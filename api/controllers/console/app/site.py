@@ -34,10 +34,13 @@ class AppSiteUpdatePayload(BaseModel):
     customize_domain: str | None = Field(default=None)
     copyright: str | None = Field(default=None)
     privacy_policy: str | None = Field(default=None)
+    default_user_avatar_url: str | None = Field(default=None)
     custom_disclaimer: str | None = Field(default=None)
+    enable_homepage: bool | None = Field(default=None)
     customize_token_strategy: Literal["must", "allow", "not_allow"] | None = Field(default=None)
     prompt_public: bool | None = Field(default=None)
     show_workflow_steps: bool | None = Field(default=None)
+    show_answer_disclaimer: bool | None = Field(default=None)
     use_icon_as_answer_icon: bool | None = Field(default=None)
 
     @field_validator("default_language")
@@ -91,10 +94,13 @@ class AppSite(Resource):
             "customize_domain",
             "copyright",
             "privacy_policy",
+            "default_user_avatar_url",
             "custom_disclaimer",
+            "enable_homepage",
             "customize_token_strategy",
             "prompt_public",
             "show_workflow_steps",
+            "show_answer_disclaimer",
             "use_icon_as_answer_icon",
         ]:
             value = getattr(args, attr_name)

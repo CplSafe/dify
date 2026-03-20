@@ -126,6 +126,24 @@ class AvatarUrlField(fields.Raw):
         return None
 
 
+class SignedFileUrlField(fields.Raw):
+    def output(self, key, obj, **kwargs):
+        if obj is None:
+            return None
+
+        value = None
+        if isinstance(obj, dict):
+            value = obj.get(key)
+        else:
+            value = getattr(obj, key, None)
+
+        if value is None:
+            return None
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            return value
+        return file_helpers.get_signed_file_url(value)
+
+
 class TimestampField(fields.Raw):
     def format(self, value) -> int:
         return int(value.timestamp())

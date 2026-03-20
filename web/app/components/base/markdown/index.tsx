@@ -42,7 +42,11 @@ export const Markdown = memo((props: MarkdownProps) => {
   const latexContent = useMemo(() => preprocess(content), [content])
 
   return (
-    <div className={cn('markdown-body', '!text-text-primary', className)} data-testid="markdown-body">
+    <div
+      className={cn('markdown-body', '!text-text-primary', className)}
+      data-testid="markdown-body"
+      style={{ WebkitTextFillColor: 'currentColor' }}
+    >
       <StreamdownWrapper
         pluginInfo={pluginInfo}
         latexContent={latexContent}

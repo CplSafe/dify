@@ -9,11 +9,8 @@ import Input from '@/app/components/base/input'
 import Loading from '@/app/components/base/loading'
 import { SimpleSelect } from '@/app/components/base/select'
 import Toast from '@/app/components/base/toast'
-import { LICENSE_LINK } from '@/constants/link'
-import { useGlobalPublicStore } from '@/context/global-public-context'
 import { setLocaleOnClient } from '@/i18n-config'
 import { languages, LanguagesSupported } from '@/i18n-config/language'
-import Link from '@/next/link'
 import { useRouter, useSearchParams } from '@/next/navigation'
 import { activateMember } from '@/service/common'
 import { useInvitationCheck } from '@/service/use-common'
@@ -22,7 +19,6 @@ import { resolvePostLoginRedirect } from '../utils/post-login-redirect'
 
 export default function InviteSettingsPage() {
   const { t } = useTranslation()
-  const systemFeatures = useGlobalPublicStore(s => s.systemFeatures)
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = decodeURIComponent(searchParams.get('invite_token') as string)
@@ -152,7 +148,7 @@ export default function InviteSettingsPage() {
           </Button>
         </div>
       </form>
-      {!systemFeatures.branding.enabled && (
+      {/* {!systemFeatures.branding.enabled && (
         <div className="mt-2 block w-full text-text-tertiary system-xs-regular">
           {t('license.tip', { ns: 'login' })}
       &nbsp;
@@ -165,7 +161,7 @@ export default function InviteSettingsPage() {
             {t('license.link', { ns: 'login' })}
           </Link>
         </div>
-      )}
+      )} */}
     </div>
   )
 }

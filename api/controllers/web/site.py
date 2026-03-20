@@ -8,7 +8,7 @@ from configs import dify_config
 from controllers.web import web_ns
 from controllers.web.wraps import WebApiResource
 from extensions.ext_database import db
-from libs.helper import AppIconUrlField
+from libs.helper import AppIconUrlField, SignedFileUrlField
 from models.account import TenantStatus
 from models.model import App, Site
 from services.feature_service import FeatureService
@@ -39,10 +39,14 @@ class AppSiteApi(WebApiResource):
         "description": fields.String,
         "copyright": fields.String,
         "privacy_policy": fields.String,
+        "default_user_avatar_url": SignedFileUrlField,
+        "default_user_avatar_file_id": fields.String(attribute="default_user_avatar_url"),
         "custom_disclaimer": fields.String,
+        "enable_homepage": fields.Boolean,
         "default_language": fields.String,
         "prompt_public": fields.Boolean,
         "show_workflow_steps": fields.Boolean,
+        "show_answer_disclaimer": fields.Boolean,
         "use_icon_as_answer_icon": fields.Boolean,
     }
 

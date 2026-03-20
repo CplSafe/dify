@@ -18,6 +18,7 @@ const BasicContent: FC<BasicContentProps> = ({
   if (annotation?.logAnnotation) {
     return (
       <Markdown
+        className="chat-answer-markdown"
         content={annotation?.logAnnotation.content || ''}
         data-testid="basic-content-markdown"
       />
@@ -34,6 +35,7 @@ const BasicContent: FC<BasicContentProps> = ({
   return (
     <Markdown
       className={cn(
+        'chat-answer-markdown [&_*]:![color:inherit]',
         item.isError && '!text-[#F04438]',
       )}
       content={displayContent}

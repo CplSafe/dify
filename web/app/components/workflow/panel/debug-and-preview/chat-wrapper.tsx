@@ -2,6 +2,7 @@ import type { StartNodeType } from '../../nodes/start/types'
 import type { ChatWrapperRefType } from './index'
 import type { ChatItem, OnSend } from '@/app/components/base/chat/types'
 import type { FileEntity } from '@/app/components/base/file-uploader/types'
+import type { AppData } from '@/models/share'
 import { memo, useCallback, useEffect, useImperativeHandle, useMemo } from 'react'
 import { useNodes } from 'reactflow'
 import { useStore as useAppStore } from '@/app/components/app/store'
@@ -74,6 +75,16 @@ const ChatWrapper = (
       file_upload: features.file,
     }
   }, [features.opening, features.suggested, features.text2speech, features.speech2text, features.citation, features.moderation, features.file])
+  const previewAppData = useMemo<AppData | undefined>(() => {
+    if (!appDetail)
+      return undefined
+
+    return {
+      app_id: appDetail.id,
+      custom_config: null,
+      site: appDetail.site,
+    }
+  }, [appDetail])
   const setShowFeaturesPanel = useStore(s => s.setShowFeaturesPanel)
 
   const {
@@ -158,7 +169,7 @@ const ChatWrapper = (
         ...inputs,
       })
     }
-  }, [initialInputs])
+  }, [initialInputs, inputs, setInputs])
 
   useEffect(() => {
     if (isResponding)
@@ -168,6 +179,7 @@ const ChatWrapper = (
   return (
     <>
       <Chat
+        appData={previewAppData}
         config={{
           ...config,
           supportCitationHitInfo: true,

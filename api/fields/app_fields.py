@@ -3,7 +3,7 @@ import json
 from flask_restx import fields
 
 from fields.workflow_fields import workflow_partial_fields
-from libs.helper import AppIconUrlField, TimestampField
+from libs.helper import AppIconUrlField, SignedFileUrlField, TimestampField
 
 
 class JsonStringField(fields.Raw):
@@ -156,11 +156,15 @@ site_fields = {
     "customize_domain": fields.String,
     "copyright": fields.String,
     "privacy_policy": fields.String,
+    "default_user_avatar_url": SignedFileUrlField,
+    "default_user_avatar_file_id": fields.String(attribute="default_user_avatar_url"),
     "custom_disclaimer": fields.String,
+    "enable_homepage": fields.Boolean,
     "customize_token_strategy": fields.String,
     "prompt_public": fields.Boolean,
     "app_base_url": fields.String,
     "show_workflow_steps": fields.Boolean,
+    "show_answer_disclaimer": fields.Boolean,
     "use_icon_as_answer_icon": fields.Boolean,
     "created_by": fields.String,
     "created_at": TimestampField,
@@ -213,10 +217,14 @@ app_site_fields = {
     "customize_domain": fields.String,
     "copyright": fields.String,
     "privacy_policy": fields.String,
+    "default_user_avatar_url": SignedFileUrlField,
+    "default_user_avatar_file_id": fields.String(attribute="default_user_avatar_url"),
     "custom_disclaimer": fields.String,
+    "enable_homepage": fields.Boolean,
     "customize_token_strategy": fields.String,
     "prompt_public": fields.Boolean,
     "show_workflow_steps": fields.Boolean,
+    "show_answer_disclaimer": fields.Boolean,
     "use_icon_as_answer_icon": fields.Boolean,
 }
 

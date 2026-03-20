@@ -289,10 +289,12 @@ class Site(ResponseModel):
     copyright: str | None = None
     privacy_policy: str | None = None
     custom_disclaimer: str | None = None
+    enable_homepage: bool | None = None
     customize_token_strategy: str | None = None
     prompt_public: bool | None = None
     app_base_url: str | None = None
     show_workflow_steps: bool | None = None
+    show_answer_disclaimer: bool | None = None
     use_icon_as_answer_icon: bool | None = None
     created_by: str | None = None
     created_at: int | None = None

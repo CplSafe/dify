@@ -55,6 +55,23 @@ export default class AudioPlayer {
     this.listenMediaSource('audio/mpeg')
   }
 
+  private getReadableMessageContent() {
+    if (!this.msgContent)
+      return this.msgContent
+
+    return this.msgContent
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/^\s{0,3}(#{1,6}|>+|- |\* |\+ |\d+\. |\|+)/gm, '')
+      .replace(/(\*\*|__|\*|_|~~)/g, '')
+      .replace(/[&#*_~`|]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
   public resetMsgId(msgId: string) {
     this.msgId = msgId
   }
@@ -104,7 +121,7 @@ export default class AudioPlayer {
         message_id: this.msgId,
         streaming: true,
         voice: this.voice,
-        text: this.msgContent,
+        text: this.getReadableMessageContent(),
       })
 
       if (audioResponse.status !== 200) {

@@ -6,9 +6,7 @@ import Button from '@/app/components/base/button'
 import { SimpleSelect } from '@/app/components/base/select'
 import Toast from '@/app/components/base/toast'
 import Tooltip from '@/app/components/base/tooltip'
-import { LICENSE_LINK } from '@/constants/link'
 import { languages, LanguagesSupported } from '@/i18n-config/language'
-import Link from '@/next/link'
 import { useRouter, useSearchParams } from '@/next/navigation'
 import { useOneMoreStep } from '@/service/use-common'
 import { timezones } from '@/utils/timezone'
@@ -150,7 +148,7 @@ const OneMoreStep = () => {
               {t('go', { ns: 'login' })}
             </Button>
           </div>
-          <div className="system-xs-regular mt-2 block w-full text-text-tertiary">
+          {/* <div className="system-xs-regular mt-2 block w-full text-text-tertiary">
             {t('license.tip', { ns: 'login' })}
             &nbsp;
             <Link
@@ -161,7 +159,7 @@ const OneMoreStep = () => {
             >
               {t('license.link', { ns: 'login' })}
             </Link>
-          </div>
+          </div> */}
         </div>
       </div>
     </>

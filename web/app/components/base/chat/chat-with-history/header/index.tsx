@@ -1,35 +1,23 @@
-import type { ConversationItem } from '@/models/share'
 import {
   RiEditBoxLine,
   RiLayoutRight2Line,
   RiResetLeftLine,
 } from '@remixicon/react'
-import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import ActionButton, { ActionButtonState } from '@/app/components/base/action-button'
 import AppIcon from '@/app/components/base/app-icon'
 import ViewFormDropdown from '@/app/components/base/chat/chat-with-history/inputs-form/view-form-dropdown'
-import RenameModal from '@/app/components/base/chat/chat-with-history/sidebar/rename-modal'
-import Confirm from '@/app/components/base/confirm'
 import Tooltip from '@/app/components/base/tooltip'
 import { cn } from '@/utils/classnames'
 import {
   useChatWithHistoryContext,
 } from '../context'
-import Operation from './operation'
 
 const Header = () => {
   const {
     appData,
     currentConversationId,
-    currentConversationItem,
     inputsForms,
-    pinnedConversationList,
-    handlePinConversation,
-    handleUnpinConversation,
-    conversationRenaming,
-    handleRenameConversation,
-    handleDeleteConversation,
     handleNewConversation,
     sidebarCollapseState,
     handleSidebarCollapse,
@@ -37,40 +25,6 @@ const Header = () => {
   } = useChatWithHistoryContext()
   const { t } = useTranslation()
   const isSidebarCollapsed = sidebarCollapseState
-
-  const isPin = pinnedConversationList.some(item => item.id === currentConversationId)
-
-  const [showConfirm, setShowConfirm] = useState<ConversationItem | null>(null)
-  const [showRename, setShowRename] = useState<ConversationItem | null>(null)
-  const handleOperate = useCallback((type: string) => {
-    if (type === 'pin')
-      handlePinConversation(currentConversationId)
-
-    if (type === 'unpin')
-      handleUnpinConversation(currentConversationId)
-
-    if (type === 'delete')
-      setShowConfirm(currentConversationItem as any)
-
-    if (type === 'rename')
-      setShowRename(currentConversationItem as any)
-  }, [currentConversationId, currentConversationItem, handlePinConversation, handleUnpinConversation])
-  const handleCancelConfirm = useCallback(() => {
-    setShowConfirm(null)
-  }, [])
-  const handleDelete = useCallback(() => {
-    /* v8 ignore next -- defensive guard; onConfirm is only reachable when showConfirm is truthy. @preserve */
-    if (showConfirm)
-      handleDeleteConversation(showConfirm.id, { onSuccess: handleCancelConfirm })
-  }, [showConfirm, handleDeleteConversation, handleCancelConfirm])
-  const handleCancelRename = useCallback(() => {
-    setShowRename(null)
-  }, [])
-  const handleRename = useCallback((newName: string) => {
-    /* v8 ignore next -- defensive guard; onSave is only reachable when showRename is truthy. @preserve */
-    if (showRename)
-      handleRenameConversation(showRename.id, newName, { onSuccess: handleCancelRename })
-  }, [showRename, handleRenameConversation, handleCancelRename])
 
   return (
     <>
@@ -88,23 +42,7 @@ const Header = () => {
               imageUrl={appData?.site.icon_url}
             />
           </div>
-          {!currentConversationId && (
-            <div className={cn('grow truncate text-text-secondary system-md-semibold')}>{appData?.site.title}</div>
-          )}
-          {currentConversationId && currentConversationItem && isSidebarCollapsed && (
-            <>
-              <div className="p-1 text-divider-deep">/</div>
-              <Operation
-                title={currentConversationItem?.name || ''}
-                isPinned={!!isPin}
-                togglePin={() => handleOperate(isPin ? 'unpin' : 'pin')}
-                isShowDelete
-                isShowRenameConversation
-                onRenameConversation={() => handleOperate('rename')}
-                onDelete={() => handleOperate('delete')}
-              />
-            </>
-          )}
+          <div className={cn('grow truncate text-text-secondary system-md-semibold')}>{appData?.site.title}</div>
           <div className="flex items-center px-1">
             <div className="h-[14px] w-px bg-divider-regular"></div>
           </div>
@@ -141,24 +79,6 @@ const Header = () => {
           )}
         </div>
       </div>
-      {!!showConfirm && (
-        <Confirm
-          title={t('chat.deleteConversation.title', { ns: 'share' })}
-          content={t('chat.deleteConversation.content', { ns: 'share' }) || ''}
-          isShow
-          onCancel={handleCancelConfirm}
-          onConfirm={handleDelete}
-        />
-      )}
-      {showRename && (
-        <RenameModal
-          isShow
-          onClose={handleCancelRename}
-          saveLoading={conversationRenaming}
-          name={showRename?.name || ''}
-          onSave={handleRename}
-        />
-      )}
     </>
   )
 }

@@ -4,7 +4,7 @@ import type { PromptVariable } from '@/models/debug'
 import { RiCloseLine, RiInformation2Fill } from '@remixicon/react'
 import { useTranslation } from 'react-i18next'
 import AnnotationReply from '@/app/components/base/features/new-feature-panel/annotation-reply'
-
+import AnswerDisclaimer from '@/app/components/base/features/new-feature-panel/answer-disclaimer'
 import Citation from '@/app/components/base/features/new-feature-panel/citation'
 import ConversationOpener from '@/app/components/base/features/new-feature-panel/conversation-opener'
 import DialogWrapper from '@/app/components/base/features/new-feature-panel/dialog-wrapper'
@@ -91,6 +91,9 @@ const NewFeaturePanel = ({
           )}
           {isChatMode && (
             <FollowUp disabled={disabled} onChange={onChange} />
+          )}
+          {isChatMode && (
+            <AnswerDisclaimer disabled={disabled} onChange={onChange} />
           )}
           {text2speechDefaultModel && (isChatMode || !inWorkflow) && (
             <TextToSpeech disabled={disabled} onChange={onChange} />

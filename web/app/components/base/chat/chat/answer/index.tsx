@@ -7,13 +7,15 @@ import type {
   ChatItem,
 } from '../../types'
 import type { AppData } from '@/models/share'
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, startTransition, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EditTitle } from '@/app/components/app/annotation/edit-annotation-modal/edit-item'
 import AnswerIcon from '@/app/components/base/answer-icon'
 import Citation from '@/app/components/base/chat/chat/citation'
 import LoadingAnim from '@/app/components/base/chat/chat/loading-anim'
+import DisclaimerText from '@/app/components/base/disclaimer-text'
 import { FileList } from '@/app/components/base/file-uploader'
+import { WorkflowRunningStatus } from '@/app/components/workflow/types'
 import { cn } from '@/utils/classnames'
 import ContentSwitch from '../content-switch'
 import { useChatContext } from '../context'
@@ -73,6 +75,16 @@ const Answer: FC<AnswerProps> = ({
   } = item
   const hasAgentThoughts = !!agent_thoughts?.length
   const hasHumanInputs = !!humanInputFormDataList?.length || !!humanInputFilledFormDataList?.length
+  const answerDisclaimer = appData?.site.show_answer_disclaimer ? appData?.site.custom_disclaimer : ''
+  const appTitle = appData?.site.title || 'AI'
+  const isWorkflowFinished = !workflowProcess || [
+    WorkflowRunningStatus.Succeeded,
+    WorkflowRunningStatus.Failed,
+    WorkflowRunningStatus.Stopped,
+  ].includes(workflowProcess.status as WorkflowRunningStatus)
+  const shouldShowAnswerDisclaimer = !responding && !!answerDisclaimer && isWorkflowFinished
+  const [loadingStage, setLoadingStage] = useState<'analyzing' | 'retrieving'>('analyzing')
+  const contentIsEmpty = typeof content === 'string' && content.trim() === ''
 
   const [containerWidth, setContainerWidth] = useState(0)
   const [contentWidth, setContentWidth] = useState(0)
@@ -90,7 +102,10 @@ const Answer: FC<AnswerProps> = ({
       setContainerWidth(containerRef.current?.clientWidth + 16)
   }
   useEffect(() => {
-    getContainerWidth()
+    const frameId = window.requestAnimationFrame(getContainerWidth)
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
   }, [])
 
   const getContentWidth = () => {
@@ -99,9 +114,35 @@ const Answer: FC<AnswerProps> = ({
   }
 
   useEffect(() => {
-    if (!responding)
-      getContentWidth()
+    if (!responding) {
+      const frameId = window.requestAnimationFrame(getContentWidth)
+      return () => {
+        window.cancelAnimationFrame(frameId)
+      }
+    }
   }, [responding])
+
+  useEffect(() => {
+    if (!responding || !contentIsEmpty || hasAgentThoughts) {
+      startTransition(() => {
+        setLoadingStage('analyzing')
+      })
+      return
+    }
+
+    startTransition(() => {
+      setLoadingStage('analyzing')
+    })
+    const timer = window.setTimeout(() => {
+      startTransition(() => {
+        setLoadingStage('retrieving')
+      })
+    }, 1200)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [contentIsEmpty, hasAgentThoughts, responding])
 
   const getHumanInputFormContainerWidth = () => {
     if (humanInputFormContainerRef.current)
@@ -109,8 +150,12 @@ const Answer: FC<AnswerProps> = ({
   }
 
   useEffect(() => {
-    if (hasHumanInputs)
-      getHumanInputFormContainerWidth()
+    if (hasHumanInputs) {
+      const frameId = window.requestAnimationFrame(getHumanInputFormContainerWidth)
+      return () => {
+        window.cancelAnimationFrame(frameId)
+      }
+    }
   }, [hasHumanInputs])
 
   // Recalculate contentWidth when content changes (e.g., SVG preview/source toggle)
@@ -138,7 +183,9 @@ const Answer: FC<AnswerProps> = ({
     }
   }, [switchSibling, item.prevSibling, item.nextSibling])
 
-  const contentIsEmpty = typeof content === 'string' && content.trim() === ''
+  const loadingText = loadingStage === 'analyzing'
+    ? `${appTitle} 正在分析问题`
+    : `${appTitle} 正在检索知识`
 
   return (
     <div className="mb-2 flex last:mb-0">
@@ -159,6 +206,7 @@ const Answer: FC<AnswerProps> = ({
             <div
               ref={humanInputFormContainerRef}
               className={cn('relative inline-block w-full max-w-full rounded-2xl bg-chat-bubble-bg px-4 py-3 text-text-primary body-lg-regular')}
+              style={{ WebkitTextFillColor: 'currentColor' }}
             >
               {
                 !responding && contentIsEmpty && !hasAgentThoughts && (
@@ -228,6 +276,7 @@ const Answer: FC<AnswerProps> = ({
             <div
               ref={contentRef}
               className="relative inline-block w-full max-w-full rounded-2xl bg-chat-bubble-bg px-4 py-3 text-text-primary body-lg-regular"
+              style={{ WebkitTextFillColor: 'currentColor' }}
             >
               {
                 !responding && (
@@ -245,8 +294,9 @@ const Answer: FC<AnswerProps> = ({
               }
               {
                 responding && contentIsEmpty && !hasAgentThoughts && (
-                  <div className="flex h-5 w-6 items-center justify-center">
-                    <LoadingAnim type="text" />
+                  <div className="flex min-h-6 items-center gap-1.5 text-xs text-text-primary">
+                    <span aria-hidden className="i-ri-loader-2-line h-3 w-3 shrink-0 animate-spin text-text-tertiary" />
+                    <span>{loadingText}</span>
                   </div>
                 )
               }
@@ -300,6 +350,12 @@ const Answer: FC<AnswerProps> = ({
                   <Citation data={citation} showHitInfo={config?.supportCitationHitInfo} />
                 )
               }
+              {shouldShowAnswerDisclaimer && (
+                <DisclaimerText
+                  className="mt-3 border-t border-divider-subtle pt-3 text-xs text-text-tertiary"
+                  content={answerDisclaimer}
+                />
+              )}
               {
                 typeof item.siblingCount === 'number'
                 && item.siblingCount > 1
@@ -323,6 +379,7 @@ const Answer: FC<AnswerProps> = ({
             <div
               ref={contentRef}
               className={cn('relative inline-block max-w-full rounded-2xl bg-chat-bubble-bg px-4 py-3 text-text-primary body-lg-regular', workflowProcess && 'w-full')}
+              style={{ WebkitTextFillColor: 'currentColor' }}
             >
               {
                 !responding && (
@@ -351,8 +408,9 @@ const Answer: FC<AnswerProps> = ({
               }
               {
                 responding && contentIsEmpty && !hasAgentThoughts && (
-                  <div className="flex h-5 w-6 items-center justify-center">
-                    <LoadingAnim type="text" />
+                  <div className="flex min-h-6 items-center gap-1.5 text-xs text-text-primary">
+                    <span aria-hidden className="i-ri-loader-2-line h-3 w-3 shrink-0 animate-spin text-text-tertiary" />
+                    <span>{loadingText}</span>
                   </div>
                 )
               }
@@ -406,6 +464,12 @@ const Answer: FC<AnswerProps> = ({
                   <Citation data={citation} showHitInfo={config?.supportCitationHitInfo} />
                 )
               }
+              {shouldShowAnswerDisclaimer && (
+                <DisclaimerText
+                  className="mt-3 border-t border-divider-subtle pt-3 text-xs text-text-tertiary"
+                  content={answerDisclaimer}
+                />
+              )}
               {
                 typeof item.siblingCount === 'number'
                 && item.siblingCount > 1 && (

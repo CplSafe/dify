@@ -7,9 +7,9 @@ import { useGlobalPublicStore, useIsSystemFeaturesPending } from '@/context/glob
  * - Custom branding (when enabled in system features)
  * - Default "Dify" branding
  * - Pending state handling (prevents title flicker during loading)
- * - Page-specific titles with automatic suffix
+ * - Page-specific titles without brand suffix
  *
- * Title format: "[Page Title] - [Brand Name]"
+ * Title format: "[Page Title]"
  * If no page title: "[Brand Name]"
  */
 import { defaultSystemFeatures } from '@/types/feature'
@@ -54,7 +54,7 @@ describe('title should be empty if systemFeatures is pending', () => {
 
 /**
  * Test default Dify branding behavior
- * When custom branding is disabled, should use "Dify" as the brand name
+ * When custom branding is disabled, should use the page title directly
  */
 describe('use default branding', () => {
   beforeEach(() => {
@@ -67,11 +67,11 @@ describe('use default branding', () => {
   })
   /**
    * Test title format with page title and default branding
-   * Format: "[page] - Dify"
+   * Format: "[page]"
    */
-  it('document title should be test-Dify if set title', () => {
+  it('document title should be test if set title', () => {
     renderHook(() => useDocumentTitle('test'))
-    expect(document.title).toBe('test - Dify')
+    expect(document.title).toBe('test')
   })
 
   /**
@@ -99,11 +99,11 @@ describe('use specific branding', () => {
   })
   /**
    * Test title format with page title and custom branding
-   * Format: "[page] - [Custom Brand]"
+   * Format: "[page]"
    */
-  it('document title should be test-Test if set title', () => {
+  it('document title should be test if set title', () => {
     renderHook(() => useDocumentTitle('test'))
-    expect(document.title).toBe('test - Test')
+    expect(document.title).toBe('test')
   })
 
   /**

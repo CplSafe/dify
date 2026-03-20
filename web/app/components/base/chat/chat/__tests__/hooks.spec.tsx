@@ -327,6 +327,30 @@ describe('useChat', () => {
       expect(result.current.chatList[1].id).toBe('m-1')
     })
 
+    it('should omit empty conversation_id for the first message', async () => {
+      vi.mocked(ssePost).mockImplementation(async () => {})
+
+      const { result } = renderHook(() => useChat())
+
+      act(() => {
+        result.current.handleSend('test-url', {
+          query: 'hello',
+          conversation_id: '',
+          parent_message_id: undefined,
+        }, {})
+      })
+
+      expect(ssePost).toHaveBeenCalledWith(
+        'test-url',
+        expect.objectContaining({
+          body: expect.not.objectContaining({
+            conversation_id: '',
+          }),
+        }),
+        expect.any(Object),
+      )
+    })
+
     it('should handle onThought and different workflow events', async () => {
       let callbacks: HookCallbacks
 

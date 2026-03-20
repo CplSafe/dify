@@ -11,10 +11,8 @@ import { formContext, useAppForm } from '@/app/components/base/form'
 import { zodSubmitValidator } from '@/app/components/base/form/utils/zod-submit-validator'
 import Input from '@/app/components/base/input'
 import { validPassword } from '@/config'
-import { LICENSE_LINK } from '@/constants/link'
 import useDocumentTitle from '@/hooks/use-document-title'
 
-import Link from '@/next/link'
 import { useRouter } from '@/next/navigation'
 import { fetchInitValidateStatus, fetchSetupStatus, login, setup } from '@/service/common'
 import { cn } from '@/utils/classnames'
@@ -213,7 +211,7 @@ const InstallForm = () => {
                     </div>
                   </form>
                 </formContext.Provider>
-                <div className="mt-2 block w-full text-xs text-text-secondary">
+                {/* <div className="mt-2 block w-full text-xs text-text-secondary">
                   {t('license.tip', { ns: 'login' })}
                 &nbsp;
                   <Link
@@ -224,7 +222,7 @@ const InstallForm = () => {
                   >
                     {t('license.link', { ns: 'login' })}
                   </Link>
-                </div>
+                </div> */}
               </div>
             </div>
           </>

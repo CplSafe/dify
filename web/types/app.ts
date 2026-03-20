@@ -304,8 +304,13 @@ export type SiteConfig = {
   copyright: string
   /** Privacy Policy */
   privacy_policy: string
+  /** Default User Avatar URL */
+  default_user_avatar_url: string
+  /** Default User Avatar File ID */
+  default_user_avatar_file_id?: string
   /** Custom Disclaimer */
   custom_disclaimer: string
+  enable_homepage: boolean
 
   icon_type: AppIconType | null
   icon: string
@@ -313,6 +318,7 @@ export type SiteConfig = {
   icon_url: string | null
 
   show_workflow_steps: boolean
+  show_answer_disclaimer: boolean
   use_icon_as_answer_icon: boolean
 }
 

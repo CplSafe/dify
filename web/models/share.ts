@@ -23,8 +23,12 @@ export type SiteInfo = {
   prompt_public?: boolean
   copyright?: string
   privacy_policy?: string
+  default_user_avatar_url?: string
+  default_user_avatar_file_id?: string
   custom_disclaimer?: string
+  enable_homepage?: boolean
   show_workflow_steps?: boolean
+  show_answer_disclaimer?: boolean
   use_icon_as_answer_icon?: boolean
 }
 

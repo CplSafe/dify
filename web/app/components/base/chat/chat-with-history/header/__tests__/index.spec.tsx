@@ -101,14 +101,14 @@ describe('Header Component', () => {
   })
 
   describe('Rendering', () => {
-    it('should render conversation name when conversation is selected', () => {
+    it('should render app title when conversation is selected', () => {
       const mockConv = { id: 'conv-1', name: 'My Chat' } as ConversationItem
       setup({
         currentConversationId: 'conv-1',
         currentConversationItem: mockConv,
         sidebarCollapseState: true,
       })
-      expect(screen.getByText('My Chat')).toBeInTheDocument()
+      expect(screen.getByText('Test App')).toBeInTheDocument()
     })
 
     it('should render ViewFormDropdown trigger when inputsForms are present', () => {
@@ -159,7 +159,7 @@ describe('Header Component', () => {
         sidebarCollapseState: true,
       })
 
-      const trigger = screen.getByText('My Chat')
+      const trigger = screen.getByText('Test App')
       await userEvent.click(trigger)
 
       const pinBtn = await screen.findByText('explore.sidebar.action.pin')
@@ -181,7 +181,7 @@ describe('Header Component', () => {
         sidebarCollapseState: true,
       })
 
-      await userEvent.click(screen.getByText('My Chat'))
+      await userEvent.click(screen.getByText('Test App'))
 
       const unpinBtn = await screen.findByText('explore.sidebar.action.unpin')
       await userEvent.click(unpinBtn)
@@ -197,7 +197,7 @@ describe('Header Component', () => {
         sidebarCollapseState: true,
       })
 
-      await userEvent.click(screen.getByText('My Chat'))
+      await userEvent.click(screen.getByText('Test App'))
 
       const renameMenuBtn = await screen.findByText('explore.sidebar.action.rename')
       await userEvent.click(renameMenuBtn)
@@ -220,7 +220,7 @@ describe('Header Component', () => {
         sidebarCollapseState: true,
       })
 
-      await userEvent.click(screen.getByText('My Chat'))
+      await userEvent.click(screen.getByText('Test App'))
 
       const renameMenuBtn = await screen.findByText('explore.sidebar.action.rename')
       await userEvent.click(renameMenuBtn)
@@ -256,7 +256,7 @@ describe('Header Component', () => {
         sidebarCollapseState: true,
       })
 
-      await userEvent.click(screen.getByText('My Chat'))
+      await userEvent.click(screen.getByText('Test App'))
 
       const deleteMenuBtn = await screen.findByText('explore.sidebar.action.delete')
       await userEvent.click(deleteMenuBtn)
@@ -287,7 +287,7 @@ describe('Header Component', () => {
         sidebarCollapseState: true,
       })
 
-      await userEvent.click(screen.getByText('My Chat'))
+      await userEvent.click(screen.getByText('Test App'))
 
       const deleteMenuBtn = await screen.findByText('explore.sidebar.action.delete')
       await userEvent.click(deleteMenuBtn)
@@ -308,7 +308,7 @@ describe('Header Component', () => {
         sidebarCollapseState: true,
       })
 
-      await userEvent.click(screen.getByText('My Chat'))
+      await userEvent.click(screen.getByText('Test App'))
       await userEvent.click(await screen.findByText('explore.sidebar.action.delete'))
 
       expect(await screen.findByText('share.chat.deleteConversation.title')).toBeInTheDocument()

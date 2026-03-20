@@ -190,7 +190,10 @@ const Question: FC<QuestionProps> = ({
             !isEditing && 'rounded-2xl bg-background-gradient-bg-fill-chat-bubble-bg-3 text-text-primary',
             isEditing && 'rounded-[24px] border-[3px] border-components-option-card-option-selected-border bg-components-panel-bg-blur shadow-lg',
           )}
-          style={(!isEditing && theme?.chatBubbleColorStyle) ? CssTransform(theme.chatBubbleColorStyle) : {}}
+          style={{
+            ...((!isEditing && theme?.chatBubbleColorStyle) ? CssTransform(theme.chatBubbleColorStyle) : {}),
+            WebkitTextFillColor: 'currentColor',
+          }}
         >
           {
             !!message_files?.length && (

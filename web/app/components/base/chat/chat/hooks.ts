@@ -683,9 +683,10 @@ export const useChat = (
     hasStopRespondedRef.current = false
 
     const { query, files, inputs, ...restData } = data
+    const conversationId = data.conversation_id || conversationIdRef.current || undefined
     const bodyParams = {
       response_mode: 'streaming',
-      conversation_id: conversationIdRef.current,
+      conversation_id: conversationId,
       files: getProcessedFiles(files || []),
       query,
       inputs: getProcessedInputs(inputs || {}, formSettings?.inputsForm || []),

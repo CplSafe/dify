@@ -1,6 +1,7 @@
 import type { SiteInfo } from '@/models/share'
 import * as React from 'react'
 import AppIcon from '@/app/components/base/app-icon'
+import DisclaimerText from '@/app/components/base/disclaimer-text'
 import Modal from '@/app/components/base/modal'
 import { appDefaultIconBackground } from '@/config'
 import { cn } from '@/utils/classnames'
@@ -43,7 +44,7 @@ const InfoModal = ({
             </div>
           )}
           {data?.custom_disclaimer && (
-            <div className="mt-2">{data.custom_disclaimer}</div>
+            <DisclaimerText className="mt-2" content={data.custom_disclaimer} />
           )}
         </div>
       </div>

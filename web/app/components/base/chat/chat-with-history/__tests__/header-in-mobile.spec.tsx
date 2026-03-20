@@ -146,7 +146,7 @@ describe('HeaderInMobile', () => {
     expect(screen.getByText('Test Chat')).toBeInTheDocument()
   })
 
-  it('should render conversation name when active', async () => {
+  it('should render app title when active', async () => {
     vi.mocked(useChatWithHistoryContext).mockReturnValue({
       ...defaultContextValue,
       currentConversationId: '1',
@@ -154,7 +154,7 @@ describe('HeaderInMobile', () => {
     })
 
     render(<HeaderInMobile />)
-    expect(await screen.findByText('Conv 1')).toBeInTheDocument()
+    expect(await screen.findByText('Test Chat')).toBeInTheDocument()
   })
 
   it('should open and close sidebar', async () => {
@@ -294,7 +294,7 @@ describe('HeaderInMobile', () => {
     render(<HeaderInMobile />)
 
     // Open dropdown for conversation
-    fireEvent.click(await screen.findByText('Conv 1'))
+    fireEvent.click(await screen.findByText('Test Chat'))
 
     await waitFor(() => {
       expect(screen.getByText(/explore\.sidebar\.action\.pin/i)).toBeInTheDocument()
@@ -316,7 +316,7 @@ describe('HeaderInMobile', () => {
     render(<HeaderInMobile />)
 
     // Open dropdown for conversation
-    fireEvent.click(await screen.findByText('Conv 1'))
+    fireEvent.click(await screen.findByText('Test Chat'))
 
     await waitFor(() => {
       expect(screen.getByText(/explore\.sidebar\.action\.unpin/i)).toBeInTheDocument()
@@ -336,7 +336,7 @@ describe('HeaderInMobile', () => {
     })
 
     render(<HeaderInMobile />)
-    fireEvent.click(await screen.findByText('Conv 1'))
+    fireEvent.click(await screen.findByText('Test Chat'))
 
     await waitFor(() => {
       expect(screen.getByText(/explore\.sidebar\.action\.rename/i)).toBeInTheDocument()
@@ -364,7 +364,7 @@ describe('HeaderInMobile', () => {
     })
 
     render(<HeaderInMobile />)
-    fireEvent.click(await screen.findByText('Conv 1'))
+    fireEvent.click(await screen.findByText('Test Chat'))
 
     await waitFor(() => {
       expect(screen.getByText(/explore\.sidebar\.action\.rename/i)).toBeInTheDocument()
@@ -396,7 +396,7 @@ describe('HeaderInMobile', () => {
     })
 
     render(<HeaderInMobile />)
-    fireEvent.click(await screen.findByText('Conv 1'))
+    fireEvent.click(await screen.findByText('Test Chat'))
 
     await waitFor(() => {
       expect(screen.getByText(/explore\.sidebar\.action\.rename/i)).toBeInTheDocument()
@@ -418,7 +418,7 @@ describe('HeaderInMobile', () => {
     })
 
     render(<HeaderInMobile />)
-    fireEvent.click(await screen.findByText('Conv 1'))
+    fireEvent.click(await screen.findByText('Test Chat'))
 
     await waitFor(() => {
       expect(screen.getByText(/explore\.sidebar\.action\.delete/i)).toBeInTheDocument()
@@ -444,7 +444,7 @@ describe('HeaderInMobile', () => {
     })
 
     render(<HeaderInMobile />)
-    fireEvent.click(await screen.findByText('Conv 1'))
+    fireEvent.click(await screen.findByText('Test Chat'))
 
     await waitFor(() => {
       expect(screen.getByText(/explore\.sidebar\.action\.delete/i)).toBeInTheDocument()
@@ -562,7 +562,7 @@ describe('HeaderInMobile', () => {
       })
 
       render(<HeaderInMobile />)
-      fireEvent.click(await screen.findByText('Conv 1'))
+      fireEvent.click(await screen.findByText('Test Chat'))
       fireEvent.click(await screen.findByText(/sidebar\.action\.delete/i))
 
       expect(await screen.findByRole('button', { name: /common\.operation\.confirm|operation\.confirm/i })).toBeInTheDocument()

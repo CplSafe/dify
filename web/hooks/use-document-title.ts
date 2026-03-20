@@ -7,16 +7,15 @@ import { basePath } from '@/utils/var'
 export default function useDocumentTitle(title: string) {
   const isPending = useIsSystemFeaturesPending()
   const systemFeatures = useGlobalPublicStore(s => s.systemFeatures)
-  const prefix = title ? `${title} - ` : ''
   let titleStr = ''
   let favicon = ''
   if (isPending === false) {
     if (systemFeatures.branding.enabled) {
-      titleStr = `${prefix}${systemFeatures.branding.application_title}`
+      titleStr = title || systemFeatures.branding.application_title
       favicon = systemFeatures.branding.favicon
     }
     else {
-      titleStr = `${prefix}Dify`
+      titleStr = title || 'Dify'
       favicon = `${basePath}/favicon.ico`
     }
   }

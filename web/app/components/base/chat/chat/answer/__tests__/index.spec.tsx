@@ -1,6 +1,7 @@
 import type { ChatItem } from '../../../types'
 import type { AppData } from '@/models/share'
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import { WorkflowRunningStatus } from '@/app/components/workflow/types'
 import Answer from '../index'
 
 // Mock the chat context
@@ -112,6 +113,32 @@ describe('Answer Component', () => {
         />,
       )
       expect(screen.getByTestId('citation-title')).toBeInTheDocument()
+    })
+
+    it('should render disclaimer after response is finished', () => {
+      render(
+        <Answer
+          {...defaultProps}
+          appData={{ site: { show_answer_disclaimer: true, custom_disclaimer: 'Call 12345678' } } as AppData}
+        />,
+      )
+
+      expect(screen.getByText('Call')).toBeInTheDocument()
+    })
+
+    it('should not render disclaimer while workflow is still running', () => {
+      render(
+        <Answer
+          {...defaultProps}
+          appData={{ site: { show_answer_disclaimer: true, custom_disclaimer: 'Call 12345678' } } as AppData}
+          item={{
+            ...defaultProps.item,
+            workflowProcess: { status: WorkflowRunningStatus.Running, tracing: [], steps: [] },
+          } as unknown as ChatItem}
+        />,
+      )
+
+      expect(screen.queryByText('Call')).not.toBeInTheDocument()
     })
   })
 

@@ -5,13 +5,17 @@ import type {
   ChatItemInTree,
   OnSend,
 } from '../types'
+import type { FileUpload } from '@/app/components/base/features/types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AnswerIcon from '@/app/components/base/answer-icon'
 import AppIcon from '@/app/components/base/app-icon'
 import InputsForm from '@/app/components/base/chat/chat-with-history/inputs-form'
 import SuggestedQuestions from '@/app/components/base/chat/chat/answer/suggested-questions'
+import ChatInputArea from '@/app/components/base/chat/chat/chat-input-area'
+import { FeaturesProvider } from '@/app/components/base/features/context'
 import { Markdown } from '@/app/components/base/markdown'
-import { InputVarType } from '@/app/components/workflow/types'
+import { FILE_EXTS } from '@/app/components/base/prompt-editor/constants'
+import { InputVarType, SupportUploadFileTypes } from '@/app/components/workflow/types'
 import {
   AppSourceType,
   fetchSuggestedQuestions,
@@ -20,7 +24,7 @@ import {
   submitHumanInputForm,
 } from '@/service/share'
 import { submitHumanInputForm as submitHumanInputFormService } from '@/service/workflow'
-import { TransferMethod } from '@/types/app'
+import { Resolution, TransferMethod } from '@/types/app'
 import { cn } from '@/utils/classnames'
 import { formatBooleanInputs } from '@/utils/model-config'
 import { Avatar } from '../../avatar'
@@ -55,7 +59,6 @@ const ChatWrapper = () => {
     allInputsHidden,
     initUserVariables,
   } = useChatWithHistoryContext()
-
   const appSourceType = isInstalledApp ? AppSourceType.installedApp : AppSourceType.webApp
 
   // Semantic variable for better code readability
@@ -74,6 +77,42 @@ const ChatWrapper = () => {
       opening_statement: currentConversationItem?.introduction || (config as any).opening_statement,
     } as ChatConfig
   }, [appParams, currentConversationItem?.introduction])
+  const homepageFeaturesData = useMemo(() => {
+    const fileUpload = appConfig.file_upload
+    const fileUploadConfig = (fileUpload as FileUpload | undefined)?.fileUploadConfig
+    const imageTransferMethods = (fileUpload?.allowed_file_upload_methods || [TransferMethod.local_file, TransferMethod.remote_url]) as TransferMethod[]
+    const imageEnabled = !!fileUpload?.allowed_file_types?.includes(SupportUploadFileTypes.image)
+    const fileEnabled = !!fileUpload?.allowed_file_types?.length
+
+    return {
+      moreLikeThis: appConfig.more_like_this || { enabled: false },
+      opening: {
+        enabled: !!appConfig.opening_statement,
+        opening_statement: appConfig.opening_statement || '',
+        suggested_questions: appConfig.suggested_questions || [],
+      },
+      moderation: appConfig.sensitive_word_avoidance || { enabled: false },
+      speech2text: appConfig.speech_to_text || { enabled: false },
+      text2speech: appConfig.text_to_speech || { enabled: false },
+      file: {
+        image: {
+          detail: fileUpload?.image?.detail || Resolution.high,
+          enabled: imageEnabled,
+          number_limits: fileUpload?.number_limits || 3,
+          transfer_methods: imageTransferMethods,
+        },
+        enabled: fileEnabled,
+        allowed_file_types: fileUpload?.allowed_file_types || [],
+        allowed_file_extensions: fileUpload?.allowed_file_extensions || [...FILE_EXTS[SupportUploadFileTypes.image], ...FILE_EXTS[SupportUploadFileTypes.video]].map(ext => `.${ext}`),
+        allowed_file_upload_methods: imageTransferMethods,
+        number_limits: fileUpload?.number_limits || 3,
+        fileUploadConfig,
+      } as FileUpload,
+      suggested: appConfig.suggested_questions_after_answer || { enabled: false },
+      citation: appConfig.retriever_resource || { enabled: false },
+      annotationReply: appConfig.annotation_reply || { enabled: false },
+    }
+  }, [appConfig])
   const {
     chatList,
     handleSend,
@@ -134,7 +173,7 @@ const ChatWrapper = () => {
   useEffect(() => {
     if (currentChatInstanceRef.current)
       currentChatInstanceRef.current.handleStop = handleStop
-  }, [])
+  }, [currentChatInstanceRef, handleStop])
 
   useEffect(() => {
     setIsResponding(respondingState)
@@ -172,7 +211,7 @@ const ChatWrapper = () => {
         },
       )
     }
-  }, [])
+  }, [appId, appPrevChatTree, appSourceType, currentConversationId, handleNewConversationCompleted, handleSwitchSibling])
 
   const doSend: OnSend = useCallback((message, files, isRegenerate = false, parentAnswer: ChatItem | null = null) => {
     const data: any = {
@@ -215,6 +254,16 @@ const ChatWrapper = () => {
     return chatList.filter(item => !item.isOpeningStatement)
   }, [chatList, currentConversationId])
 
+  const showHomepage = useMemo(() => {
+    if (!appData?.site.enable_homepage)
+      return false
+    if (currentConversationId || respondingState)
+      return false
+    if (!allInputsHidden && inputsForms.length > 0)
+      return false
+    return messageList.length === 0
+  }, [allInputsHidden, appData?.site.enable_homepage, currentConversationId, inputsForms.length, messageList.length, respondingState])
+
   const handleSubmitHumanInputForm = useCallback(async (formToken: string, formData: any) => {
     if (isInstalledApp)
       await submitHumanInputFormService(formToken, formData)
@@ -223,6 +272,29 @@ const ChatWrapper = () => {
   }, [isInstalledApp])
 
   const [collapsed, setCollapsed] = useState(!!currentConversationId)
+  const questionIcon = useMemo(() => {
+    if (initUserVariables?.avatar_url) {
+      return (
+        <Avatar
+          avatar={initUserVariables.avatar_url}
+          name={initUserVariables.name || 'user'}
+          size="xl"
+        />
+      )
+    }
+
+    if (appData?.site.default_user_avatar_url) {
+      return (
+        <Avatar
+          avatar={appData.site.default_user_avatar_url}
+          name={initUserVariables?.name || 'user'}
+          size="xl"
+        />
+      )
+    }
+
+    return undefined
+  }, [appData?.site.default_user_avatar_url, initUserVariables?.avatar_url, initUserVariables?.name])
 
   const chatNode = useMemo(() => {
     if (allInputsHidden || !inputsForms.length)
@@ -245,6 +317,82 @@ const ChatWrapper = () => {
 
   const welcome = useMemo(() => {
     const welcomeMessage = chatList.find(item => item.isOpeningStatement)
+    if (showHomepage) {
+      const homepageDescription = appData?.site.description || appConfig.opening_statement || ''
+      const homepageTitle = '益阳赫山'
+
+      return (
+        <div className="px-4 py-6 md:px-6 md:py-8">
+          <div className="relative mx-auto min-h-[calc(100vh-180px)] w-full max-w-[760px] overflow-hidden rounded-[36px] border border-white/60 bg-[linear-gradient(145deg,#fdf2f8_0%,#fff7ed_42%,#f8fafc_100%)] shadow-[0_30px_80px_rgba(249,115,22,0.14)]">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_14%,rgba(251,113,133,0.28),transparent_34%),radial-gradient(circle_at_80%_22%,rgba(253,186,116,0.26),transparent_30%),radial-gradient(circle_at_52%_72%,rgba(255,255,255,0.72),transparent_44%)]" />
+            <div className="absolute -left-16 top-28 h-56 w-56 rounded-full bg-[rgba(255,255,255,0.32)] blur-3xl" />
+            <div className="absolute -right-8 bottom-40 h-48 w-48 rounded-full bg-[rgba(255,255,255,0.26)] blur-3xl" />
+
+            <div className="relative flex min-h-[calc(100vh-180px)] flex-col px-5 pb-8 pt-5 md:px-8 md:pb-10 md:pt-7">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full bg-[rgba(255,255,255,0.88)] px-4 py-2 text-[15px] font-semibold text-[#f97316] shadow-[0_10px_30px_rgba(255,255,255,0.55)]">
+                <div className="i-ri-map-pin-2-fill h-4 w-4" />
+                <span>{homepageTitle}</span>
+              </div>
+
+              <div className="flex flex-1 flex-col items-center justify-center py-10 text-center md:py-14">
+                <div className="pointer-events-none absolute left-[18%] top-[28%] h-36 w-36 rounded-full border-[6px] border-[#fb7185]/45" />
+                <div className="pointer-events-none absolute right-[16%] top-[34%] h-28 w-28 rounded-full border-[5px] border-[#fdba74]/40" />
+                <div className="pointer-events-none absolute left-[22%] top-[48%] h-3 w-3 rounded-full bg-[#fb7185]" />
+                <div className="pointer-events-none absolute right-[24%] top-[46%] h-4 w-4 rounded-full bg-[#fdba74]" />
+
+                <div className="text-[40px] font-black italic leading-none tracking-[0.08em] text-[#f97316] drop-shadow-[0_10px_22px_rgba(249,115,22,0.18)] md:text-[58px]">
+                  赫山
+                </div>
+                <div className="mt-2 text-[68px] font-black italic leading-none tracking-[0.04em] text-[#ef4444] drop-shadow-[0_18px_30px_rgba(239,68,68,0.18)] md:text-[108px]">
+                  百事通
+                </div>
+
+                <div className="relative mt-8 flex w-full max-w-[430px] justify-center md:mt-10">
+                  <div className="absolute inset-x-12 bottom-4 h-12 rounded-full bg-[radial-gradient(circle,rgba(249,115,22,0.2),transparent_68%)] blur-2xl" />
+                  <div className="absolute inset-x-10 top-6 h-[72%] rounded-[36px] bg-[radial-gradient(circle_at_50%_20%,rgba(255,255,255,0.55),rgba(255,255,255,0.08)_56%,transparent_78%)] blur-xl" />
+                  <div className="absolute left-1/2 top-[18%] h-[64%] w-[58%] -translate-x-1/2 rounded-[42px] bg-[linear-gradient(180deg,rgba(255,255,255,0.18),rgba(255,255,255,0.04))] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-[1px]" />
+                  <img
+                    src="/logo/webapphome-transparent.png"
+                    alt="赫事通首页形象"
+                    className="relative z-10 w-full max-w-[330px] select-none object-contain drop-shadow-[0_40px_42px_rgba(124,45,18,0.2)] saturate-[1.12] contrast-[1.04] brightness-[1.01] md:max-w-[372px]"
+                  />
+                  <div className="pointer-events-none absolute left-1/2 top-[12%] z-20 h-[18%] w-[34%] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.3),transparent_72%)] blur-2xl" />
+                </div>
+
+                {!!homepageDescription && (
+                  <div className="mt-8 max-w-[520px] text-sm leading-6 text-[#7c2d12]/70 md:mt-10">
+                    <Markdown className="!text-[#7c2d12]/70" content={homepageDescription} />
+                  </div>
+                )}
+              </div>
+
+              <div className="mx-auto w-full max-w-[640px]">
+                <div className="rounded-[28px] bg-[rgba(255,255,255,0.42)] p-0 shadow-[0_22px_40px_rgba(249,115,22,0.12)] backdrop-blur-sm">
+                  <FeaturesProvider features={homepageFeaturesData}>
+                    <div className="[&>div:first-child]:rounded-[24px] [&>div:first-child]:border-0 [&>div:first-child]:bg-white [&>div:first-child]:shadow-[0_12px_28px_rgba(124,45,18,0.12)] [&>div:first-child>div:first-child]:px-[14px] [&>div:first-child>div:first-child]:pt-[12px] [&_textarea]:px-0 [&_textarea]:text-[18px] [&_textarea]:text-[#7c2d12] [&_textarea]:placeholder:text-[#9ca3af]">
+                      <ChatInputArea
+                        botName={appData?.site.title}
+                        showFeatureBar={false}
+                        showFileUpload
+                        featureBarDisabled={respondingState || inputDisabled}
+                        visionConfig={appConfig.file_upload}
+                        speechToTextConfig={appConfig.speech_to_text}
+                        onSend={(message, files) => doSend(message, files)}
+                        inputs={(currentConversationId ? currentConversationInputs : newConversationInputs) as Record<string, unknown>}
+                        inputsForm={inputsForms}
+                        isResponding={respondingState}
+                        disabled={inputDisabled}
+                      />
+                    </div>
+                  </FeaturesProvider>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     if (respondingState)
       return null
     if (currentConversationId)
@@ -265,7 +413,7 @@ const ChatWrapper = () => {
               imageUrl={appData?.site.icon_url}
             />
             <div className="w-0 grow">
-              <div className="body-lg-regular grow rounded-2xl bg-chat-bubble-bg px-4 py-3 text-text-primary">
+              <div className="grow rounded-2xl bg-chat-bubble-bg px-4 py-3 text-text-primary body-lg-regular">
                 <Markdown content={welcomeMessage.content} />
                 <SuggestedQuestions item={welcomeMessage} />
               </div>
@@ -284,11 +432,13 @@ const ChatWrapper = () => {
           imageUrl={appData?.site.icon_url}
         />
         <div className="max-w-[768px] px-4">
-          <Markdown className="!body-2xl-regular !text-text-tertiary" content={welcomeMessage.content} />
+          <Markdown className="!text-text-tertiary !body-2xl-regular" content={welcomeMessage.content} />
         </div>
       </div>
     )
   }, [
+    appConfig.opening_statement,
+    appData?.site.description,
     appData?.site.icon,
     appData?.site.icon_background,
     appData?.site.icon_type,
@@ -296,9 +446,18 @@ const ChatWrapper = () => {
     chatList,
     collapsed,
     currentConversationId,
-    inputsForms.length,
+    currentConversationInputs,
+    doSend,
+    appConfig.file_upload,
+    appConfig.speech_to_text,
+    appData?.site.title,
+    homepageFeaturesData,
+    inputsForms,
+    inputDisabled,
+    newConversationInputs,
     respondingState,
     allInputsHidden,
+    showHomepage,
   ])
 
   const answerIcon = (appData?.site && appData.site.use_icon_as_answer_icon)
@@ -341,21 +500,12 @@ const ChatWrapper = () => {
         suggestedQuestions={suggestedQuestions}
         answerIcon={answerIcon}
         hideProcessDetail
+        noChatInput={showHomepage}
         themeBuilder={themeBuilder}
         switchSibling={doSwitchSibling}
         inputDisabled={inputDisabled}
         sidebarCollapseState={sidebarCollapseState}
-        questionIcon={
-          initUserVariables?.avatar_url
-            ? (
-                <Avatar
-                  avatar={initUserVariables.avatar_url}
-                  name={initUserVariables.name || 'user'}
-                  size="xl"
-                />
-              )
-            : undefined
-        }
+        questionIcon={questionIcon}
       />
     </div>
   )

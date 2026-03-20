@@ -218,6 +218,29 @@ const ChatWrapper = () => {
 
   const isTryApp = appSourceType === AppSourceType.tryApp
   const [collapsed, setCollapsed] = useState(!!currentConversationId && !isTryApp) // try app always use the new chat
+  const questionIcon = useMemo(() => {
+    if (initUserVariables?.avatar_url) {
+      return (
+        <Avatar
+          avatar={initUserVariables.avatar_url}
+          name={initUserVariables.name || 'user'}
+          size="xl"
+        />
+      )
+    }
+
+    if (appData?.site.default_user_avatar_url) {
+      return (
+        <Avatar
+          avatar={appData.site.default_user_avatar_url}
+          name={initUserVariables?.name || 'user'}
+          size="xl"
+        />
+      )
+    }
+
+    return undefined
+  }, [appData?.site.default_user_avatar_url, initUserVariables?.avatar_url, initUserVariables?.name])
 
   const chatNode = useMemo(() => {
     if (allInputsHidden || !inputsForms.length)
@@ -331,17 +354,7 @@ const ChatWrapper = () => {
       switchSibling={doSwitchSibling}
       inputDisabled={inputDisabled}
       sendOnEnter={sendOnEnter}
-      questionIcon={
-        initUserVariables?.avatar_url
-          ? (
-              <Avatar
-                avatar={initUserVariables.avatar_url}
-                name={initUserVariables.name || 'user'}
-                size="xl"
-              />
-            )
-          : undefined
-      }
+      questionIcon={questionIcon}
     />
   )
 }

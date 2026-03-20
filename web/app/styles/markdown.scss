@@ -506,6 +506,32 @@
   margin-bottom: 0;
 }
 
+.markdown-body.chat-answer-markdown p {
+  margin-top: 0.375rem;
+  margin-bottom: 0.375rem;
+}
+
+.markdown-body.chat-answer-markdown h1,
+.markdown-body.chat-answer-markdown h2,
+.markdown-body.chat-answer-markdown h3,
+.markdown-body.chat-answer-markdown h4,
+.markdown-body.chat-answer-markdown h5,
+.markdown-body.chat-answer-markdown h6 {
+  margin-top: 0.625rem;
+  margin-bottom: 0.25rem;
+  line-height: 1.45;
+}
+
+.markdown-body.chat-answer-markdown ul,
+.markdown-body.chat-answer-markdown ol {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.markdown-body.chat-answer-markdown li + li {
+  margin-top: 0.125rem;
+}
+
 .markdown-body dl {
   padding: 0;
 }

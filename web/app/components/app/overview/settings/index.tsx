@@ -47,11 +47,14 @@ export type ConfigParams = {
   prompt_public: boolean
   copyright: string
   privacy_policy: string
+  default_user_avatar_url: string
   custom_disclaimer: string
+  enable_homepage: boolean
   icon_type: AppIconType
   icon: string
   icon_background?: string
   show_workflow_steps: boolean
+  show_answer_disclaimer: boolean
   use_icon_as_answer_icon: boolean
   enable_sso?: boolean
 }
@@ -78,9 +81,13 @@ const SettingsModal: FC<ISettingsModalProps> = ({
     chat_color_theme_inverted,
     copyright,
     privacy_policy,
+    default_user_avatar_url,
+    default_user_avatar_file_id,
     custom_disclaimer,
+    enable_homepage,
     default_language,
     show_workflow_steps,
+    show_answer_disclaimer,
     use_icon_as_answer_icon,
   } = appInfo.site
   const [inputInfo, setInputInfo] = useState({
@@ -91,8 +98,11 @@ const SettingsModal: FC<ISettingsModalProps> = ({
     copyright,
     copyrightSwitchValue: !!copyright,
     privacyPolicy: privacy_policy,
+    defaultUserAvatarFileId: default_user_avatar_file_id || default_user_avatar_url,
     customDisclaimer: custom_disclaimer,
+    enable_homepage,
     show_workflow_steps,
+    show_answer_disclaimer,
     use_icon_as_answer_icon,
     enable_sso: appInfo.enable_sso,
   })
@@ -107,6 +117,16 @@ const SettingsModal: FC<ISettingsModalProps> = ({
       ? { type: 'image', url: icon_url!, fileId: icon }
       : { type: 'emoji', icon, background: icon_background! },
   )
+  const [showUserAvatarPicker, setShowUserAvatarPicker] = useState(false)
+  const [defaultUserAvatar, setDefaultUserAvatar] = useState<AppIconSelection | null>(
+    (default_user_avatar_file_id || default_user_avatar_url)
+      ? {
+          type: 'image',
+          url: default_user_avatar_url || '',
+          fileId: default_user_avatar_file_id || default_user_avatar_url,
+        }
+      : null,
+  )
 
   const { enableBilling, plan, webappCopyrightEnabled } = useProviderContext()
   const { setShowPricingModal, setShowAccountSettingModal } = useModalContext()
@@ -118,6 +138,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
       setShowAccountSettingModal({ payload: ACCOUNT_SETTING_TAB.BILLING })
   }, [isFreePlan, setShowAccountSettingModal, setShowPricingModal])
 
+  /* eslint-disable react-hooks-extra/no-direct-set-state-in-use-effect */
   useEffect(() => {
     setInputInfo({
       title,
@@ -127,8 +148,11 @@ const SettingsModal: FC<ISettingsModalProps> = ({
       copyright,
       copyrightSwitchValue: !!copyright,
       privacyPolicy: privacy_policy,
+      defaultUserAvatarFileId: default_user_avatar_file_id || default_user_avatar_url,
       customDisclaimer: custom_disclaimer,
+      enable_homepage,
       show_workflow_steps,
+      show_answer_disclaimer,
       use_icon_as_answer_icon,
       enable_sso: appInfo.enable_sso,
     })
@@ -136,7 +160,15 @@ const SettingsModal: FC<ISettingsModalProps> = ({
     setAppIcon(icon_type === 'image'
       ? { type: 'image', url: icon_url!, fileId: icon }
       : { type: 'emoji', icon, background: icon_background! })
-  }, [appInfo, chat_color_theme, chat_color_theme_inverted, copyright, custom_disclaimer, default_language, description, icon, icon_background, icon_type, icon_url, privacy_policy, show_workflow_steps, title, use_icon_as_answer_icon])
+    setDefaultUserAvatar((default_user_avatar_file_id || default_user_avatar_url)
+      ? {
+          type: 'image',
+          url: default_user_avatar_url || '',
+          fileId: default_user_avatar_file_id || default_user_avatar_url,
+        }
+      : null)
+  }, [appInfo, chat_color_theme, chat_color_theme_inverted, copyright, custom_disclaimer, default_language, default_user_avatar_file_id, default_user_avatar_url, description, enable_homepage, icon, icon_background, icon_type, icon_url, privacy_policy, show_answer_disclaimer, show_workflow_steps, title, use_icon_as_answer_icon])
+  /* eslint-enable react-hooks-extra/no-direct-set-state-in-use-effect */
 
   useEffect(() => {
     return () => {
@@ -204,11 +236,16 @@ const SettingsModal: FC<ISettingsModalProps> = ({
           ? inputInfo.copyright
           : '',
       privacy_policy: inputInfo.privacyPolicy,
+      default_user_avatar_url: defaultUserAvatar?.type === 'image'
+        ? defaultUserAvatar.fileId
+        : inputInfo.defaultUserAvatarFileId || '',
       custom_disclaimer: inputInfo.customDisclaimer,
+      enable_homepage: inputInfo.enable_homepage,
       icon_type: appIcon.type,
       icon: appIcon.type === 'emoji' ? appIcon.icon : appIcon.fileId,
       icon_background: appIcon.type === 'emoji' ? appIcon.background : undefined,
       show_workflow_steps: inputInfo.show_workflow_steps,
+      show_answer_disclaimer: inputInfo.show_answer_disclaimer,
       use_icon_as_answer_icon: inputInfo.use_icon_as_answer_icon,
       enable_sso: inputInfo.enable_sso,
     }
@@ -333,6 +370,17 @@ const SettingsModal: FC<ISettingsModalProps> = ({
               </div>
             </div>
           )}
+          <div className="w-full">
+            <div className="flex items-center justify-between">
+              <div className={cn('py-1 text-text-secondary system-sm-semibold')}>{t(`${prefixSettings}.homepage.title`, { ns: 'appOverview' })}</div>
+              <Switch
+                disabled={appInfo.mode !== AppModeEnum.ADVANCED_CHAT}
+                value={inputInfo.enable_homepage}
+                onChange={v => setInputInfo({ ...inputInfo, enable_homepage: v })}
+              />
+            </div>
+            <p className="pb-0.5 text-text-tertiary body-xs-regular">{t(`${prefixSettings}.homepage.desc`, { ns: 'appOverview' })}</p>
+          </div>
           {/* workflow detail */}
           <div className="w-full">
             <div className="flex items-center justify-between">
@@ -425,6 +473,39 @@ const SettingsModal: FC<ISettingsModalProps> = ({
                   placeholder={t(`${prefixSettings}.more.privacyPolicyPlaceholder`, { ns: 'appOverview' }) as string}
                 />
               </div>
+              {/* default user avatar */}
+              <div className="w-full">
+                <div className={cn('py-1 text-text-secondary system-sm-semibold')}>{t(`${prefixSettings}.more.defaultUserAvatar`, { ns: 'appOverview' })}</div>
+                <p className={cn('pb-0.5 text-text-tertiary body-xs-regular')}>{t(`${prefixSettings}.more.defaultUserAvatarTip`, { ns: 'appOverview' })}</p>
+                <div className="mt-2 flex items-center gap-3">
+                  <button
+                    type="button"
+                    aria-label={t(`${prefixSettings}.more.defaultUserAvatar`, { ns: 'appOverview' }) as string}
+                    className="cursor-pointer rounded-full"
+                    onClick={() => setShowUserAvatarPicker(true)}
+                  >
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-components-panel-border bg-components-panel-on-panel-item-bg text-text-tertiary">
+                      <span className={cn('h-5 w-5', defaultUserAvatar ? 'i-ri-check-line text-text-success' : 'i-ri-upload-cloud-2-line')} />
+                    </div>
+                  </button>
+                  <div className="min-w-0 grow">
+                    <div className="truncate text-text-secondary system-xs-regular">
+                      {t(`${prefixSettings}.more.defaultUserAvatarPlaceholder`, { ns: 'appOverview' })}
+                    </div>
+                  </div>
+                  {defaultUserAvatar && (
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setDefaultUserAvatar(null)
+                        setInputInfo(item => ({ ...item, defaultUserAvatarFileId: '' }))
+                      }}
+                    >
+                      {t('operation.clear', { ns: 'common' })}
+                    </Button>
+                  )}
+                </div>
+              </div>
               {/* custom disclaimer */}
               <div className="w-full">
                 <div className={cn('py-1 text-text-secondary system-sm-semibold')}>{t(`${prefixSettings}.more.customDisclaimer`, { ns: 'appOverview' })}</div>
@@ -435,6 +516,17 @@ const SettingsModal: FC<ISettingsModalProps> = ({
                   onChange={onChange('customDisclaimer')}
                   placeholder={t(`${prefixSettings}.more.customDisclaimerPlaceholder`, { ns: 'appOverview' }) as string}
                 />
+              </div>
+              <div className="w-full">
+                <div className="flex items-center justify-between">
+                  <div className={cn('py-1 text-text-secondary system-sm-semibold')}>{t(`${prefixSettings}.disclaimer.title`, { ns: 'appOverview' })}</div>
+                  <Switch
+                    disabled={appInfo.mode !== AppModeEnum.ADVANCED_CHAT}
+                    value={inputInfo.show_answer_disclaimer}
+                    onChange={v => setInputInfo({ ...inputInfo, show_answer_disclaimer: v })}
+                  />
+                </div>
+                <p className="pb-0.5 text-text-tertiary body-xs-regular">{t(`${prefixSettings}.disclaimer.desc`, { ns: 'appOverview' })}</p>
               </div>
             </>
           )}
@@ -456,6 +548,23 @@ const SettingsModal: FC<ISettingsModalProps> = ({
                   ? { type: 'image', url: icon_url!, fileId: icon }
                   : { type: 'emoji', icon, background: icon_background! })
                 setShowAppIconPicker(false)
+              }}
+            />
+          </div>
+        )}
+        {showUserAvatarPicker && (
+          <div onClick={e => e.stopPropagation()}>
+            <AppIconPicker
+              onSelect={(payload) => {
+                if (payload.type === 'image') {
+                  setDefaultUserAvatar(payload)
+                  setInputInfo(item => ({ ...item, defaultUserAvatarFileId: payload.fileId }))
+                }
+                setShowUserAvatarPicker(false)
+              }}
+              imageOnly
+              onClose={() => {
+                setShowUserAvatarPicker(false)
               }}
             />
           </div>

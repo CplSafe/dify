@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import type { ReactNode } from 'react'
+import type { AppIconSelection } from '@/app/components/base/app-icon-picker'
 import type { ModalContextState } from '@/context/modal-context'
 import type { ProviderContextState } from '@/context/provider-context'
 import type { AppDetailResponse } from '@/models/app'
@@ -11,6 +12,25 @@ import { Plan } from '@/app/components/billing/type'
 import { baseProviderContextValue } from '@/context/provider-context'
 import { AppModeEnum } from '@/types/app'
 import SettingsModal from './index'
+
+vi.mock('@/app/components/base/app-icon-picker', () => ({
+  default: ({ onSelect, imageOnly, onClose }: { onSelect?: (payload: AppIconSelection) => void, imageOnly?: boolean, onClose?: () => void }) => (
+    <div>
+      <button
+        type="button"
+        onClick={() => {
+          if (imageOnly)
+            onSelect?.({ type: 'image', url: 'https://example.com/default-avatar.png', fileId: 'avatar-file-id' })
+          else
+            onSelect?.({ type: 'emoji', icon: '🤖', background: '#FFFFFF' })
+        }}
+      >
+        mock-select-icon
+      </button>
+      <button type="button" onClick={onClose}>mock-close-icon-picker</button>
+    </div>
+  ),
+}))
 
 vi.mock('react-i18next', async () => {
   const actual = await vi.importActual<typeof import('react-i18next')>('react-i18next')
@@ -94,9 +114,12 @@ const mockAppInfo = {
     chat_color_theme_inverted: true,
     copyright: '© Dify',
     privacy_policy: '',
+    default_user_avatar_url: '',
+    default_user_avatar_file_id: '',
     custom_disclaimer: 'Disclaimer',
     default_language: 'en-US',
     show_workflow_steps: true,
+    show_answer_disclaimer: true,
     use_icon_as_answer_icon: true,
   },
   mode: AppModeEnum.ADVANCED_CHAT,
@@ -206,15 +229,32 @@ describe('SettingsModal', () => {
       prompt_public: false,
       copyright: mockAppInfo.site.copyright,
       privacy_policy: mockAppInfo.site.privacy_policy,
+      default_user_avatar_url: '',
       custom_disclaimer: mockAppInfo.site.custom_disclaimer,
       icon_type: 'emoji',
       icon: mockAppInfo.site.icon,
       icon_background: mockAppInfo.site.icon_background,
+      show_answer_disclaimer: mockAppInfo.site.show_answer_disclaimer,
       show_workflow_steps: mockAppInfo.site.show_workflow_steps,
       use_icon_as_answer_icon: mockAppInfo.site.use_icon_as_answer_icon,
       enable_sso: mockAppInfo.enable_sso,
     }))
     expect(mockOnClose).toHaveBeenCalled()
+  })
+
+  it('should save uploaded default user avatar file id', async () => {
+    mockOnSave.mockResolvedValueOnce(undefined)
+    renderSettingsModal()
+
+    fireEvent.click(screen.getByText('appOverview.overview.appInfo.settings.more.entry'))
+    fireEvent.click(screen.getByRole('button', { name: 'appOverview.overview.appInfo.settings.more.defaultUserAvatar' }))
+    fireEvent.click(screen.getByText('mock-select-icon'))
+    fireEvent.click(screen.getByText('common.operation.save'))
+
+    await waitFor(() => expect(mockOnSave).toHaveBeenCalled())
+    expect(mockOnSave).toHaveBeenCalledWith(expect.objectContaining({
+      default_user_avatar_url: 'avatar-file-id',
+    }))
   })
 
   it('should clear the delayed hide-more timer when the modal unmounts after closing', () => {

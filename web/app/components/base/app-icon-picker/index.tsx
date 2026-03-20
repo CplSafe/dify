@@ -35,12 +35,14 @@ type AppIconPickerProps = {
   onSelect?: (payload: AppIconSelection) => void
   onClose?: () => void
   className?: string
+  imageOnly?: boolean
 }
 
 const AppIconPicker: FC<AppIconPickerProps> = ({
   onSelect,
   onClose,
   className,
+  imageOnly = false,
 }) => {
   const { t } = useTranslation()
 
@@ -48,7 +50,7 @@ const AppIconPicker: FC<AppIconPickerProps> = ({
     { key: 'emoji', label: t('iconPicker.emoji', { ns: 'app' }), icon: <span className="text-lg">🤖</span> },
     { key: 'image', label: t('iconPicker.image', { ns: 'app' }), icon: <RiImageCircleAiLine className="size-4" /> },
   ]
-  const [activeTab, setActiveTab] = useState<AppIconType>('emoji')
+  const [activeTab, setActiveTab] = useState<AppIconType>(imageOnly ? 'image' : 'emoji')
 
   const [emoji, setEmoji] = useState<{ emoji: string, background: string }>()
   const handleSelectEmoji = useCallback((emoji: string, background: string) => {
@@ -115,7 +117,7 @@ const AppIconPicker: FC<AppIconPickerProps> = ({
       wrapperClassName={className}
       className={cn(s.container, '!h-[462px] !w-[362px] !p-0')}
     >
-      {!DISABLE_UPLOAD_IMAGE_AS_ICON && (
+      {!DISABLE_UPLOAD_IMAGE_AS_ICON && !imageOnly && (
         <div className="w-full p-2 pb-0">
           <div className="flex items-center justify-center gap-2 rounded-xl bg-background-body p-1 text-text-primary">
             {tabs.map(tab => (

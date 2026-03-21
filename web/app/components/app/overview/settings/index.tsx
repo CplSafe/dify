@@ -44,6 +44,7 @@ export type ConfigParams = {
   default_language: string
   chat_color_theme: string
   chat_color_theme_inverted: boolean
+  chat_page_background_color: string
   prompt_public: boolean
   copyright: string
   privacy_policy: string
@@ -79,6 +80,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
     description,
     chat_color_theme,
     chat_color_theme_inverted,
+    chat_page_background_color,
     copyright,
     privacy_policy,
     default_user_avatar_url,
@@ -95,6 +97,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
     desc: description,
     chatColorTheme: chat_color_theme,
     chatColorThemeInverted: chat_color_theme_inverted,
+    chatPageBackgroundColor: chat_page_background_color || '',
     copyright,
     copyrightSwitchValue: !!copyright,
     privacyPolicy: privacy_policy,
@@ -110,6 +113,8 @@ const SettingsModal: FC<ISettingsModalProps> = ({
   const [saveLoading, setSaveLoading] = useState(false)
   const { t } = useTranslation()
   const hideMoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const chatColorThemePickerRef = useRef<HTMLInputElement>(null)
+  const chatPageBackgroundColorPickerRef = useRef<HTMLInputElement>(null)
 
   const [showAppIconPicker, setShowAppIconPicker] = useState(false)
   const [appIcon, setAppIcon] = useState<AppIconSelection>(
@@ -145,6 +150,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
       desc: description,
       chatColorTheme: chat_color_theme,
       chatColorThemeInverted: chat_color_theme_inverted,
+      chatPageBackgroundColor: chat_page_background_color || '',
       copyright,
       copyrightSwitchValue: !!copyright,
       privacyPolicy: privacy_policy,
@@ -167,7 +173,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
           fileId: default_user_avatar_file_id || default_user_avatar_url,
         }
       : null)
-  }, [appInfo, chat_color_theme, chat_color_theme_inverted, copyright, custom_disclaimer, default_language, default_user_avatar_file_id, default_user_avatar_url, description, enable_homepage, icon, icon_background, icon_type, icon_url, privacy_policy, show_answer_disclaimer, show_workflow_steps, title, use_icon_as_answer_icon])
+  }, [appInfo, chat_color_theme, chat_color_theme_inverted, chat_page_background_color, copyright, custom_disclaimer, default_language, default_user_avatar_file_id, default_user_avatar_url, description, enable_homepage, icon, icon_background, icon_type, icon_url, privacy_policy, show_answer_disclaimer, show_workflow_steps, title, use_icon_as_answer_icon])
   /* eslint-enable react-hooks-extra/no-direct-set-state-in-use-effect */
 
   useEffect(() => {
@@ -212,7 +218,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
     }
 
     if (inputInfo !== null) {
-      if (!validateColorHex(inputInfo.chatColorTheme)) {
+      if (!validateColorHex(inputInfo.chatColorTheme) || !validateColorHex(inputInfo.chatPageBackgroundColor)) {
         notify({ type: 'error', message: t(`${prefixSettings}.invalidHexMessage`, { ns: 'appOverview' }) })
         return
       }
@@ -229,6 +235,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
       default_language: language,
       chat_color_theme: inputInfo.chatColorTheme,
       chat_color_theme_inverted: inputInfo.chatColorThemeInverted,
+      chat_page_background_color: inputInfo.chatPageBackgroundColor,
       prompt_public: false,
       copyright: !webappCopyrightEnabled
         ? ''
@@ -269,6 +276,17 @@ const SettingsModal: FC<ISettingsModalProps> = ({
   const onDesChange = (value: string) => {
     setInputInfo(item => ({ ...item, desc: value }))
   }
+
+  const openColorPicker = useCallback((field: 'chatColorTheme' | 'chatPageBackgroundColor') => {
+    const targetRef = field === 'chatColorTheme' ? chatColorThemePickerRef : chatPageBackgroundColorPickerRef
+    targetRef.current?.click()
+  }, [])
+
+  const onColorPickerChange = useCallback((field: 'chatColorTheme' | 'chatPageBackgroundColor') => {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      setInputInfo(item => ({ ...item, [field]: e.target.value.toUpperCase() }))
+    }
+  }, [])
 
   return (
     <>
@@ -351,21 +369,54 @@ const SettingsModal: FC<ISettingsModalProps> = ({
           </div>
           {/* theme color */}
           {isChat && (
-            <div className="flex items-center">
-              <div className="grow">
-                <div className={cn('py-1 text-text-secondary system-sm-semibold')}>{t(`${prefixSettings}.chatColorTheme`, { ns: 'appOverview' })}</div>
-                <div className="pb-0.5 text-text-tertiary body-xs-regular">{t(`${prefixSettings}.chatColorThemeDesc`, { ns: 'appOverview' })}</div>
+            <div className="space-y-3">
+              <div className="flex items-start">
+                <div className="grow">
+                  <div className={cn('py-1 text-text-secondary system-sm-semibold')}>{t(`${prefixSettings}.chatColorTheme`, { ns: 'appOverview' })}</div>
+                  <div className="pb-0.5 text-text-tertiary body-xs-regular">{t(`${prefixSettings}.chatColorThemeDesc`, { ns: 'appOverview' })}</div>
+                </div>
+                <div className="shrink-0 w-[200px]">
+                  <input
+                    ref={chatColorThemePickerRef}
+                    type="color"
+                    className="sr-only"
+                    value={inputInfo.chatColorTheme || '#A020F0'}
+                    onChange={onColorPickerChange('chatColorTheme')}
+                  />
+                  <Input
+                    className="mb-1 w-[200px]"
+                    value={inputInfo.chatColorTheme ?? ''}
+                    onChange={onChange('chatColorTheme')}
+                    placeholder="E.g #A020F0"
+                    onClick={() => openColorPicker('chatColorTheme')}
+                  />
+                  <div className="flex items-center justify-between">
+                    <p className={cn('text-text-tertiary body-xs-regular')}>{t(`${prefixSettings}.chatColorThemeInverted`, { ns: 'appOverview' })}</p>
+                    <Switch value={inputInfo.chatColorThemeInverted} onChange={v => setInputInfo({ ...inputInfo, chatColorThemeInverted: v })}></Switch>
+                  </div>
+                </div>
               </div>
-              <div className="shrink-0">
-                <Input
-                  className="mb-1 w-[200px]"
-                  value={inputInfo.chatColorTheme ?? ''}
-                  onChange={onChange('chatColorTheme')}
-                  placeholder="E.g #A020F0"
-                />
-                <div className="flex items-center justify-between">
-                  <p className={cn('text-text-tertiary body-xs-regular')}>{t(`${prefixSettings}.chatColorThemeInverted`, { ns: 'appOverview' })}</p>
-                  <Switch value={inputInfo.chatColorThemeInverted} onChange={v => setInputInfo({ ...inputInfo, chatColorThemeInverted: v })}></Switch>
+              <div className="flex items-start">
+                <div className="grow">
+                  <div className={cn('py-1 text-text-secondary system-sm-semibold')}>{t(`${prefixSettings}.chatPageBackgroundColor`, { ns: 'appOverview' })}</div>
+                  <div className="pb-0.5 text-text-tertiary body-xs-regular">{t(`${prefixSettings}.chatPageBackgroundColorDesc`, { ns: 'appOverview' })}</div>
+                </div>
+                <div className="shrink-0 w-[200px]">
+                  <input
+                    ref={chatPageBackgroundColorPickerRef}
+                    type="color"
+                    className="sr-only"
+                    value={inputInfo.chatPageBackgroundColor || '#F8FAFC'}
+                    onChange={onColorPickerChange('chatPageBackgroundColor')}
+                  />
+                  <Input
+                    className="w-[200px]"
+                    value={inputInfo.chatPageBackgroundColor ?? ''}
+                    onChange={onChange('chatPageBackgroundColor')}
+                    placeholder="E.g #F8FAFC"
+                    onClick={() => openColorPicker('chatPageBackgroundColor')}
+                  />
+                  <div className="h-7" />
                 </div>
               </div>
             </div>

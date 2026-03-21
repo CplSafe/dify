@@ -281,6 +281,8 @@ export type SiteConfig = {
   chat_color_theme: string
   /** Invert the color of the theme set in chat_color_theme */
   chat_color_theme_inverted: boolean
+  /** Background color of the chat page */
+  chat_page_background_color?: string | null
   /** Author */
   author: string
   /** User Support Email Address */

@@ -14,6 +14,7 @@ export type SiteInfo = {
   title: string
   chat_color_theme?: string
   chat_color_theme_inverted?: boolean
+  chat_page_background_color?: string | null
   icon_type?: AppIconType | null
   icon?: string
   icon_background?: string | null

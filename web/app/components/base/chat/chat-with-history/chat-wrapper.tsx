@@ -340,11 +340,13 @@ const ChatWrapper = () => {
                 <div className="pointer-events-none absolute left-[22%] top-[48%] h-3 w-3 rounded-full bg-[#fb7185]" />
                 <div className="pointer-events-none absolute right-[24%] top-[46%] h-4 w-4 rounded-full bg-[#fdba74]" />
 
-                <div className="text-[40px] font-black italic leading-none tracking-[0.08em] text-[#f97316] drop-shadow-[0_10px_22px_rgba(249,115,22,0.18)] md:text-[58px]">
-                  赫山
-                </div>
-                <div className="mt-2 text-[68px] font-black italic leading-none tracking-[0.04em] text-[#ef4444] drop-shadow-[0_18px_30px_rgba(239,68,68,0.18)] md:text-[108px]">
-                  百事通
+                <div className="flex w-full max-w-[360px] flex-col items-center md:max-w-[440px]">
+                  <div className="w-full text-center text-[38px] font-black italic leading-none tracking-[0.04em] text-[#f97316] drop-shadow-[0_10px_22px_rgba(249,115,22,0.18)] md:text-[56px]">
+                    赫山
+                  </div>
+                  <div className="mt-2 w-full text-center text-[66px] font-black italic leading-none tracking-[0.02em] text-[#ef4444] drop-shadow-[0_18px_30px_rgba(239,68,68,0.18)] md:text-[104px]">
+                    百事通
+                  </div>
                 </div>
 
                 <div className="relative mt-8 flex w-full max-w-[430px] justify-center md:mt-10">
@@ -474,6 +476,7 @@ const ChatWrapper = () => {
   return (
     <div
       className="h-full overflow-hidden bg-chatbot-bg"
+      style={appData?.site.chat_page_background_color ? { backgroundColor: appData.site.chat_page_background_color } : undefined}
     >
       <Chat
         appData={appData ?? undefined}

@@ -2033,6 +2033,7 @@ class Site(Base):
     default_language: Mapped[str] = mapped_column(String(255), nullable=False)
     chat_color_theme = mapped_column(String(255))
     chat_color_theme_inverted: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default=sa.text("false"))
+    chat_page_background_color = mapped_column(String(255))
     copyright = mapped_column(String(255))
     privacy_policy = mapped_column(String(255))
     default_user_avatar_url = mapped_column(String(255))

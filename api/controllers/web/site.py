@@ -32,6 +32,7 @@ class AppSiteApi(WebApiResource):
         "title": fields.String,
         "chat_color_theme": fields.String,
         "chat_color_theme_inverted": fields.Boolean,
+        "chat_page_background_color": fields.String,
         "icon_type": fields.String,
         "icon": fields.String,
         "icon_background": fields.String,

@@ -73,6 +73,8 @@
   "overview.appInfo.settings.chatColorTheme": "聊天顏色主題",
   "overview.appInfo.settings.chatColorThemeDesc": "設定聊天機器人的顏色主題",
   "overview.appInfo.settings.chatColorThemeInverted": "反轉",
+  "overview.appInfo.settings.chatPageBackgroundColor": "對話聊天頁面背景色",
+  "overview.appInfo.settings.chatPageBackgroundColorDesc": "設定對話聊天頁面使用的背景顏色",
   "overview.appInfo.settings.disclaimer.buttonDesc": "控制是否在 Web App 的每條 AI 回覆下方顯示自訂免責聲明。",
   "overview.appInfo.settings.disclaimer.desc": "在 Web App 中的每條 AI 回覆底部顯示自訂免責聲明。",
   "overview.appInfo.settings.disclaimer.tip": "顯示的內容來自下方的自訂免責聲明欄位，其中的電話號碼會自動識別為可直接撥打的連結。",

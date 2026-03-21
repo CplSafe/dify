@@ -31,6 +31,7 @@ class AppSiteUpdatePayload(BaseModel):
     default_language: str | None = Field(default=None)
     chat_color_theme: str | None = Field(default=None)
     chat_color_theme_inverted: bool | None = Field(default=None)
+    chat_page_background_color: str | None = Field(default=None)
     customize_domain: str | None = Field(default=None)
     copyright: str | None = Field(default=None)
     privacy_policy: str | None = Field(default=None)
@@ -91,6 +92,7 @@ class AppSite(Resource):
             "default_language",
             "chat_color_theme",
             "chat_color_theme_inverted",
+            "chat_page_background_color",
             "customize_domain",
             "copyright",
             "privacy_policy",

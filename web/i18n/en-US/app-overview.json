@@ -73,6 +73,8 @@
   "overview.appInfo.settings.chatColorTheme": "Chat color theme",
   "overview.appInfo.settings.chatColorThemeDesc": "Set the color theme of the chatbot",
   "overview.appInfo.settings.chatColorThemeInverted": "Inverted",
+  "overview.appInfo.settings.chatPageBackgroundColor": "Chat page background color",
+  "overview.appInfo.settings.chatPageBackgroundColorDesc": "Set the background color used on the conversation page",
   "overview.appInfo.settings.disclaimer.buttonDesc": "Control whether every AI reply shows the custom disclaimer from Web App Settings.",
   "overview.appInfo.settings.disclaimer.desc": "Display the custom disclaimer under every AI reply in the web app.",
   "overview.appInfo.settings.disclaimer.tip": "The displayed text comes from the Custom Disclaimer field below. Phone numbers in the text can be clicked to call directly.",

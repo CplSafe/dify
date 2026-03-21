@@ -206,7 +206,6 @@ const Answer: FC<AnswerProps> = ({
             <div
               ref={humanInputFormContainerRef}
               className={cn('relative inline-block w-full max-w-full rounded-2xl bg-chat-bubble-bg px-4 py-3 text-text-primary body-lg-regular')}
-              style={{ WebkitTextFillColor: 'currentColor' }}
             >
               {
                 !responding && contentIsEmpty && !hasAgentThoughts && (
@@ -276,7 +275,6 @@ const Answer: FC<AnswerProps> = ({
             <div
               ref={contentRef}
               className="relative inline-block w-full max-w-full rounded-2xl bg-chat-bubble-bg px-4 py-3 text-text-primary body-lg-regular"
-              style={{ WebkitTextFillColor: 'currentColor' }}
             >
               {
                 !responding && (
@@ -379,7 +377,6 @@ const Answer: FC<AnswerProps> = ({
             <div
               ref={contentRef}
               className={cn('relative inline-block max-w-full rounded-2xl bg-chat-bubble-bg px-4 py-3 text-text-primary body-lg-regular', workflowProcess && 'w-full')}
-              style={{ WebkitTextFillColor: 'currentColor' }}
             >
               {
                 !responding && (

@@ -45,7 +45,6 @@ export const Markdown = memo((props: MarkdownProps) => {
     <div
       className={cn('markdown-body', '!text-text-primary', className)}
       data-testid="markdown-body"
-      style={{ WebkitTextFillColor: 'currentColor' }}
     >
       <StreamdownWrapper
         pluginInfo={pluginInfo}

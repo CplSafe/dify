@@ -73,6 +73,8 @@
   "overview.appInfo.settings.chatColorTheme": "聊天颜色主题",
   "overview.appInfo.settings.chatColorThemeDesc": "设置聊天机器人的颜色主题",
   "overview.appInfo.settings.chatColorThemeInverted": "反转",
+  "overview.appInfo.settings.chatPageBackgroundColor": "对话聊天页面背景色",
+  "overview.appInfo.settings.chatPageBackgroundColorDesc": "设置对话聊天页面使用的背景颜色",
   "overview.appInfo.settings.disclaimer.buttonDesc": "控制是否在 Web App 的每条 AI 回复下方展示自定义免责声明。",
   "overview.appInfo.settings.disclaimer.desc": "在 Web App 中的每条 AI 回复底部展示自定义免责声明。",
   "overview.appInfo.settings.disclaimer.tip": "展示的内容来自下方的自定义免责声明字段，其中的手机号会自动识别为可直接拨打的链接。",

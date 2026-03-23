@@ -263,7 +263,7 @@ const ChatWrapper = () => {
               imageUrl={appData?.site.icon_url}
             />
             <div className="grow rounded-2xl bg-chat-bubble-bg px-4 py-3 text-text-primary body-lg-regular">
-              <Markdown content={welcomeMessage.content} />
+              <Markdown content={welcomeMessage.content} mode="static" />
               <SuggestedQuestions item={welcomeMessage} />
             </div>
           </div>
@@ -280,7 +280,7 @@ const ChatWrapper = () => {
           imageUrl={appData?.site.icon_url}
         />
         <div className="max-w-[768px] px-4">
-          <Markdown className="!text-text-tertiary !body-2xl-regular" content={welcomeMessage.content} />
+          <Markdown className="!text-text-tertiary !body-2xl-regular" content={welcomeMessage.content} mode="static" />
         </div>
       </div>
     )

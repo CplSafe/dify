@@ -138,18 +138,22 @@
 }
 
 .markdownCardTitle {
+  display: inline-block;
   font-size: 15px;
   font-weight: 700;
   line-height: 1;
-  color: #111827;
+  color: #111827 !important;
+  text-decoration: none !important;
 }
 
 .markdownCardMeta {
+  display: inline-flex;
   border-radius: 9999px;
   padding: 4px 8px;
   font-size: 12px;
   line-height: 1;
-  color: #64748b;
+  color: #64748b !important;
+  text-decoration: none !important;
   background: rgba(241, 245, 249, 0.95);
 }
 
@@ -162,16 +166,20 @@
 }
 
 .markdownCardCaption {
+  display: inline-block;
   font-size: 12px;
   line-height: 1;
-  color: #64748b;
+  color: #64748b !important;
+  text-decoration: none !important;
 }
 
 .markdownCardIndex {
+  display: inline-flex;
   border-radius: 9999px;
   padding: 4px 8px;
   font-size: 12px;
   line-height: 1;
-  color: #1e293b;
+  color: #1e293b !important;
+  text-decoration: none !important;
   background: rgba(241, 245, 249, 0.95);
 }

@@ -31,7 +31,7 @@ const ContentItem = ({
 
   if (!isInputField(content)) {
     return (
-      <Markdown content={content} />
+      <Markdown content={content} mode="static" />
     )
   }
 

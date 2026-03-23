@@ -3,6 +3,7 @@ import type { FC } from 'react'
 import * as React from 'react'
 import { useState } from 'react'
 import { Carousel } from '@/app/components/base/carousel'
+import ImagePreviewer from '@/app/components/datasets/common/image-previewer'
 import ImagePreview from '@/app/components/base/image-uploader/image-preview'
 import { cn } from '@/utils/classnames'
 import s from './style.module.css'
@@ -34,7 +35,7 @@ const ImageGallery: FC<Props> = ({
   srcs,
   variant = 'default',
 }) => {
-  const [imagePreviewUrl, setImagePreviewUrl] = useState('')
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
 
   const validSrcs = srcs.filter(Boolean)
   const imgNum = validSrcs.length
@@ -66,7 +67,7 @@ const ImageGallery: FC<Props> = ({
                 <button
                   type="button"
                   className={cn(s.itemButton, s.markdownButton)}
-                  onClick={() => setImagePreviewUrl(src)}
+                  onClick={() => setPreviewIndex(index)}
                   data-testid="gallery-image-button"
                 >
                   <div className={s.markdownCardHeader}>
@@ -89,11 +90,15 @@ const ImageGallery: FC<Props> = ({
             ))}
           </Carousel.Content>
         </Carousel>
-        {imagePreviewUrl && (
-          <ImagePreview
-            url={imagePreviewUrl}
-            onCancel={() => setImagePreviewUrl('')}
-            title=""
+        {previewIndex !== null && (
+          <ImagePreviewer
+            images={validSrcs.map((url, index) => ({
+              url,
+              name: `流程图 ${index + 1}`,
+              size: 0,
+            }))}
+            initialIndex={previewIndex}
+            onClose={() => setPreviewIndex(null)}
           />
         )}
       </>
@@ -121,7 +126,7 @@ const ImageGallery: FC<Props> = ({
               isSingleImage && s.singleButton,
             )}
             style={gridWidthStyle}
-            onClick={() => setImagePreviewUrl(src)}
+            onClick={() => setPreviewIndex(index)}
             data-testid="gallery-image-button"
           >
             <img
@@ -139,10 +144,23 @@ const ImageGallery: FC<Props> = ({
         )
       })}
       {
-        imagePreviewUrl && (
+        previewIndex !== null && imgNum > 1 && (
+          <ImagePreviewer
+            images={validSrcs.map((url, index) => ({
+              url,
+              name: `图片 ${index + 1}`,
+              size: 0,
+            }))}
+            initialIndex={previewIndex}
+            onClose={() => setPreviewIndex(null)}
+          />
+        )
+      }
+      {
+        previewIndex !== null && imgNum === 1 && (
           <ImagePreview
-            url={imagePreviewUrl}
-            onCancel={() => setImagePreviewUrl('')}
+            url={validSrcs[previewIndex]}
+            onCancel={() => setPreviewIndex(null)}
             title=""
           />
         )

@@ -252,7 +252,7 @@ const Answer: FC<AnswerProps> = ({
               }
               {
                 !contentIsEmpty && !hasAgentThoughts && (
-                  <BasicContent item={item} />
+                  <BasicContent item={item} responding={responding} />
                 )
               }
               {
@@ -358,7 +358,7 @@ const Answer: FC<AnswerProps> = ({
               }
               {
                 !contentIsEmpty && !hasAgentThoughts && (
-                  <BasicContent item={item} />
+                  <BasicContent item={item} responding={responding} />
                 )
               }
               {

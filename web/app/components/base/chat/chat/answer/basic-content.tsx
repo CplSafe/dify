@@ -6,9 +6,11 @@ import { cn } from '@/utils/classnames'
 
 type BasicContentProps = {
   item: ChatItem
+  responding?: boolean
 }
 const BasicContent: FC<BasicContentProps> = ({
   item,
+  responding,
 }) => {
   const {
     annotation,
@@ -18,7 +20,9 @@ const BasicContent: FC<BasicContentProps> = ({
   if (annotation?.logAnnotation) {
     return (
       <Markdown
+        className="chat-answer-markdown"
         content={annotation?.logAnnotation.content || ''}
+        mode="static"
         data-testid="basic-content-markdown"
       />
     )
@@ -34,9 +38,11 @@ const BasicContent: FC<BasicContentProps> = ({
   return (
     <Markdown
       className={cn(
+        'chat-answer-markdown',
         item.isError && '!text-[#F04438]',
       )}
       content={displayContent}
+      mode={responding ? 'streaming' : 'static'}
       data-testid="basic-content-markdown"
     />
   )

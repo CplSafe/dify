@@ -27,6 +27,7 @@ const AgentContent: FC<AgentContentProps> = ({
     return (
       <Markdown
         content={annotation?.logAnnotation.content || ''}
+        mode="static"
         data-testid="agent-content-markdown"
       />
     )
@@ -37,6 +38,7 @@ const AgentContent: FC<AgentContentProps> = ({
       {content ? (
         <Markdown
           content={content}
+          mode={responding ? 'streaming' : 'static'}
           data-testid="agent-content-markdown"
         />
       ) : agent_thoughts?.map((thought, index) => (
@@ -44,6 +46,7 @@ const AgentContent: FC<AgentContentProps> = ({
           {thought.thought && (
             <Markdown
               content={thought.thought}
+              mode="static"
               data-testid="agent-thought-markdown"
             />
           )}

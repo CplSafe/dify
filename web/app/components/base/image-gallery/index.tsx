@@ -2,15 +2,17 @@
 import type { FC } from 'react'
 import * as React from 'react'
 import { useState } from 'react'
+import { Carousel } from '@/app/components/base/carousel'
 import ImagePreview from '@/app/components/base/image-uploader/image-preview'
 import { cn } from '@/utils/classnames'
 import s from './style.module.css'
 
 type Props = {
   srcs: string[]
+  variant?: 'default' | 'markdown'
 }
 
-const getWidthStyle = (imgNum: number) => {
+const getGridWidthStyle = (imgNum: number) => {
   if (imgNum === 1) {
     return {
       maxWidth: '100%',
@@ -30,29 +32,112 @@ const getWidthStyle = (imgNum: number) => {
 
 const ImageGallery: FC<Props> = ({
   srcs,
+  variant = 'default',
 }) => {
   const [imagePreviewUrl, setImagePreviewUrl] = useState('')
 
-  const imgNum = srcs.length
-  const imgStyle = getWidthStyle(imgNum)
+  const validSrcs = srcs.filter(Boolean)
+  const imgNum = validSrcs.length
+  const isSingleImage = imgNum === 1
+
+  if (!imgNum)
+    return null
+
+  if (variant === 'markdown' && imgNum > 1) {
+    return (
+      <>
+        <Carousel
+          className={s.markdownCarousel}
+          opts={{
+            align: 'center',
+            containScroll: 'trimSnaps',
+            dragFree: false,
+            skipSnaps: false,
+            loop: false,
+          }}
+          data-testid="image-gallery"
+        >
+          <Carousel.Content className={s.markdownCarouselContent}>
+            {validSrcs.map((src, index) => (
+              <Carousel.Item
+                key={`${src}-${index}`}
+                className={s.markdownCarouselItem}
+              >
+                <button
+                  type="button"
+                  className={cn(s.itemButton, s.markdownButton)}
+                  onClick={() => setImagePreviewUrl(src)}
+                  data-testid="gallery-image-button"
+                >
+                  <div className={s.markdownCardHeader}>
+                    <span className={s.markdownCardTitle}>流程图 {index + 1}</span>
+                    <span className={s.markdownCardMeta}>点击查看</span>
+                  </div>
+                  <img
+                    className={cn(s.item, s.markdownItem)}
+                    src={src}
+                    alt=""
+                    data-testid="gallery-image"
+                    onError={e => e.currentTarget.parentElement?.parentElement?.remove()}
+                  />
+                  <div className={s.markdownCardFooter}>
+                    <span className={s.markdownCardCaption}>左右滑动查看</span>
+                    <span className={s.markdownCardIndex}>{index + 1}/{imgNum}</span>
+                  </div>
+                </button>
+              </Carousel.Item>
+            ))}
+          </Carousel.Content>
+        </Carousel>
+        {imagePreviewUrl && (
+          <ImagePreview
+            url={imagePreviewUrl}
+            onCancel={() => setImagePreviewUrl('')}
+            title=""
+          />
+        )}
+      </>
+    )
+  }
+
   return (
-    <div className={cn(s[`img-${imgNum}`], 'flex flex-wrap')} data-testid="image-gallery">
-      {srcs.map((src, index) => (
-        !src
-          ? null
-          : (
-              <img
-                key={index}
-                className={s.item}
-                style={imgStyle}
-                src={src}
-                alt=""
-                data-testid="gallery-image" // Added for testing
-                onClick={() => setImagePreviewUrl(src)}
-                onError={e => e.currentTarget.remove()}
-              />
-            )
-      ))}
+    <div
+      className={cn(
+        s.gallery,
+        s[`img-${imgNum}`],
+        isSingleImage ? s.single : s.grid,
+      )}
+      data-testid="image-gallery"
+    >
+      {validSrcs.map((src, index) => {
+        const gridWidthStyle = getGridWidthStyle(imgNum)
+
+        return (
+          <button
+            key={`${src}-${index}`}
+            type="button"
+            className={cn(
+              s.itemButton,
+              isSingleImage && s.singleButton,
+            )}
+            style={gridWidthStyle}
+            onClick={() => setImagePreviewUrl(src)}
+            data-testid="gallery-image-button"
+          >
+            <img
+              className={cn(s.item, isSingleImage && s.singleItem)}
+              style={isSingleImage ? gridWidthStyle : undefined}
+              src={src}
+              alt=""
+              data-testid="gallery-image"
+              onError={e => e.currentTarget.parentElement?.remove()}
+            />
+            {isSingleImage && (
+              <span className={s.singleHint}>点击查看大图</span>
+            )}
+          </button>
+        )
+      })}
       {
         imagePreviewUrl && (
           <ImagePreview
@@ -72,8 +157,6 @@ export const ImageGalleryTest = () => {
   const imgGallerySrcs = (() => {
     const srcs = []
     for (let i = 0; i < 6; i++)
-      // srcs.push('https://placekitten.com/640/360')
-      // srcs.push('https://placekitten.com/360/640')
       srcs.push('https://placekitten.com/360/360')
 
     return srcs

@@ -38,6 +38,8 @@ const Chatbot = () => {
 
   const customConfig = appData?.custom_config
   const site = appData?.site
+  const chatPageBackgroundStyle = site?.chat_page_background_color ? { backgroundColor: site.chat_page_background_color } : undefined
+  const hasCustomChatPageBackground = !!site?.chat_page_background_color
 
   const difyIcon = <LogoHeader />
 
@@ -52,9 +54,10 @@ const Chatbot = () => {
       <div
         className={cn(
           'flex flex-col rounded-2xl',
-          isMobile ? 'h-[calc(100vh_-_60px)] shadow-xs' : 'h-[100vh] bg-chatbot-bg',
+          isMobile ? 'h-[calc(100vh_-_60px)] shadow-xs' : 'h-[100vh]',
+          !hasCustomChatPageBackground && 'bg-chatbot-bg',
         )}
-        style={isMobile ? Object.assign({}, CssTransform(themeBuilder?.theme?.backgroundHeaderColorStyle ?? '')) : {}}
+        style={isMobile ? { ...CssTransform(themeBuilder?.theme?.backgroundHeaderColorStyle ?? ''), ...chatPageBackgroundStyle } : chatPageBackgroundStyle}
       >
         <Header
           isMobile={isMobile}
@@ -64,7 +67,14 @@ const Chatbot = () => {
           theme={themeBuilder?.theme}
           onCreateNewChat={handleNewConversation}
         />
-        <div className={cn('flex grow flex-col overflow-y-auto', isMobile && 'm-[0.5px] !h-[calc(100vh_-_3rem)] rounded-2xl bg-chatbot-bg')}>
+        <div
+          className={cn(
+            'flex grow flex-col overflow-y-auto',
+            isMobile && 'm-[0.5px] !h-[calc(100vh_-_3rem)] rounded-2xl',
+            !hasCustomChatPageBackground && isMobile && 'bg-chatbot-bg',
+          )}
+          style={chatPageBackgroundStyle}
+        >
           {appChatListDataLoading && (
             <Loading type="app" />
           )}

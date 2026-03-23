@@ -60,7 +60,7 @@ export const PluginParagraph: React.FC<PluginParagraphProps> = ({ pluginInfo, no
 
     return (
       <div className="markdown-img-wrapper" data-testid="image-paragraph-wrapper">
-        <ImageGallery srcs={[imageUrl]} />
+        <ImageGallery srcs={[imageUrl]} variant="markdown" />
         {remainingChildren && (
           <div className="mt-2" data-testid="remaining-children">{remainingChildren}</div>
         )}

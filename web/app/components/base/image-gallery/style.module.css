@@ -1,22 +1,177 @@
-.item {
-  max-height: 200px;
-  margin-right: 8px;
-  margin-bottom: 8px;
-  object-fit: contain;
-  object-position: center;
-  border-radius: 8px;
+.gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+}
+
+.grid {
+  align-items: flex-start;
+}
+
+.markdownCarousel {
+  width: calc(100% + 16px);
+  margin-left: -8px;
+  padding-top: 2px;
+  padding-bottom: 8px;
+}
+
+.markdownCarouselContent {
+  margin-left: 0;
+  gap: 14px;
+  padding-inline: 8px;
+}
+
+.markdownCarouselItem {
+  flex: 0 0 min(74vw, 280px);
+  min-width: min(74vw, 280px);
+  max-width: min(74vw, 280px);
+  padding-left: 0;
+}
+
+.single {
+  display: block;
+}
+
+.itemButton {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92));
+  box-shadow:
+    0 18px 34px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
   cursor: pointer;
+  text-align: left;
 }
 
-.item:nth-child(3n) {
-  margin-right: 0;
+.itemButton::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  pointer-events: none;
 }
 
-.img-2 .item:nth-child(2n),
-.img-4 .item:nth-child(2n) {
-  margin-right: 0;
+.itemButton:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 22px 38px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
-.img-4 .item:nth-child(3n) {
-  margin-right: 8px;
+.singleButton {
+  display: block;
+  width: min(100%, 420px);
+  padding: 12px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top, rgba(59, 130, 246, 0.08), transparent 48%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
+}
+
+.markdownButton {
+  width: 100%;
+  padding: 12px;
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
+  box-shadow:
+    0 16px 32px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.item {
+  display: block;
+  width: 100%;
+  min-height: 120px;
+  max-height: 240px;
+  object-fit: cover;
+  object-position: top center;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(241, 245, 249, 0.96), rgba(226, 232, 240, 0.88));
+}
+
+.singleItem {
+  max-height: 360px;
+  min-height: 220px;
+  object-fit: contain;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.96));
+}
+
+.markdownItem {
+  height: 186px;
+  max-height: 186px;
+  min-height: 186px;
+  border-radius: 18px;
+  object-fit: cover;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.96));
+}
+
+.singleHint {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1;
+  color: #475569;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.markdownCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+
+.markdownCardTitle {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: #111827;
+}
+
+.markdownCardMeta {
+  border-radius: 9999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
+  color: #64748b;
+  background: rgba(241, 245, 249, 0.95);
+}
+
+.markdownCardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  gap: 10px;
+}
+
+.markdownCardCaption {
+  font-size: 12px;
+  line-height: 1;
+  color: #64748b;
+}
+
+.markdownCardIndex {
+  border-radius: 9999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
+  color: #1e293b;
+  background: rgba(241, 245, 249, 0.95);
 }

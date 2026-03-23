@@ -99,6 +99,8 @@ class AppSite(Resource):
             "use_icon_as_answer_icon",
         ]:
             value = getattr(args, attr_name)
+            if attr_name == "default_user_avatar_url" and value == "":
+                value = None
             if value is not None:
                 setattr(site, attr_name, value)
 

@@ -83,6 +83,24 @@ describe('Markdown', () => {
     expect(props.latexContent).toContain('$$a + b$$')
   })
 
+  it('should convert phone numbers into tel links', () => {
+    render(<Markdown content={'咨询电话：0737-6106266'} />)
+    const props = getLastWrapperProps()
+    expect(props.latexContent).toContain('[0737-6106266](tel:07376106266)')
+  })
+
+  it('should convert complaint phone numbers into tel links', () => {
+    render(<Markdown content={'监督投诉电话：0737-6106266'} />)
+    const props = getLastWrapperProps()
+    expect(props.latexContent).toContain('监督投诉电话：[0737-6106266](tel:07376106266)')
+  })
+
+  it('should not convert numbers inside urls into tel links', () => {
+    render(<Markdown content={'流程图链接：https://example.com/ID_7CCF3313180945A0AFB8DBF239722431.png'} />)
+    const props = getLastWrapperProps()
+    expect(props.latexContent).toContain('https://example.com/ID_7CCF3313180945A0AFB8DBF239722431.png')
+    expect(props.latexContent).not.toContain('tel:')
+  })
   it('should preserve latex inside code blocks', () => {
     render(<Markdown content={'```\n$E = mc^2$\n```'} />)
     const props = getLastWrapperProps()

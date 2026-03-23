@@ -36,6 +36,9 @@ const Link = ({ node, children, ...props }: any) => {
     if (!href || !isValidUrl(href))
       return <span>{children}</span>
 
+    if (href.toString().startsWith('tel:'))
+      return <a href={href}>{children || 'Call'}</a>
+
     return <a href={href} target="_blank" rel="noopener noreferrer" className={commonClassName}>{children || 'Download'}</a>
   }
 }

@@ -44,7 +44,7 @@ export const PluginImg = memo<ImgProps>(({ src, pluginInfo }) => {
 
   return (
     <div className="markdown-img-wrapper">
-      <ImageGallery srcs={srcs} />
+      <ImageGallery srcs={srcs} variant="markdown" />
     </div>
   )
 })

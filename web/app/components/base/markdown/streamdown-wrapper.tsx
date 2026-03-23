@@ -10,6 +10,7 @@ import {
   Link,
   MarkdownButton,
   MarkdownForm,
+  MarkdownImageGallery,
   Paragraph,
   PluginImg,
   PluginParagraph,
@@ -52,6 +53,7 @@ const mathPlugin = createMathPlugin({
 const ALLOWED_TAGS: Record<string, string[]> = {
   button: ['dataVariant', 'dataSize', 'dataMessage', 'dataLink'],
   form: ['dataFormat'],
+  'image-gallery': ['dataSrcs'],
   input: ['type', 'name', 'value', 'placeholder', 'checked', 'dataTip', 'dataOptions'],
   textarea: ['name', 'placeholder', 'value'],
   label: ['htmlFor'],
@@ -194,6 +196,7 @@ const StreamdownWrapper = (props: StreamdownWrapperProps) => {
       video: VideoBlock,
       audio: AudioBlock,
       a: Link,
+      'image-gallery': MarkdownImageGallery as ComponentType,
       p: pProps => pluginInfo ? <PluginParagraph {...pProps} pluginInfo={pluginInfo} /> : <Paragraph {...pProps} />,
       button: MarkdownButton,
       form: MarkdownForm as ComponentType,

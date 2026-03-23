@@ -1,6 +1,54 @@
 /**
- * Tests for Array.prototype.toSpliced polyfill
+ * Tests for browser polyfills
  */
+
+describe('at polyfill', () => {
+  let originalAt: typeof Array.prototype.at
+
+  beforeEach(() => {
+    originalAt = Array.prototype.at
+  })
+
+  afterEach(() => {
+    // eslint-disable-next-line no-extend-native
+    Array.prototype.at = originalAt
+  })
+
+  const applyPolyfill = () => {
+    // @ts-expect-error - intentionally deleting for test
+    delete Array.prototype.at
+
+    if (!Array.prototype.at) {
+      // eslint-disable-next-line no-extend-native
+      Array.prototype.at = function <T>(this: T[], index: number): T | undefined {
+        const normalizedIndex = Math.trunc(index) || 0
+        const resolvedIndex = normalizedIndex >= 0 ? normalizedIndex : this.length + normalizedIndex
+        return resolvedIndex < 0 || resolvedIndex >= this.length ? undefined : this[resolvedIndex]
+      }
+    }
+  }
+
+  it('should add at method when not available', () => {
+    applyPolyfill()
+    expect(typeof Array.prototype.at).toBe('function')
+  })
+
+  it('should return the correct item for positive indices', () => {
+    applyPolyfill()
+    expect([1, 2, 3].at(1)).toBe(2)
+  })
+
+  it('should return the correct item for negative indices', () => {
+    applyPolyfill()
+    expect([1, 2, 3].at(-1)).toBe(3)
+  })
+
+  it('should return undefined for out-of-range indices', () => {
+    applyPolyfill()
+    expect([1, 2, 3].at(4)).toBeUndefined()
+    expect([1, 2, 3].at(-4)).toBeUndefined()
+  })
+})
 
 describe('toSpliced polyfill', () => {
   let originalToSpliced: typeof Array.prototype.toSpliced

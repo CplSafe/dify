@@ -170,6 +170,24 @@ describe('Link component', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
+  it('renders tel link without opening a new tab', () => {
+    mockIsValidUrl.mockReturnValue(true)
+
+    const node = {
+      properties: {
+        href: 'tel:07376106266',
+      },
+    }
+
+    render(<Link node={node}>0737-6106266</Link>)
+
+    const link = screen.getByText('0737-6106266')
+    expect(link.tagName).toBe('A')
+    expect(link).toHaveAttribute('href', 'tel:07376106266')
+    expect(link).not.toHaveAttribute('target')
+    expect(link).not.toHaveAttribute('rel')
+  })
+
   // --------------------------
   // NO HREF
   // --------------------------

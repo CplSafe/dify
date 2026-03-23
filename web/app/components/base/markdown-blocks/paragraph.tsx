@@ -10,7 +10,7 @@ const Paragraph = (paragraph: any) => {
     if (children_node[0]?.tagName === 'img') {
       return (
         <div className="markdown-img-wrapper">
-          <ImageGallery srcs={[children_node[0].properties.src]} />
+          <ImageGallery srcs={[children_node[0].properties.src]} variant="markdown" />
           {Array.isArray(paragraph.children) && paragraph.children.length > 1
             ? <div className="mt-2">{paragraph.children.slice(1)}</div>
             : null}

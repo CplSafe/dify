@@ -16,14 +16,14 @@ from zoneinfo import available_timezones
 
 from flask import Response, stream_with_context
 from flask_restx import fields
-from graphon.file import helpers as file_helpers
-from graphon.model_runtime.utils.encoders import jsonable_encoder
 from pydantic import BaseModel
 from pydantic.functional_validators import AfterValidator
 
 from configs import dify_config
 from core.app.features.rate_limiting.rate_limit import RateLimitGenerator
 from extensions.ext_redis import redis_client
+from graphon.file import helpers as file_helpers
+from graphon.model_runtime.utils.encoders import jsonable_encoder
 
 if TYPE_CHECKING:
     from models import Account
@@ -126,6 +126,24 @@ class AvatarUrlField(fields.Raw):
         return None
 
 
+class SignedFileUrlField(fields.Raw):
+    def output(self, key, obj, **kwargs):
+        if obj is None:
+            return None
+
+        value = None
+        if isinstance(obj, dict):
+            value = obj.get(key)
+        else:
+            value = getattr(obj, key, None)
+
+        if value is None or value == "":
+            return None
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            return value
+        return file_helpers.get_signed_file_url(value)
+
+
 class TimestampField(fields.Raw):
     def format(self, value) -> int:
         return int(value.timestamp())
@@ -172,18 +190,6 @@ def normalize_uuid(value: str | UUID) -> str:
         return uuid_value(value)
     except ValueError as exc:
         raise ValueError("must be a valid UUID") from exc
-
-
-def parse_uuid_str_or_none(value: str | None) -> str | None:
-    """
-    Return None for missing/empty UUID-like values.
-
-    Keep non-empty values unchanged to avoid changing behavior in paths that
-    currently pass placeholder IDs in tests/mocks.
-    """
-    if value is None or not str(value).strip():
-        return None
-    return str(value)
 
 
 UUIDStrOrEmpty = Annotated[str, AfterValidator(normalize_uuid)]

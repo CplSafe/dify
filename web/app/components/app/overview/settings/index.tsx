@@ -25,7 +25,6 @@ import { ACCOUNT_SETTING_TAB } from '@/app/components/header/account-setting/con
 import { useModalContext } from '@/context/modal-context'
 import { useProviderContext } from '@/context/provider-context'
 import { languages } from '@/i18n-config/language'
-import Link from '@/next/link'
 import { AppModeEnum } from '@/types/app'
 import { cn } from '@/utils/classnames'
 
@@ -44,14 +43,18 @@ export type ConfigParams = {
   default_language: string
   chat_color_theme: string
   chat_color_theme_inverted: boolean
+  chat_page_background_color: string
   prompt_public: boolean
   copyright: string
   privacy_policy: string
+  default_user_avatar_url: string
   custom_disclaimer: string
+  enable_homepage: boolean
   icon_type: AppIconType
   icon: string
   icon_background?: string
   show_workflow_steps: boolean
+  show_answer_disclaimer: boolean
   use_icon_as_answer_icon: boolean
   enable_sso?: boolean
 }
@@ -76,11 +79,16 @@ const SettingsModal: FC<ISettingsModalProps> = ({
     description,
     chat_color_theme,
     chat_color_theme_inverted,
+    chat_page_background_color,
     copyright,
     privacy_policy,
+    default_user_avatar_url,
+    default_user_avatar_file_id,
     custom_disclaimer,
+    enable_homepage,
     default_language,
     show_workflow_steps,
+    show_answer_disclaimer,
     use_icon_as_answer_icon,
   } = appInfo.site
   const [inputInfo, setInputInfo] = useState({
@@ -88,11 +96,15 @@ const SettingsModal: FC<ISettingsModalProps> = ({
     desc: description,
     chatColorTheme: chat_color_theme,
     chatColorThemeInverted: chat_color_theme_inverted,
+    chatPageBackgroundColor: chat_page_background_color || '',
     copyright,
     copyrightSwitchValue: !!copyright,
     privacyPolicy: privacy_policy,
+    defaultUserAvatarFileId: default_user_avatar_file_id || '',
     customDisclaimer: custom_disclaimer,
+    enable_homepage,
     show_workflow_steps,
+    show_answer_disclaimer,
     use_icon_as_answer_icon,
     enable_sso: appInfo.enable_sso,
   })
@@ -100,12 +112,24 @@ const SettingsModal: FC<ISettingsModalProps> = ({
   const [saveLoading, setSaveLoading] = useState(false)
   const { t } = useTranslation()
   const hideMoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const chatColorThemePickerRef = useRef<HTMLInputElement>(null)
+  const chatPageBackgroundColorPickerRef = useRef<HTMLInputElement>(null)
 
   const [showAppIconPicker, setShowAppIconPicker] = useState(false)
   const [appIcon, setAppIcon] = useState<AppIconSelection>(
     icon_type === 'image'
       ? { type: 'image', url: icon_url!, fileId: icon }
       : { type: 'emoji', icon, background: icon_background! },
+  )
+  const [showUserAvatarPicker, setShowUserAvatarPicker] = useState(false)
+  const [defaultUserAvatar, setDefaultUserAvatar] = useState<AppIconSelection | null>(
+    (default_user_avatar_file_id || default_user_avatar_url)
+      ? {
+          type: 'image',
+          url: default_user_avatar_url || '',
+          fileId: default_user_avatar_file_id || '',
+        }
+      : null,
   )
 
   const { enableBilling, plan, webappCopyrightEnabled } = useProviderContext()
@@ -118,17 +142,22 @@ const SettingsModal: FC<ISettingsModalProps> = ({
       setShowAccountSettingModal({ payload: ACCOUNT_SETTING_TAB.BILLING })
   }, [isFreePlan, setShowAccountSettingModal, setShowPricingModal])
 
+  /* eslint-disable react-hooks-extra/no-direct-set-state-in-use-effect */
   useEffect(() => {
     setInputInfo({
       title,
       desc: description,
       chatColorTheme: chat_color_theme,
       chatColorThemeInverted: chat_color_theme_inverted,
+      chatPageBackgroundColor: chat_page_background_color || '',
       copyright,
       copyrightSwitchValue: !!copyright,
       privacyPolicy: privacy_policy,
+      defaultUserAvatarFileId: default_user_avatar_file_id || '',
       customDisclaimer: custom_disclaimer,
+      enable_homepage,
       show_workflow_steps,
+      show_answer_disclaimer,
       use_icon_as_answer_icon,
       enable_sso: appInfo.enable_sso,
     })
@@ -136,7 +165,15 @@ const SettingsModal: FC<ISettingsModalProps> = ({
     setAppIcon(icon_type === 'image'
       ? { type: 'image', url: icon_url!, fileId: icon }
       : { type: 'emoji', icon, background: icon_background! })
-  }, [appInfo, chat_color_theme, chat_color_theme_inverted, copyright, custom_disclaimer, default_language, description, icon, icon_background, icon_type, icon_url, privacy_policy, show_workflow_steps, title, use_icon_as_answer_icon])
+    setDefaultUserAvatar((default_user_avatar_file_id || default_user_avatar_url)
+      ? {
+          type: 'image',
+          url: default_user_avatar_url || '',
+          fileId: default_user_avatar_file_id || '',
+        }
+      : null)
+  }, [appInfo, chat_color_theme, chat_color_theme_inverted, chat_page_background_color, copyright, custom_disclaimer, default_language, default_user_avatar_file_id, default_user_avatar_url, description, enable_homepage, icon, icon_background, icon_type, icon_url, privacy_policy, show_answer_disclaimer, show_workflow_steps, title, use_icon_as_answer_icon])
+  /* eslint-enable react-hooks-extra/no-direct-set-state-in-use-effect */
 
   useEffect(() => {
     return () => {
@@ -180,7 +217,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
     }
 
     if (inputInfo !== null) {
-      if (!validateColorHex(inputInfo.chatColorTheme)) {
+      if (!validateColorHex(inputInfo.chatColorTheme) || !validateColorHex(inputInfo.chatPageBackgroundColor)) {
         notify({ type: 'error', message: t(`${prefixSettings}.invalidHexMessage`, { ns: 'appOverview' }) })
         return
       }
@@ -197,6 +234,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
       default_language: language,
       chat_color_theme: inputInfo.chatColorTheme,
       chat_color_theme_inverted: inputInfo.chatColorThemeInverted,
+      chat_page_background_color: inputInfo.chatPageBackgroundColor,
       prompt_public: false,
       copyright: !webappCopyrightEnabled
         ? ''
@@ -204,11 +242,16 @@ const SettingsModal: FC<ISettingsModalProps> = ({
           ? inputInfo.copyright
           : '',
       privacy_policy: inputInfo.privacyPolicy,
+      default_user_avatar_url: defaultUserAvatar?.type === 'image'
+        ? (defaultUserAvatar.fileId || defaultUserAvatar.url || inputInfo.defaultUserAvatarFileId || '')
+        : inputInfo.defaultUserAvatarFileId || '',
       custom_disclaimer: inputInfo.customDisclaimer,
+      enable_homepage: inputInfo.enable_homepage,
       icon_type: appIcon.type,
       icon: appIcon.type === 'emoji' ? appIcon.icon : appIcon.fileId,
       icon_background: appIcon.type === 'emoji' ? appIcon.background : undefined,
       show_workflow_steps: inputInfo.show_workflow_steps,
+      show_answer_disclaimer: inputInfo.show_answer_disclaimer,
       use_icon_as_answer_icon: inputInfo.use_icon_as_answer_icon,
       enable_sso: inputInfo.enable_sso,
     }
@@ -232,6 +275,17 @@ const SettingsModal: FC<ISettingsModalProps> = ({
   const onDesChange = (value: string) => {
     setInputInfo(item => ({ ...item, desc: value }))
   }
+
+  const openColorPicker = useCallback((field: 'chatColorTheme' | 'chatPageBackgroundColor') => {
+    const targetRef = field === 'chatColorTheme' ? chatColorThemePickerRef : chatPageBackgroundColorPickerRef
+    targetRef.current?.click()
+  }, [])
+
+  const onColorPickerChange = useCallback((field: 'chatColorTheme' | 'chatPageBackgroundColor') => {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      setInputInfo(item => ({ ...item, [field]: e.target.value.toUpperCase() }))
+    }
+  }, [])
 
   return (
     <>
@@ -314,25 +368,69 @@ const SettingsModal: FC<ISettingsModalProps> = ({
           </div>
           {/* theme color */}
           {isChat && (
-            <div className="flex items-center">
-              <div className="grow">
-                <div className={cn('py-1 text-text-secondary system-sm-semibold')}>{t(`${prefixSettings}.chatColorTheme`, { ns: 'appOverview' })}</div>
-                <div className="pb-0.5 text-text-tertiary body-xs-regular">{t(`${prefixSettings}.chatColorThemeDesc`, { ns: 'appOverview' })}</div>
+            <div className="space-y-3">
+              <div className="flex items-start">
+                <div className="grow">
+                  <div className={cn('py-1 text-text-secondary system-sm-semibold')}>{t(`${prefixSettings}.chatColorTheme`, { ns: 'appOverview' })}</div>
+                  <div className="pb-0.5 text-text-tertiary body-xs-regular">{t(`${prefixSettings}.chatColorThemeDesc`, { ns: 'appOverview' })}</div>
+                </div>
+                <div className="shrink-0 w-[200px]">
+                  <input
+                    ref={chatColorThemePickerRef}
+                    type="color"
+                    className="sr-only"
+                    value={inputInfo.chatColorTheme || '#A020F0'}
+                    onChange={onColorPickerChange('chatColorTheme')}
+                  />
+                  <Input
+                    className="mb-1 w-[200px]"
+                    value={inputInfo.chatColorTheme ?? ''}
+                    onChange={onChange('chatColorTheme')}
+                    placeholder="E.g #A020F0"
+                    onClick={() => openColorPicker('chatColorTheme')}
+                  />
+                  <div className="flex items-center justify-between">
+                    <p className={cn('text-text-tertiary body-xs-regular')}>{t(`${prefixSettings}.chatColorThemeInverted`, { ns: 'appOverview' })}</p>
+                    <Switch value={inputInfo.chatColorThemeInverted} onChange={v => setInputInfo({ ...inputInfo, chatColorThemeInverted: v })}></Switch>
+                  </div>
+                </div>
               </div>
-              <div className="shrink-0">
-                <Input
-                  className="mb-1 w-[200px]"
-                  value={inputInfo.chatColorTheme ?? ''}
-                  onChange={onChange('chatColorTheme')}
-                  placeholder="E.g #A020F0"
-                />
-                <div className="flex items-center justify-between">
-                  <p className={cn('text-text-tertiary body-xs-regular')}>{t(`${prefixSettings}.chatColorThemeInverted`, { ns: 'appOverview' })}</p>
-                  <Switch value={inputInfo.chatColorThemeInverted} onChange={v => setInputInfo({ ...inputInfo, chatColorThemeInverted: v })}></Switch>
+              <div className="flex items-start">
+                <div className="grow">
+                  <div className={cn('py-1 text-text-secondary system-sm-semibold')}>{t(`${prefixSettings}.chatPageBackgroundColor`, { ns: 'appOverview' })}</div>
+                  <div className="pb-0.5 text-text-tertiary body-xs-regular">{t(`${prefixSettings}.chatPageBackgroundColorDesc`, { ns: 'appOverview' })}</div>
+                </div>
+                <div className="shrink-0 w-[200px]">
+                  <input
+                    ref={chatPageBackgroundColorPickerRef}
+                    type="color"
+                    className="sr-only"
+                    value={inputInfo.chatPageBackgroundColor || '#F8FAFC'}
+                    onChange={onColorPickerChange('chatPageBackgroundColor')}
+                  />
+                  <Input
+                    className="w-[200px]"
+                    value={inputInfo.chatPageBackgroundColor ?? ''}
+                    onChange={onChange('chatPageBackgroundColor')}
+                    placeholder="E.g #F8FAFC"
+                    onClick={() => openColorPicker('chatPageBackgroundColor')}
+                  />
+                  <div className="h-7" />
                 </div>
               </div>
             </div>
           )}
+          <div className="w-full">
+            <div className="flex items-center justify-between">
+              <div className={cn('py-1 text-text-secondary system-sm-semibold')}>{t(`${prefixSettings}.homepage.title`, { ns: 'appOverview' })}</div>
+              <Switch
+                disabled={appInfo.mode !== AppModeEnum.ADVANCED_CHAT}
+                value={inputInfo.enable_homepage}
+                onChange={v => setInputInfo({ ...inputInfo, enable_homepage: v })}
+              />
+            </div>
+            <p className="pb-0.5 text-text-tertiary body-xs-regular">{t(`${prefixSettings}.homepage.desc`, { ns: 'appOverview' })}</p>
+          </div>
           {/* workflow detail */}
           <div className="w-full">
             <div className="flex items-center justify-between">
@@ -415,7 +513,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
                   <Trans
                     i18nKey={`${prefixSettings}.more.privacyPolicyTip`}
                     ns="appOverview"
-                    components={{ privacyPolicyLink: <Link href="https://dify.ai/privacy" target="_blank" rel="noopener noreferrer" className="text-text-accent" /> }}
+                    components={{ privacyPolicyLink: <span className="text-text-accent" /> }}
                   />
                 </p>
                 <Input
@@ -424,6 +522,39 @@ const SettingsModal: FC<ISettingsModalProps> = ({
                   onChange={onChange('privacyPolicy')}
                   placeholder={t(`${prefixSettings}.more.privacyPolicyPlaceholder`, { ns: 'appOverview' }) as string}
                 />
+              </div>
+              {/* default user avatar */}
+              <div className="w-full">
+                <div className={cn('py-1 text-text-secondary system-sm-semibold')}>{t(`${prefixSettings}.more.defaultUserAvatar`, { ns: 'appOverview' })}</div>
+                <p className={cn('pb-0.5 text-text-tertiary body-xs-regular')}>{t(`${prefixSettings}.more.defaultUserAvatarTip`, { ns: 'appOverview' })}</p>
+                <div className="mt-2 flex items-center gap-3">
+                  <button
+                    type="button"
+                    aria-label={t(`${prefixSettings}.more.defaultUserAvatar`, { ns: 'appOverview' }) as string}
+                    className="cursor-pointer rounded-full"
+                    onClick={() => setShowUserAvatarPicker(true)}
+                  >
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-components-panel-border bg-components-panel-on-panel-item-bg text-text-tertiary">
+                      <span className={cn('h-5 w-5', defaultUserAvatar ? 'i-ri-check-line text-text-success' : 'i-ri-upload-cloud-2-line')} />
+                    </div>
+                  </button>
+                  <div className="min-w-0 grow">
+                    <div className="truncate text-text-secondary system-xs-regular">
+                      {t(`${prefixSettings}.more.defaultUserAvatarPlaceholder`, { ns: 'appOverview' })}
+                    </div>
+                  </div>
+                  {defaultUserAvatar && (
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setDefaultUserAvatar(null)
+                        setInputInfo(item => ({ ...item, defaultUserAvatarFileId: '' }))
+                      }}
+                    >
+                      {t('operation.clear', { ns: 'common' })}
+                    </Button>
+                  )}
+                </div>
               </div>
               {/* custom disclaimer */}
               <div className="w-full">
@@ -435,6 +566,17 @@ const SettingsModal: FC<ISettingsModalProps> = ({
                   onChange={onChange('customDisclaimer')}
                   placeholder={t(`${prefixSettings}.more.customDisclaimerPlaceholder`, { ns: 'appOverview' }) as string}
                 />
+              </div>
+              <div className="w-full">
+                <div className="flex items-center justify-between">
+                  <div className={cn('py-1 text-text-secondary system-sm-semibold')}>{t(`${prefixSettings}.disclaimer.title`, { ns: 'appOverview' })}</div>
+                  <Switch
+                    disabled={appInfo.mode !== AppModeEnum.ADVANCED_CHAT}
+                    value={inputInfo.show_answer_disclaimer}
+                    onChange={v => setInputInfo({ ...inputInfo, show_answer_disclaimer: v })}
+                  />
+                </div>
+                <p className="pb-0.5 text-text-tertiary body-xs-regular">{t(`${prefixSettings}.disclaimer.desc`, { ns: 'appOverview' })}</p>
               </div>
             </>
           )}
@@ -456,6 +598,23 @@ const SettingsModal: FC<ISettingsModalProps> = ({
                   ? { type: 'image', url: icon_url!, fileId: icon }
                   : { type: 'emoji', icon, background: icon_background! })
                 setShowAppIconPicker(false)
+              }}
+            />
+          </div>
+        )}
+        {showUserAvatarPicker && (
+          <div onClick={e => e.stopPropagation()}>
+            <AppIconPicker
+              onSelect={(payload) => {
+                if (payload.type === 'image') {
+                  setDefaultUserAvatar(payload)
+                  setInputInfo(item => ({ ...item, defaultUserAvatarFileId: payload.fileId }))
+                }
+                setShowUserAvatarPicker(false)
+              }}
+              imageOnly
+              onClose={() => {
+                setShowUserAvatarPicker(false)
               }}
             />
           </div>

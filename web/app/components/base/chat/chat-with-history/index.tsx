@@ -37,6 +37,8 @@ const ChatWithHistory: FC<ChatWithHistoryProps> = ({
   const isSidebarCollapsed = sidebarCollapseState
   const customConfig = appData?.custom_config
   const site = appData?.site
+  const chatPageBackgroundStyle = site?.chat_page_background_color ? { backgroundColor: site.chat_page_background_color } : undefined
+  const hasCustomChatPageBackground = !!site?.chat_page_background_color
 
   const [showSidePanel, setShowSidePanel] = useState(false)
 
@@ -57,6 +59,7 @@ const ChatWithHistory: FC<ChatWithHistoryProps> = ({
       isMobile && 'flex-col',
       className,
     )}
+      style={chatPageBackgroundStyle}
     >
       {!isMobile && (
         <div className={cn(
@@ -83,7 +86,14 @@ const ChatWithHistory: FC<ChatWithHistoryProps> = ({
             <Sidebar isPanel panelVisible={showSidePanel} />
           </div>
         )}
-        <div className={cn('flex h-full flex-col overflow-hidden border-[0,5px] border-components-panel-border-subtle bg-chatbot-bg', isMobile ? 'rounded-t-2xl' : 'rounded-2xl')}>
+        <div
+          className={cn(
+            'flex h-full flex-col overflow-hidden border-[0,5px] border-components-panel-border-subtle',
+            !hasCustomChatPageBackground && 'bg-chatbot-bg',
+            isMobile ? 'rounded-t-2xl' : 'rounded-2xl',
+          )}
+          style={chatPageBackgroundStyle}
+        >
           {!isMobile && <Header />}
           {appChatListDataLoading && (
             <Loading type="app" />

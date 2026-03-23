@@ -3,11 +3,11 @@ import { flow } from 'es-toolkit/compat'
 import { memo, useMemo } from 'react'
 import dynamic from '@/next/dynamic'
 import { cn } from '@/utils/classnames'
-import { preprocessLaTeX, preprocessThinkTag } from './markdown-utils'
+import { preprocessImageGallery, preprocessLaTeX, preprocessPhoneLinks, preprocessThinkTag } from './markdown-utils'
 
 const StreamdownWrapper = dynamic(() => import('./streamdown-wrapper'), { ssr: false })
 
-const preprocess = flow([preprocessThinkTag, preprocessLaTeX])
+const preprocess = flow([preprocessThinkTag, preprocessPhoneLinks, preprocessImageGallery, preprocessLaTeX])
 
 const EMPTY_COMPONENTS = {} as const
 

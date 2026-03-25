@@ -8,7 +8,44 @@ const withMDX = createMDX()
 
 const nextConfig: NextConfig = {
   basePath: env.NEXT_PUBLIC_BASE_PATH,
-  transpilePackages: ['@t3-oss/env-core', '@t3-oss/env-nextjs', 'echarts', 'zrender'],
+  transpilePackages: [
+    '@t3-oss/env-core',
+    '@t3-oss/env-nextjs',
+    '@tanstack/query-core',
+    '@tanstack/react-query',
+    'echarts',
+    'marked',
+    'mermaid',
+    'zrender',
+  ],
+  webpack: (config) => {
+    config.module.rules.push({
+      test: /\.m?js$/,
+      include: (modulePath: string) => {
+        return (
+          modulePath.includes('node_modules/mermaid')
+          || modulePath.includes('node_modules\\mermaid')
+          || modulePath.includes('node_modules/marked')
+          || modulePath.includes('node_modules\\marked')
+        )
+      },
+      use: {
+        loader: 'babel-loader',
+        options: {
+          presets: [[
+            '@babel/preset-env',
+            {
+              targets: { browsers: ['ios >= 10', 'safari >= 10'] },
+              modules: false,
+            },
+          ]],
+          plugins: ['@babel/plugin-transform-class-static-block'],
+        },
+      },
+    })
+
+    return config
+  },
   turbopack: {
     rules: codeInspectorPlugin({
       bundler: 'turbopack',

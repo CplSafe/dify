@@ -6,6 +6,111 @@
 import { flow } from 'es-toolkit/compat'
 import { ALLOW_UNSAFE_DATA_SCHEME } from '@/config'
 
+const PHONE_PATTERN_SOURCE = String.raw`\+?\d[\d \t\-()]{5,}\d`
+const PHONE_PATTERN = new RegExp(PHONE_PATTERN_SOURCE, 'g')
+const PHONE_FIELD_LABELS = ['咨询电话', '监督投诉电话'] as const
+const LABELED_PHONE_PATTERN = new RegExp(
+  String.raw`((?:${PHONE_FIELD_LABELS.join('|')})[：:]\s*)(${PHONE_PATTERN_SOURCE})`,
+  'g',
+)
+const CODE_OR_LINK_PLACEHOLDER_PREFIX = '__MARKDOWN_PHONE_PLACEHOLDER__'
+const IMAGE_GALLERY_TAG = 'image-gallery'
+const IMAGE_LINE_PATTERN = /^!\[[^\]]*]\(([^)\n]+)\)$/
+
+const normalizeTelHref = (value: string) => {
+  const trimmed = value.trim()
+  const normalized = trimmed.replace(/[^\d+]/g, '')
+  const digitsOnly = normalized.replace(/\D/g, '')
+
+  if (digitsOnly.length < 7)
+    return null
+
+  return normalized.startsWith('+') ? normalized : digitsOnly
+}
+
+export const preprocessPhoneLinks = (content: string) => {
+  if (typeof content !== 'string' || !content)
+    return content
+
+  const preservedSegments: string[] = []
+  const preserveSegment = (segment: string) => {
+    const placeholder = `${CODE_OR_LINK_PLACEHOLDER_PREFIX}${preservedSegments.length}__`
+    preservedSegments.push(segment)
+    return placeholder
+  }
+
+  let processedContent = content
+    .replace(/```[\s\S]*?```/g, preserveSegment)
+    .replace(/`[^`\n]+`/g, preserveSegment)
+    .replace(/!?\[[^\]]*?\]\([^)\n]+?\)/g, preserveSegment)
+    .replace(/<[^>\n]+>/g, preserveSegment)
+
+  processedContent = processedContent.replace(LABELED_PHONE_PATTERN, (_match, prefix: string, phone: string) => {
+    const telHref = normalizeTelHref(phone)
+    if (!telHref)
+      return `${prefix}${phone}`
+
+    return `${prefix}[${phone}](tel:${telHref})`
+  })
+
+  preservedSegments.forEach((segment, index) => {
+    processedContent = processedContent.replace(`${CODE_OR_LINK_PLACEHOLDER_PREFIX}${index}__`, segment)
+  })
+
+  return processedContent
+}
+
+export const preprocessImageGallery = (content: string) => {
+  if (typeof content !== 'string' || !content)
+    return content
+
+  const lines = content.split('\n')
+  const result: string[] = []
+
+  let index = 0
+  while (index < lines.length) {
+    let cursor = index
+    const imageUrls: string[] = []
+
+    while (cursor < lines.length) {
+      const trimmed = lines[cursor].trim()
+      if (!trimmed) {
+        if (imageUrls.length > 0) {
+          cursor += 1
+          continue
+        }
+        break
+      }
+
+      const match = trimmed.match(IMAGE_LINE_PATTERN)
+      if (!match)
+        break
+
+      imageUrls.push(match[1])
+      cursor += 1
+    }
+
+    if (imageUrls.length >= 2) {
+      result.push(
+        `<${IMAGE_GALLERY_TAG} data-srcs="${imageUrls.map(url => encodeURIComponent(url)).join(',')}"></${IMAGE_GALLERY_TAG}>`,
+      )
+      index = cursor
+      continue
+    }
+
+    if (cursor > index) {
+      result.push(...lines.slice(index, cursor))
+      index = cursor
+      continue
+    }
+
+    result.push(lines[index])
+    index += 1
+  }
+
+  return result.join('\n')
+}
+
 export const preprocessLaTeX = (content: string) => {
   if (typeof content !== 'string')
     return content

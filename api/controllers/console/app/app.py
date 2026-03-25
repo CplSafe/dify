@@ -5,11 +5,9 @@ from typing import Any, Literal, TypeAlias
 
 from flask import request
 from flask_restx import Resource
-from graphon.enums import WorkflowExecutionStatus
-from graphon.file import helpers as file_helpers
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, computed_field, field_serializer, field_validator
 from sqlalchemy import select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session
 from werkzeug.exceptions import BadRequest
 
 from controllers.common.helpers import FileInfo
@@ -29,6 +27,8 @@ from core.ops.ops_trace_manager import OpsTraceManager
 from core.rag.retrieval.retrieval_methods import RetrievalMethod
 from core.trigger.constants import TRIGGER_NODE_TYPES
 from extensions.ext_database import db
+from graphon.enums import WorkflowExecutionStatus
+from graphon.file import helpers as file_helpers
 from libs.login import current_account_with_tenant, login_required
 from models import App, DatasetPermissionEnum, Workflow
 from models.model import IconType
@@ -285,9 +285,11 @@ class Site(ResponseModel):
     default_language: str | None = None
     chat_color_theme: str | None = None
     chat_color_theme_inverted: bool | None = None
+    chat_page_background_color: str | None = None
     customize_domain: str | None = None
     copyright: str | None = None
     privacy_policy: str | None = None
+    default_user_avatar_url: str | None = None
     custom_disclaimer: str | None = None
     enable_homepage: bool | None = None
     customize_token_strategy: str | None = None
@@ -305,6 +307,19 @@ class Site(ResponseModel):
     @property
     def icon_url(self) -> str | None:
         return _build_icon_url(self.icon_type, self.icon)
+
+    @computed_field(return_type=str | None)  # type: ignore
+    @property
+    def default_user_avatar_file_id(self) -> str | None:
+        return self.default_user_avatar_url
+
+    @field_serializer("default_user_avatar_url")
+    def serialize_default_user_avatar_url(self, value: str | None) -> str | None:
+        if not value:
+            return None
+        if value.startswith(("http://", "https://")):
+            return value
+        return file_helpers.get_signed_file_url(value)
 
     @field_validator("icon_type", mode="before")
     @classmethod
@@ -644,7 +659,7 @@ class AppCopyApi(Resource):
 
         args = CopyAppPayload.model_validate(console_ns.payload or {})
 
-        with sessionmaker(db.engine, expire_on_commit=False).begin() as session:
+        with Session(db.engine) as session:
             import_service = AppDslService(session)
             yaml_content = import_service.export_dsl(app_model=app_model, include_secret=True)
             result = import_service.import_app(
@@ -657,6 +672,7 @@ class AppCopyApi(Resource):
                 icon=args.icon,
                 icon_background=args.icon_background,
             )
+            session.commit()
 
             # Inherit web app permission from original app
             if result.app_id and FeatureService.get_system_features().webapp_auth.enabled:

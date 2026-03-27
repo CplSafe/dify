@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+import { Children } from 'react'
 import { ALLOW_UNSAFE_DATA_SCHEME, MARKETPLACE_API_PREFIX } from '@/config'
 
 type MdastNode = {
@@ -26,4 +28,19 @@ export const getMarkdownImageURL = (url: string, pathname?: string) => {
   if (regex.test(url))
     return `${MARKETPLACE_API_PREFIX}${MARKETPLACE_API_PREFIX.endsWith('/') ? '' : '/'}plugins/${pathname ?? ''}${url.replace(regex, '/_assets')}`
   return url
+}
+
+const MARKDOWN_IMAGE_LITERAL_PATTERN = /^!\[[^\]]*\]\([^\n)]+\)$/
+
+export const getRenderableImageParagraphChildren = (children: ReactNode): ReactNode[] => {
+  return Children.toArray(children).filter((child) => {
+    if (typeof child !== 'string')
+      return true
+
+    const trimmed = child.trim()
+    if (!trimmed)
+      return false
+
+    return !MARKDOWN_IMAGE_LITERAL_PATTERN.test(trimmed)
+  })
 }

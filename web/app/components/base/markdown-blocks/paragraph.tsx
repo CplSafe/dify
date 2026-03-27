@@ -1,5 +1,5 @@
 import ImageGallery from '@/app/components/base/image-gallery'
-import { hasImageChild } from './utils'
+import { getRenderableImageParagraphChildren, hasImageChild } from './utils'
 
 const Paragraph = (paragraph: any) => {
   const { node }: any = paragraph
@@ -8,11 +8,13 @@ const Paragraph = (paragraph: any) => {
 
   if (hasImage) {
     if (children_node[0]?.tagName === 'img') {
+      const remainingChildren = getRenderableImageParagraphChildren(paragraph.children).slice(1)
+
       return (
         <div className="markdown-img-wrapper">
           <ImageGallery srcs={[children_node[0].properties.src]} variant="markdown" />
-          {Array.isArray(paragraph.children) && paragraph.children.length > 1
-            ? <div className="mt-2">{paragraph.children.slice(1)}</div>
+          {remainingChildren.length > 0
+            ? <div className="mt-2">{remainingChildren}</div>
             : null}
         </div>
       )

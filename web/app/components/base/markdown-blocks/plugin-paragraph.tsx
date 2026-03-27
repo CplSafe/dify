@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import ImageGallery from '@/app/components/base/image-gallery'
 import { usePluginReadmeAsset } from '@/service/use-plugins'
-import { getMarkdownImageURL, hasImageChild } from './utils'
+import { getMarkdownImageURL, getRenderableImageParagraphChildren, hasImageChild } from './utils'
 
 type HastChildNode = {
   tagName?: string
@@ -56,12 +56,12 @@ export const PluginParagraph: React.FC<PluginParagraphProps> = ({ pluginInfo, no
   }, [blobUrl, imageSrc, isImageParagraph, pluginId])
 
   if (isImageParagraph) {
-    const remainingChildren = Array.isArray(children) && children.length > 1 ? children.slice(1) : undefined
+    const remainingChildren = getRenderableImageParagraphChildren(children).slice(1)
 
     return (
       <div className="markdown-img-wrapper" data-testid="image-paragraph-wrapper">
         <ImageGallery srcs={[imageUrl]} variant="markdown" />
-        {remainingChildren && (
+        {remainingChildren.length > 0 && (
           <div className="mt-2" data-testid="remaining-children">{remainingChildren}</div>
         )}
       </div>

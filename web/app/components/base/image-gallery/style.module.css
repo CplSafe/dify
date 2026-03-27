@@ -183,3 +183,51 @@
   text-decoration: none !important;
   background: rgba(241, 245, 249, 0.95);
 }
+
+@media (max-width: 767px) {
+  .gallery {
+    gap: 10px;
+  }
+
+  .markdownCarousel {
+    width: 100%;
+    margin-left: 0;
+    padding-top: 0;
+    padding-bottom: 6px;
+  }
+
+  .markdownCarouselContent {
+    gap: 10px;
+    padding-inline: 0;
+  }
+
+  .markdownCarouselItem {
+    flex: 0 0 min(72vw, 246px);
+    min-width: min(72vw, 246px);
+    max-width: min(72vw, 246px);
+  }
+
+  .markdownButton {
+    padding: 10px;
+    border-radius: 20px;
+  }
+
+  .markdownCardHeader {
+    margin-bottom: 8px;
+  }
+
+  .markdownCardTitle {
+    font-size: 14px;
+  }
+
+  .markdownItem {
+    height: 152px;
+    max-height: 152px;
+    min-height: 152px;
+    border-radius: 16px;
+  }
+
+  .markdownCardFooter {
+    margin-top: 8px;
+  }
+}

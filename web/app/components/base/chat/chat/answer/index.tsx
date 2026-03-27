@@ -190,7 +190,7 @@ const Answer: FC<AnswerProps> = ({
   return (
     <div className="mb-2 flex last:mb-0">
       {!hideAvatar && (
-        <div className="relative h-10 w-10 shrink-0">
+        <div className="relative h-9 w-9 shrink-0 md:h-10 md:w-10">
           {answerIcon || <AnswerIcon />}
           {responding && (
             <div className="absolute left-[-3px] top-[-3px] flex h-4 w-4 items-center rounded-full border-[0.5px] border-divider-subtle bg-background-section-burn pl-[6px] shadow-xs">
@@ -199,7 +199,7 @@ const Answer: FC<AnswerProps> = ({
           )}
         </div>
       )}
-      <div className="chat-answer-container group ml-4 w-0 grow pb-4" ref={containerRef} data-testid="chat-answer-container">
+      <div className="chat-answer-container group ml-2.5 w-0 grow pb-3 md:ml-4 md:pb-4" ref={containerRef} data-testid="chat-answer-container">
         {/* Block 1: Workflow Process + Human Input Forms */}
         {hasHumanInputs && (
           <div className={cn('group relative pr-10', chatAnswerContainerInner)} data-testid="chat-answer-container-humaninput">
@@ -270,11 +270,11 @@ const Answer: FC<AnswerProps> = ({
 
         {/* Block 2: Response Content (when human inputs exist) */}
         {hasHumanInputs && (responding || !contentIsEmpty || hasAgentThoughts) && (
-          <div className={cn('group relative mt-2 pr-10', chatAnswerContainerInner)}>
+          <div className={cn('group relative mt-2 pr-1 md:pr-10', chatAnswerContainerInner)}>
             <div className="absolute -top-2 left-6 h-3 w-0.5 bg-chat-answer-human-input-form-divider-bg" />
             <div
               ref={contentRef}
-              className="relative inline-block w-full max-w-full rounded-2xl bg-chat-bubble-bg px-4 py-3 text-text-primary body-lg-regular"
+              className="relative inline-block w-full max-w-full rounded-2xl bg-chat-bubble-bg px-3.5 py-2.5 text-text-primary body-lg-regular md:px-4 md:py-3"
             >
               {
                 !responding && (
@@ -373,10 +373,10 @@ const Answer: FC<AnswerProps> = ({
 
         {/* Original single block layout (when no human inputs) */}
         {!hasHumanInputs && (
-          <div className={cn('group relative pr-10', chatAnswerContainerInner)} data-testid="chat-answer-container-inner">
+          <div className={cn('group relative pr-1 md:pr-10', chatAnswerContainerInner)} data-testid="chat-answer-container-inner">
             <div
               ref={contentRef}
-              className={cn('relative inline-block max-w-full rounded-2xl bg-chat-bubble-bg px-4 py-3 text-text-primary body-lg-regular', workflowProcess && 'w-full')}
+              className={cn('relative inline-block max-w-full rounded-2xl bg-chat-bubble-bg px-3.5 py-2.5 text-text-primary body-lg-regular md:px-4 md:py-3', workflowProcess && 'w-full')}
             >
               {
                 !responding && (

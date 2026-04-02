@@ -717,3 +717,7 @@ a {
     -moz-appearance: textfield;
   }
 }
+/* Hide disabled external help/community links when those features are turned off. */
+a[href="about:blank#hidden-external-link"] {
+  display: none !important;
+}

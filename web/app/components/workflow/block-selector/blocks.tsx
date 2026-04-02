@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { useStoreApi } from 'reactflow'
 import Badge from '@/app/components/base/badge'
 import Tooltip from '@/app/components/base/tooltip'
+import { DEFAULT_BRAND_NAME } from '@/config'
 import BlockIcon from '../block-icon'
 import { BlockEnum } from '../types'
 import { BLOCK_CLASSIFICATIONS } from './constants'
@@ -38,7 +39,7 @@ const Blocks = ({
       sort: 0, // Default sort order
       type: block.type,
       title: block.title,
-      author: 'Dify',
+      author: DEFAULT_BRAND_NAME,
       // @ts-expect-error Fix this missing field later
       description: block.description,
     },

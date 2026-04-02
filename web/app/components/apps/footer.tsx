@@ -1,6 +1,7 @@
 import { RiDiscordFill, RiDiscussLine, RiGithubFill } from '@remixicon/react'
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
+import { COMMUNITY_LINKS_ENABLED } from '@/config'
 import Link from '@/next/link'
 
 type CustomLinkProps = {
@@ -26,6 +27,9 @@ const CustomLink = React.memo(({
 
 const Footer = () => {
   const { t } = useTranslation()
+
+  if (!COMMUNITY_LINKS_ENABLED)
+    return null
 
   return (
     <footer className="relative shrink-0 grow-0 px-12 py-2">

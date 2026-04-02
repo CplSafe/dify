@@ -26,7 +26,7 @@ const Header = () => {
                 <img
                   src={systemFeatures.branding.login_page_logo}
                   className="block h-[22px] w-auto object-contain"
-                  alt="Dify logo"
+                  alt="Platform logo"
                 />
               )
             : <DifyLogo />}

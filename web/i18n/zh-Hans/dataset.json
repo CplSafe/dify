@@ -69,7 +69,7 @@
   "externalAPIForm.endpoint": "API 端点",
   "externalAPIForm.name": "名称",
   "externalAPIForm.save": "保存",
-  "externalAPIPanelDescription": "外部知识库 API 用于连接到 Dify 之外的知识库并从中检索知识。",
+  "externalAPIPanelDescription": "外部知识库 API 用于连接到平台之外的知识库并从中检索知识。",
   "externalAPIPanelDocumentation": "了解如何创建外部知识库 API",
   "externalAPIPanelTitle": "外部知识库 API",
   "externalKnowledgeBase": "外部知识库",

@@ -6,6 +6,7 @@ import dataSourceEmptyDefault from '@/app/components/workflow/nodes/data-source-
 import dataSourceDefault from '@/app/components/workflow/nodes/data-source/default'
 import knowledgeBaseDefault from '@/app/components/workflow/nodes/knowledge-base/default'
 import { BlockEnum } from '@/app/components/workflow/types'
+import { HELP_CENTER_ENABLED } from '@/config'
 import { useDocLink } from '@/context/i18n'
 
 export const useAvailableNodesMetaData = () => {
@@ -26,9 +27,12 @@ export const useAvailableNodesMetaData = () => {
     dataSourceEmptyDefault,
   ], [])
 
-  const helpLinkUri = useMemo(() => docLink(
-    '/use-dify/knowledge/knowledge-pipeline/knowledge-pipeline-orchestration',
-  ), [docLink])
+  const helpLinkUri = useMemo(() => {
+    if (!HELP_CENTER_ENABLED)
+      return undefined
+
+    return docLink('/use-dify/knowledge/knowledge-pipeline/knowledge-pipeline-orchestration')
+  }, [docLink])
 
   const availableNodesMetaData = useMemo(() => mergedNodesMetaData.map((node) => {
     const { metaData } = node

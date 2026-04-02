@@ -32,6 +32,20 @@ export const MARKETPLACE_URL_PREFIX = getStringConfig(
   '',
 )
 
+export const DEFAULT_BRAND_NAME = getStringConfig(
+  env.NEXT_PUBLIC_DEFAULT_BRAND_NAME,
+  'Assistant',
+)
+
+export const HELP_CENTER_ENABLED = false
+export const COMMUNITY_LINKS_ENABLED = false
+export const HIDDEN_EXTERNAL_LINK = 'about:blank#hidden-external-link'
+
+export const DEFAULT_SUPPORT_EMAIL = getStringConfig(
+  env.NEXT_PUBLIC_DEFAULT_SUPPORT_EMAIL,
+  '',
+)
+
 const EDITION = env.NEXT_PUBLIC_EDITION
 
 export const IS_CE_EDITION = EDITION === 'SELF_HOSTED'

@@ -127,11 +127,11 @@ const EducationApplyAge = () => {
             <div className="mb-1 text-text-tertiary system-md-regular">
               {t('form.terms.desc.front', { ns: 'education' })}
 &nbsp;
-              <a href="https://dify.ai/terms" target="_blank" className="text-text-secondary hover:underline">{t('form.terms.desc.termsOfService', { ns: 'education' })}</a>
+              <span className="text-text-secondary">{t('form.terms.desc.termsOfService', { ns: 'education' })}</span>
 &nbsp;
               {t('form.terms.desc.and', { ns: 'education' })}
 &nbsp;
-              <a href="https://dify.ai/privacy" target="_blank" className="text-text-secondary hover:underline">{t('form.terms.desc.privacyPolicy', { ns: 'education' })}</a>
+              <span className="text-text-secondary">{t('form.terms.desc.privacyPolicy', { ns: 'education' })}</span>
               {t('form.terms.desc.end', { ns: 'education' })}
             </div>
             <div className="py-2 text-text-primary system-md-regular">

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import Loading from '@/app/components/base/loading'
+import { DEFAULT_BRAND_NAME } from '@/config'
 import { useSelector as useAppContextWithSelector } from '@/context/app-context'
 import { useDatasetList, useInvalidDatasetList } from '@/service/knowledge/use-dataset'
 import DatasetCard from './dataset-card'
@@ -39,7 +40,7 @@ const Datasets = ({
   const observerRef = useRef<IntersectionObserver>(null)
 
   useEffect(() => {
-    document.title = `${t('knowledge', { ns: 'dataset' })} - Dify`
+    document.title = `${t('knowledge', { ns: 'dataset' })} - ${DEFAULT_BRAND_NAME}`
   }, [t])
 
   useEffect(() => {

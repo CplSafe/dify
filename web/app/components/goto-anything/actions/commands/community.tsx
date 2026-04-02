@@ -2,6 +2,7 @@ import type { SlashCommandHandler } from './types'
 import { RiDiscordLine } from '@remixicon/react'
 import * as React from 'react'
 import { getI18n } from 'react-i18next'
+import { COMMUNITY_LINKS_ENABLED } from '@/config'
 import { registerCommands, unregisterCommands } from './command-bus'
 
 // Community command dependency types
@@ -17,11 +18,17 @@ export const communityCommand: SlashCommandHandler<CommunityDeps> = {
 
   // Direct execution function
   execute: () => {
+    if (!COMMUNITY_LINKS_ENABLED)
+      return
+
     const url = 'https://discord.gg/5AEfbxcd9k'
     window.open(url, '_blank', 'noopener,noreferrer')
   },
 
   async search(args: string, locale: string = 'en') {
+    if (!COMMUNITY_LINKS_ENABLED)
+      return []
+
     const i18n = getI18n()
     return [{
       id: 'community',
@@ -38,6 +45,9 @@ export const communityCommand: SlashCommandHandler<CommunityDeps> = {
   },
 
   register(_deps: CommunityDeps) {
+    if (!COMMUNITY_LINKS_ENABLED)
+      return
+
     registerCommands({
       'navigation.community': async (args) => {
         const url = args?.url || 'https://discord.gg/5AEfbxcd9k'

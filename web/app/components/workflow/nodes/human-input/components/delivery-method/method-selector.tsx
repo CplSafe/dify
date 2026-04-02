@@ -21,7 +21,7 @@ import {
 } from '@/app/components/base/portal-to-follow-elem'
 import useWorkflowNodes from '@/app/components/workflow/store/workflow/use-nodes'
 import { isTriggerWorkflow } from '@/app/components/workflow/utils/workflow-entry'
-import { IS_CE_EDITION } from '@/config'
+import { DEFAULT_SUPPORT_EMAIL, IS_CE_EDITION } from '@/config'
 import { useProviderContextSelector } from '@/context/provider-context'
 import { cn } from '@/utils/classnames'
 import { DeliveryMethodType } from '../../types'
@@ -206,11 +206,13 @@ const MethodSelector: FC<MethodSelectorProps> = ({
               </div>
               <div className="system-sm-regular text-text-secondary">
                 <div>{t(`${i18nPrefix}.deliveryMethod.contactTip1`, { ns: 'workflow' })}</div>
-                <Trans
-                  i18nKey={`${i18nPrefix}.deliveryMethod.contactTip2`}
-                  ns="workflow"
-                  components={{ email: <a href="mailto:support@dify.ai" className="text-text-accent-light-mode-only">support@dify.ai</a> }}
-                />
+                {DEFAULT_SUPPORT_EMAIL && (
+                  <Trans
+                    i18nKey={`${i18nPrefix}.deliveryMethod.contactTip2`}
+                    ns="workflow"
+                    components={{ email: <a href={`mailto:${DEFAULT_SUPPORT_EMAIL}`} className="text-text-accent-light-mode-only">{DEFAULT_SUPPORT_EMAIL}</a> }}
+                  />
+                )}
               </div>
             </div>
           </div>

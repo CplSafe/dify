@@ -1,6 +1,7 @@
 'use client'
 import { useFavicon, useTitle } from 'ahooks'
 import { useEffect } from 'react'
+import { DEFAULT_BRAND_NAME } from '@/config'
 import { useGlobalPublicStore, useIsSystemFeaturesPending } from '@/context/global-public-context'
 import { basePath } from '@/utils/var'
 
@@ -15,7 +16,7 @@ export default function useDocumentTitle(title: string) {
       favicon = systemFeatures.branding.favicon
     }
     else {
-      titleStr = title || 'Dify'
+      titleStr = title || DEFAULT_BRAND_NAME
       favicon = `${basePath}/favicon.ico`
     }
   }

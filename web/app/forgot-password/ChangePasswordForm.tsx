@@ -6,6 +6,7 @@ import Button from '@/app/components/base/button'
 import Loading from '@/app/components/base/loading'
 import { toast } from '@/app/components/base/ui/toast'
 import { validPassword } from '@/config'
+import Link from '@/next/link'
 import { useSearchParams } from '@/next/navigation'
 import { changePasswordWithToken } from '@/service/common'
 import { useVerifyForgotPasswordToken } from '@/service/use-common'
@@ -87,7 +88,7 @@ const ChangePasswordForm = () => {
           </div>
           <div className="mx-auto mt-6 w-full">
             <Button variant="primary" className="w-full !text-sm">
-              <a href="https://dify.ai">{t('explore', { ns: 'login' })}</a>
+              <Link href="/">{t('explore', { ns: 'login' })}</Link>
             </Button>
           </div>
         </div>

@@ -18,7 +18,6 @@ import ContentItem from '@/app/components/base/chat/chat/answer/human-input-cont
 import ExpirationTime from '@/app/components/base/chat/chat/answer/human-input-content/expiration-time'
 import { getButtonStyle } from '@/app/components/base/chat/chat/answer/human-input-content/utils'
 import Loading from '@/app/components/base/loading'
-import DifyLogo from '@/app/components/base/logo/dify-logo'
 import useDocumentTitle from '@/hooks/use-document-title'
 import { useParams } from '@/next/navigation'
 import { useGetHumanInputForm, useSubmitHumanInputForm } from '@/service/use-share'
@@ -111,15 +110,7 @@ const FormContent = () => {
             </div>
             <div className="system-2xs-regular-uppercase shrink-0 text-text-tertiary">{t('humanInput.submissionID', { id: token, ns: 'share' })}</div>
           </div>
-          <div className="flex flex-row-reverse px-2 py-3">
-            <div className={cn(
-              'flex shrink-0 items-center gap-1.5 px-1',
-            )}
-            >
-              <div className="system-2xs-medium-uppercase text-text-tertiary">{t('chat.poweredBy', { ns: 'share' })}</div>
-              <DifyLogo size="small" />
-            </div>
-          </div>
+          <div className="px-2 py-3" />
         </div>
       </div>
     )

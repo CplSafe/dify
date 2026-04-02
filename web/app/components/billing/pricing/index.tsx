@@ -12,8 +12,8 @@ import {
   ScrollAreaThumb,
   ScrollAreaViewport,
 } from '@/app/components/base/ui/scroll-area'
+import { HIDDEN_EXTERNAL_LINK } from '@/config'
 import { useAppContext } from '@/context/app-context'
-import { useGetPricingPageLanguage } from '@/context/i18n'
 import { useProviderContext } from '@/context/provider-context'
 import { NoiseBottom, NoiseTop } from './assets'
 import Footer from './footer'
@@ -45,10 +45,7 @@ const Pricing: FC<PricingProps> = ({
   const [currentCategory, setCurrentCategory] = useState<Category>(CategoryEnum.CLOUD)
   const canPay = isCurrentWorkspaceManager
 
-  const pricingPageLanguage = useGetPricingPageLanguage()
-  const pricingPageURL = pricingPageLanguage
-    ? `https://dify.ai/${pricingPageLanguage}/pricing#plans-and-features`
-    : 'https://dify.ai/pricing#plans-and-features'
+  const pricingPageURL = HIDDEN_EXTERNAL_LINK
 
   return (
     <Dialog

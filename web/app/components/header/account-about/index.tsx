@@ -6,10 +6,8 @@ import { useTranslation } from 'react-i18next'
 import Button from '@/app/components/base/button'
 import DifyLogo from '@/app/components/base/logo/dify-logo'
 import Modal from '@/app/components/base/modal'
-import { IS_CE_EDITION } from '@/config'
+import { DEFAULT_BRAND_NAME } from '@/config'
 import { useGlobalPublicStore } from '@/context/global-public-context'
-
-import Link from '@/next/link'
 
 type IAccountSettingProps = {
   langGeniusVersionInfo: LangGeniusVersionResponse
@@ -56,19 +54,7 @@ export default function AccountAbout({
               {' '}
               LangGenius, Inc., Contributors.
             </div>
-            <div className="text-text-accent">
-              {
-                IS_CE_EDITION
-                  ? <Link href="https://github.com/langgenius/dify/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Open Source License</Link>
-                  : (
-                      <>
-                        <Link href="https://dify.ai/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>
-                        ,&nbsp;
-                        <Link href="https://dify.ai/terms" target="_blank" rel="noopener noreferrer">Terms of Service</Link>
-                      </>
-                    )
-              }
-            </div>
+            <div className="text-text-accent">{DEFAULT_BRAND_NAME}</div>
           </div>
         </div>
         <div className="-mx-8 mb-4 h-[0.5px] bg-divider-regular" />
@@ -81,28 +67,9 @@ export default function AccountAbout({
             }
           </div>
           <div className="flex items-center">
-            <Button className="mr-2" size="small">
-              <Link
-                href="https://github.com/langgenius/dify/releases"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {t('about.changeLog', { ns: 'common' })}
-              </Link>
+            <Button className="mr-2" size="small" disabled>
+              {t('about.changeLog', { ns: 'common' })}
             </Button>
-            {
-              !isLatest && !IS_CE_EDITION && (
-                <Button variant="primary" size="small">
-                  <Link
-                    href={langGeniusVersionInfo.release_notes}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {t('about.updateNow', { ns: 'common' })}
-                  </Link>
-                </Button>
-              )
-            }
           </div>
         </div>
       </div>

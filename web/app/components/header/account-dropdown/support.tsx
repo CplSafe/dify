@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLinkItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/app/components/base/ui/dropdown-menu'
 import { toggleZendeskWindow } from '@/app/components/base/zendesk/utils'
 import { Plan } from '@/app/components/billing/type'
-import { SUPPORT_EMAIL_ADDRESS, ZENDESK_WIDGET_KEY } from '@/config'
+import { COMMUNITY_LINKS_ENABLED, SUPPORT_EMAIL_ADDRESS, ZENDESK_WIDGET_KEY } from '@/config'
 import { useAppContext } from '@/context/app-context'
 import { useProviderContext } from '@/context/provider-context'
 import { mailToSupport } from '../utils/util'
@@ -60,30 +60,34 @@ export default function Support({ closeAccountDropdown }: SupportProps) {
               />
             </DropdownMenuLinkItem>
           )}
-          <DropdownMenuLinkItem
-            className="justify-between"
-            href="https://forum.dify.ai/"
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            <MenuItemContent
-              iconClassName="i-ri-discuss-line"
-              label={t('userProfile.forum', { ns: 'common' })}
-              trailing={<ExternalLinkIndicator />}
-            />
-          </DropdownMenuLinkItem>
-          <DropdownMenuLinkItem
-            className="justify-between"
-            href="https://discord.gg/5AEfbxcd9k"
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            <MenuItemContent
-              iconClassName="i-ri-discord-line"
-              label={t('userProfile.community', { ns: 'common' })}
-              trailing={<ExternalLinkIndicator />}
-            />
-          </DropdownMenuLinkItem>
+          {COMMUNITY_LINKS_ENABLED && (
+            <>
+              <DropdownMenuLinkItem
+                className="justify-between"
+                href="https://forum.dify.ai/"
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                <MenuItemContent
+                  iconClassName="i-ri-discuss-line"
+                  label={t('userProfile.forum', { ns: 'common' })}
+                  trailing={<ExternalLinkIndicator />}
+                />
+              </DropdownMenuLinkItem>
+              <DropdownMenuLinkItem
+                className="justify-between"
+                href="https://discord.gg/5AEfbxcd9k"
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                <MenuItemContent
+                  iconClassName="i-ri-discord-line"
+                  label={t('userProfile.community', { ns: 'common' })}
+                  trailing={<ExternalLinkIndicator />}
+                />
+              </DropdownMenuLinkItem>
+            </>
+          )}
         </DropdownMenuGroup>
       </DropdownMenuSubContent>
     </DropdownMenuSub>

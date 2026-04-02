@@ -33,6 +33,7 @@ import { useAppContext } from '@/context/app-context'
 import { useGlobalPublicStore } from '@/context/global-public-context'
 import { useDocLink } from '@/context/i18n'
 import { AccessMode } from '@/models/access-control'
+import { HELP_CENTER_ENABLED } from '@/config'
 import { usePathname, useRouter } from '@/next/navigation'
 import { useAppWhiteListSubjects } from '@/service/access-control'
 import { fetchAppDetailDirect } from '@/service/apps'
@@ -243,12 +244,14 @@ function AppCard({
                                   <div className="mb-1 text-xs font-normal text-text-secondary">
                                     {t('overview.appInfo.enableTooltip.description', { ns: 'appOverview' })}
                                   </div>
-                                  <div
-                                    className="cursor-pointer text-xs font-normal text-text-accent hover:underline"
-                                    onClick={() => window.open(docLink('/use-dify/nodes/user-input'), '_blank')}
-                                  >
-                                    {t('overview.appInfo.enableTooltip.learnMore', { ns: 'appOverview' })}
-                                  </div>
+                                  {HELP_CENTER_ENABLED && (
+                                    <div
+                                      className="cursor-pointer text-xs font-normal text-text-accent hover:underline"
+                                      onClick={() => window.open(docLink('/use-dify/nodes/user-input'), '_blank')}
+                                    >
+                                      {t('overview.appInfo.enableTooltip.learnMore', { ns: 'appOverview' })}
+                                    </div>
+                                  )}
                                 </>
                               )
                             : ''

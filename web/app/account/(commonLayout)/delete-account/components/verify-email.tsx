@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import Button from '@/app/components/base/button'
 import Input from '@/app/components/base/input'
 import Countdown from '@/app/components/signin/countdown'
-import Link from '@/next/link'
 import { useAccountDeleteStore, useConfirmDeleteAccount, useSendDeleteAccountEmail } from '../state'
 
 const CODE_EXP = /[A-Z\d]{6}/gi
@@ -41,7 +40,7 @@ export default function VerifyEmail(props: DeleteAccountProps) {
       </div>
       <div className="body-md-regular pb-2 pt-1 text-text-secondary">
         {t('account.deletePrivacyLinkTip', { ns: 'common' })}
-        <Link href="https://dify.ai/privacy" className="text-text-accent">{t('account.deletePrivacyLink', { ns: 'common' })}</Link>
+        <span className="text-text-accent">{t('account.deletePrivacyLink', { ns: 'common' })}</span>
       </div>
       <label className="system-sm-semibold mb-1 mt-3 flex h-6 items-center text-text-secondary">{t('account.verificationLabel', { ns: 'common' })}</label>
       <Input

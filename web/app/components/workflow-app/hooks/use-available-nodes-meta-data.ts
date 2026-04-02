@@ -10,6 +10,7 @@ import TriggerPluginDefault from '@/app/components/workflow/nodes/trigger-plugin
 import TriggerScheduleDefault from '@/app/components/workflow/nodes/trigger-schedule/default'
 import TriggerWebhookDefault from '@/app/components/workflow/nodes/trigger-webhook/default'
 import { BlockEnum } from '@/app/components/workflow/types'
+import { HELP_CENTER_ENABLED } from '@/config'
 import { useDocLink } from '@/context/i18n'
 import { useIsChatMode } from './use-is-chat-mode'
 
@@ -52,7 +53,7 @@ export const useAvailableNodesMetaData = () => {
         ...metaData,
         title,
         description,
-        helpLinkUri: docLink(helpLinkPath),
+        helpLinkUri: HELP_CENTER_ENABLED ? docLink(helpLinkPath) : undefined,
       },
       defaultValue: {
         ...node.defaultValue,

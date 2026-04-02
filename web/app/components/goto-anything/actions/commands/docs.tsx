@@ -2,6 +2,7 @@ import type { SlashCommandHandler } from './types'
 import { RiBookOpenLine } from '@remixicon/react'
 import * as React from 'react'
 import { getI18n } from 'react-i18next'
+import { HELP_CENTER_ENABLED } from '@/config'
 import { defaultDocBaseUrl } from '@/context/i18n'
 import { getDocLanguage } from '@/i18n-config/language'
 import { registerCommands, unregisterCommands } from './command-bus'
@@ -19,6 +20,9 @@ export const docsCommand: SlashCommandHandler<DocDeps> = {
 
   // Direct execution function
   execute: () => {
+    if (!HELP_CENTER_ENABLED)
+      return
+
     const i18n = getI18n()
     const currentLocale = i18n.language
     const docLanguage = getDocLanguage(currentLocale)
@@ -27,6 +31,9 @@ export const docsCommand: SlashCommandHandler<DocDeps> = {
   },
 
   async search(args: string, locale: string = 'en') {
+    if (!HELP_CENTER_ENABLED)
+      return []
+
     const i18n = getI18n()
     return [{
       id: 'doc',
@@ -43,6 +50,9 @@ export const docsCommand: SlashCommandHandler<DocDeps> = {
   },
 
   register(_deps: DocDeps) {
+    if (!HELP_CENTER_ENABLED)
+      return
+
     const i18n = getI18n()
     registerCommands({
       'navigation.doc': async (_args) => {

@@ -2,6 +2,7 @@ import type { SlashCommandHandler } from './types'
 import { RiFeedbackLine } from '@remixicon/react'
 import * as React from 'react'
 import { getI18n } from 'react-i18next'
+import { COMMUNITY_LINKS_ENABLED } from '@/config'
 import { registerCommands, unregisterCommands } from './command-bus'
 
 // Forum command dependency types
@@ -17,11 +18,17 @@ export const forumCommand: SlashCommandHandler<ForumDeps> = {
 
   // Direct execution function
   execute: () => {
+    if (!COMMUNITY_LINKS_ENABLED)
+      return
+
     const url = 'https://forum.dify.ai'
     window.open(url, '_blank', 'noopener,noreferrer')
   },
 
   async search(args: string, locale: string = 'en') {
+    if (!COMMUNITY_LINKS_ENABLED)
+      return []
+
     const i18n = getI18n()
     return [{
       id: 'forum',
@@ -38,6 +45,9 @@ export const forumCommand: SlashCommandHandler<ForumDeps> = {
   },
 
   register(_deps: ForumDeps) {
+    if (!COMMUNITY_LINKS_ENABLED)
+      return
+
     registerCommands({
       'navigation.forum': async (args) => {
         const url = args?.url || 'https://forum.dify.ai'

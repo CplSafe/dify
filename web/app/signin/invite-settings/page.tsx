@@ -11,6 +11,7 @@ import { SimpleSelect } from '@/app/components/base/select'
 import Toast from '@/app/components/base/toast'
 import { setLocaleOnClient } from '@/i18n-config'
 import { languages, LanguagesSupported } from '@/i18n-config/language'
+import Link from '@/next/link'
 import { useRouter, useSearchParams } from '@/next/navigation'
 import { activateMember } from '@/service/common'
 import { useInvitationCheck } from '@/service/use-common'
@@ -72,7 +73,7 @@ export default function InviteSettingsPage() {
         </div>
         <div className="mx-auto mt-6 w-full">
           <Button variant="primary" className="w-full !text-sm">
-            <a href="https://dify.ai">{t('explore', { ns: 'login' })}</a>
+            <Link href="/">{t('explore', { ns: 'login' })}</Link>
           </Button>
         </div>
       </div>

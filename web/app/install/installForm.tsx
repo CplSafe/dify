@@ -189,7 +189,7 @@ const InstallForm = () => {
                           <button
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
-                            className="text-text-quaternary hover:text-text-tertiary focus:text-text-tertiary focus:outline-none"
+                            className="text-text-quaternary hover:text-text-tertiary focus:text-text-tertiary focus:outline-hidden"
                           >
                             {showPassword ? '👀' : '😝'}
                           </button>
@@ -197,7 +197,7 @@ const InstallForm = () => {
                       </div>
 
                       <div className={cn('mt-1 text-xs text-text-secondary', {
-                        '!text-sm text-red-400': passwordErrors && passwordErrors.length > 0,
+                        'text-sm! text-red-400': passwordErrors && passwordErrors.length > 0,
                       })}
                       >
                         {t('error.passwordInvalid', { ns: 'login' })}

@@ -19,8 +19,8 @@ import PremiumBadge from '@/app/components/base/premium-badge'
 import { SimpleSelect } from '@/app/components/base/select'
 import Switch from '@/app/components/base/switch'
 import Textarea from '@/app/components/base/textarea'
-import { useToastContext } from '@/app/components/base/toast/context'
 import Tooltip from '@/app/components/base/tooltip'
+import { toast } from '@/app/components/base/ui/toast'
 import { ACCOUNT_SETTING_TAB } from '@/app/components/header/account-setting/constants'
 import { useModalContext } from '@/context/modal-context'
 import { useProviderContext } from '@/context/provider-context'
@@ -28,7 +28,7 @@ import { languages } from '@/i18n-config/language'
 import { AppModeEnum } from '@/types/app'
 import { cn } from '@/utils/classnames'
 
-export type ISettingsModalProps = {
+type ISettingsModalProps = {
   isChat: boolean
   appInfo: AppDetailResponse & Partial<AppSSO>
   isShow: boolean
@@ -68,7 +68,6 @@ const SettingsModal: FC<ISettingsModalProps> = ({
   onClose,
   onSave,
 }) => {
-  const { notify } = useToastContext()
   const [isShowMore, setIsShowMore] = useState(false)
   const {
     title,
@@ -196,7 +195,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
 
   const onClickSave = async () => {
     if (!inputInfo.title) {
-      notify({ type: 'error', message: t('newApp.nameNotEmpty', { ns: 'app' }) })
+      toast.error(t('newApp.nameNotEmpty', { ns: 'app' }))
       return
     }
 
@@ -222,7 +221,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
         return
       }
       if (!validatePrivacyPolicy(inputInfo.privacyPolicy)) {
-        notify({ type: 'error', message: t(`${prefixSettings}.invalidPrivacyPolicy`, { ns: 'appOverview' }) })
+        toast.error(t(`${prefixSettings}.invalidPrivacyPolicy`, { ns: 'appOverview' }))
         return
       }
     }
@@ -472,7 +471,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
                     {enableBilling && isFreePlan && (
                       <div className="h-[18px] select-none">
                         <PremiumBadge size="s" color="blue" allowHover={true} onClick={handlePlanClick}>
-                          <SparklesSoft className="flex h-3.5 w-3.5 items-center py-[1px] pl-[3px] text-components-premium-badge-indigo-text-stop-0" />
+                          <SparklesSoft className="flex h-3.5 w-3.5 items-center py-px pl-[3px] text-components-premium-badge-indigo-text-stop-0" />
                           <div className="system-xs-medium">
                             <span className="p-1">
                               {t('upgradeBtn.encourageShort', { ns: 'billing' })}

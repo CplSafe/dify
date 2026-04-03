@@ -3,7 +3,7 @@ import type { UseDifyNodesPath } from '@/types/doc-paths'
 import { BlockClassificationEnum } from '@/app/components/workflow/block-selector/types'
 import { DEFAULT_BRAND_NAME, HELP_CENTER_ENABLED } from '@/config'
 
-export type GenNodeMetaDataParams = {
+type GenNodeMetaDataParams = {
   classification?: BlockClassificationEnum
   sort: number
   type: BlockEnum

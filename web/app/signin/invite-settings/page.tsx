@@ -8,7 +8,7 @@ import Button from '@/app/components/base/button'
 import Input from '@/app/components/base/input'
 import Loading from '@/app/components/base/loading'
 import { SimpleSelect } from '@/app/components/base/select'
-import Toast from '@/app/components/base/toast'
+import { toast } from '@/app/components/base/ui/toast'
 import { setLocaleOnClient } from '@/i18n-config'
 import { languages, LanguagesSupported } from '@/i18n-config/language'
 import Link from '@/next/link'
@@ -38,7 +38,7 @@ export default function InviteSettingsPage() {
   const handleActivate = useCallback(async () => {
     try {
       if (!name) {
-        Toast.notify({ type: 'error', message: t('enterYourName', { ns: 'login' }) })
+        toast.error(t('enterYourName', { ns: 'login' }))
         return
       }
       const res = await activateMember({

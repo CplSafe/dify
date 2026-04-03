@@ -282,10 +282,10 @@ function AppCard({
                 </div>
                 <CopyFeedback
                   content={isApp ? appUrl : apiUrl}
-                  className="!size-6"
+                  className="size-6!"
                 />
                 {isApp && <ShareQRCode content={isApp ? appUrl : apiUrl} />}
-                {isApp && <Divider type="vertical" className="!mx-0.5 !h-3.5 shrink-0" />}
+                {isApp && <Divider type="vertical" className="mx-0.5! h-3.5! shrink-0" />}
                 {/* button copy link/ button regenerate */}
                 {showConfirmDelete && (
                   <Confirm
@@ -388,9 +388,9 @@ function AppCard({
                     popupContent={
                       t('overview.appInfo.preUseReminder', { ns: 'appOverview' }) ?? ''
                     }
-                    popupClassName={disabled ? 'mt-[-8px]' : '!hidden'}
+                    popupClassName={disabled ? 'mt-[-8px]' : 'hidden!'}
                   >
-                    <div className="flex items-center justify-center gap-[1px]">
+                    <div className="flex items-center justify-center gap-px">
                       <op.opIcon className="h-3.5 w-3.5" />
                       <div className={`${(runningStatus || !disabled) ? 'text-text-tertiary' : 'text-components-button-ghost-text-disabled'} system-xs-medium px-[3px]`}>{op.opName}</div>
                     </div>

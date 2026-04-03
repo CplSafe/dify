@@ -128,13 +128,13 @@ export default function AppSelector() {
       <DropdownMenu open={isAccountMenuOpen} onOpenChange={setIsAccountMenuOpen}>
         <DropdownMenuTrigger
           aria-label={t('account.account', { ns: 'common' })}
-          className={cn('inline-flex items-center rounded-[20px] p-0.5 hover:bg-background-default-dodge', isAccountMenuOpen && 'bg-background-default-dodge')}
+          className={cn('inline-flex items-center radius-3xl p-0.5 hover:bg-background-default-dodge', isAccountMenuOpen && 'bg-background-default-dodge')}
         >
           <Avatar avatar={userProfile.avatar_url} name={userProfile.name} size="lg" />
         </DropdownMenuTrigger>
         <DropdownMenuContent
           sideOffset={6}
-          popupClassName="w-60 max-w-80 !bg-components-panel-bg-blur !py-0 backdrop-blur-sm"
+          popupClassName="w-60 max-w-80 bg-components-panel-bg-blur! py-0! backdrop-blur-xs"
         >
           <DropdownMenuGroup className="py-1">
             <div className="mx-1 flex flex-nowrap items-center py-2 pl-3 pr-2">
@@ -142,7 +142,7 @@ export default function AppSelector() {
                 <div className="break-all text-text-primary system-md-medium">
                   {userProfile.name}
                   {isEducationAccount && (
-                    <PremiumBadge size="s" color="blue" className="ml-1 !px-2">
+                    <PremiumBadge size="s" color="blue" className="ml-1 px-2!">
                       <span aria-hidden className="i-ri-graduation-cap-fill mr-1 h-3 w-3" />
                       <span className="system-2xs-medium">EDU</span>
                     </PremiumBadge>
@@ -177,7 +177,7 @@ export default function AppSelector() {
                 <Support closeAccountDropdown={() => setIsAccountMenuOpen(false)} />
                 {IS_CLOUD_EDITION && isCurrentWorkspaceOwner && <Compliance />}
               </AccountMenuSection>
-              <DropdownMenuSeparator className="!my-0 bg-divider-subtle" />
+              <DropdownMenuSeparator className="my-0! bg-divider-subtle" />
               <AccountMenuSection>
                 <AccountMenuExternalItem
                   href="https://roadmap.dify.ai"
@@ -215,13 +215,13 @@ export default function AppSelector() {
                   )
                 }
               </AccountMenuSection>
-              <DropdownMenuSeparator className="!my-0 bg-divider-subtle" />
+              <DropdownMenuSeparator className="my-0! bg-divider-subtle" />
             </>
           )} */}
           <AccountMenuSection>
             <DropdownMenuItem
               closeOnClick={false}
-              className="cursor-default data-[highlighted]:bg-transparent"
+              className="cursor-default data-highlighted:bg-transparent"
             >
               <MenuItemContent
                 iconClassName="i-ri-t-shirt-2-line"
@@ -230,7 +230,7 @@ export default function AppSelector() {
               />
             </DropdownMenuItem>
           </AccountMenuSection>
-          <DropdownMenuSeparator className="!my-0 bg-divider-subtle" />
+          <DropdownMenuSeparator className="my-0! bg-divider-subtle" />
           <AccountMenuSection>
             <AccountMenuActionItem
               iconClassName="i-ri-logout-box-r-line"

@@ -7,6 +7,7 @@ import type {
 } from '../types'
 import type { FileUpload } from '@/app/components/base/features/types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import AnswerIcon from '@/app/components/base/answer-icon'
 import AppIcon from '@/app/components/base/app-icon'
 import InputsForm from '@/app/components/base/chat/chat-with-history/inputs-form'
@@ -34,6 +35,7 @@ import { getLastAnswer, isValidGeneratedAnswer } from '../utils'
 import { useChatWithHistoryContext } from './context'
 
 const ChatWrapper = () => {
+  const { t } = useTranslation()
   const {
     appParams,
     appPrevChatTree,
@@ -482,6 +484,7 @@ const ChatWrapper = () => {
         />
       )
     : null
+  const footerNote = <span>{t('chat.aiGeneratedDisclaimer', { ns: 'share' })}</span>
 
   return (
     <div
@@ -517,6 +520,7 @@ const ChatWrapper = () => {
         answerIcon={answerIcon}
         hideProcessDetail
         noChatInput={showHomepage}
+        footerNote={footerNote}
         themeBuilder={themeBuilder}
         switchSibling={doSwitchSibling}
         inputDisabled={inputDisabled}

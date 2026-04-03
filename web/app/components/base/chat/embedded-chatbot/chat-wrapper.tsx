@@ -6,6 +6,7 @@ import type {
   OnSend,
 } from '../types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import AnswerIcon from '@/app/components/base/answer-icon'
 import AppIcon from '@/app/components/base/app-icon'
 import SuggestedQuestions from '@/app/components/base/chat/chat/answer/suggested-questions'
@@ -57,6 +58,7 @@ const ChatWrapper = () => {
     initUserVariables,
     appSourceType,
   } = useEmbeddedChatbotContext()
+  const { t } = useTranslation()
 
   // Read sendOnEnter from URL params (e.g., ?sendOnEnter=false)
   const sendOnEnter = useMemo(() => {
@@ -321,6 +323,9 @@ const ChatWrapper = () => {
             />
           )
         : null
+  const footerNote = (
+    <span>{t('chat.aiGeneratedDisclaimer', { ns: 'share' })}</span>
+  )
 
   return (
     <Chat
@@ -349,6 +354,7 @@ const ChatWrapper = () => {
       onFeedback={handleFeedback}
       suggestedQuestions={suggestedQuestions}
       answerIcon={answerIcon}
+      footerNote={footerNote}
       hideProcessDetail
       themeBuilder={themeBuilder}
       switchSibling={doSwitchSibling}

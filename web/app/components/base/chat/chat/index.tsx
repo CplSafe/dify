@@ -45,6 +45,7 @@ export type ChatProps = {
   onStopResponding?: () => void
   noChatInput?: boolean
   onSend?: OnSend
+  footerNote?: ReactNode
   inputs?: Record<string, any>
   inputsForm?: InputForm[]
   onRegenerate?: OnRegenerate
@@ -98,6 +99,7 @@ const Chat: FC<ChatProps> = ({
   chatContainerInnerClassName,
   chatFooterClassName,
   chatFooterInnerClassName,
+  footerNote,
   suggestedQuestions,
   showPromptLog,
   questionIcon,
@@ -373,6 +375,11 @@ const Chat: FC<ChatProps> = ({
                 />
               )
             }
+            {footerNote && (
+              <div className="mt-2 pb-1 text-center text-xs text-text-tertiary">
+                {footerNote}
+              </div>
+            )}
           </div>
         </div>
         {showPromptLogModal && !hideLogModal && (

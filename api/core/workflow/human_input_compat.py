@@ -176,6 +176,15 @@ DeliveryChannelConfig = Annotated[InteractiveSurfaceDeliveryMethod | EmailDelive
 _DELIVERY_METHODS_ADAPTER = TypeAdapter(list[DeliveryChannelConfig])
 
 
+def _is_valid_uuid(value: str) -> bool:
+    """Check if a string is a valid UUID."""
+    try:
+        uuid.UUID(value)
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
 def _copy_mapping(value: object) -> dict[str, Any] | None:
     if isinstance(value, BaseModel):
         return value.model_dump(mode="python")
@@ -199,6 +208,13 @@ def normalize_human_input_node_data_for_graph(node_data: Mapping[str, Any] | Bas
         if method_mapping is None:
             normalized_methods.append(method)
             continue
+
+        # Ensure ID is a valid UUID string for web app delivery
+        if method_mapping.get("type") == DeliveryMethodType.WEBAPP:
+            method_id = method_mapping.get("id")
+            if method_id and isinstance(method_id, str) and not _is_valid_uuid(method_id):
+                # Generate new UUID if the ID is not a valid UUID
+                method_mapping["id"] = str(uuid.uuid4())
 
         config_mapping = _copy_mapping(method_mapping.get("config"))
         if config_mapping is not None:

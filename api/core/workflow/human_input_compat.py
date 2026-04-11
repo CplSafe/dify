@@ -209,12 +209,12 @@ def normalize_human_input_node_data_for_graph(node_data: Mapping[str, Any] | Bas
             normalized_methods.append(method)
             continue
 
-        # Ensure ID is a valid UUID string for web app delivery
-        if method_mapping.get("type") == DeliveryMethodType.WEBAPP:
-            method_id = method_mapping.get("id")
-            if method_id and isinstance(method_id, str) and not _is_valid_uuid(method_id):
-                # Generate new UUID if the ID is not a valid UUID
-                method_mapping["id"] = str(uuid.uuid4())
+        # Ensure ID is a valid UUID for all delivery method types.
+        # Stored workflow graphs may contain non-UUID string IDs (e.g. 'dm-webapp-review')
+        # which cause pydantic validation errors in _DeliveryMethodBase.id (uuid.UUID).
+        method_id = method_mapping.get("id")
+        if method_id is not None and not _is_valid_uuid(method_id):
+            method_mapping["id"] = str(uuid.uuid4())
 
         config_mapping = _copy_mapping(method_mapping.get("config"))
         if config_mapping is not None:

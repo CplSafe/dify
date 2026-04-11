@@ -44,6 +44,7 @@ export const initializeInputs = (
 
     switch (item.type) {
       case 'text-input':
+      case 'text_input':
       case 'paragraph':
       case 'select':
       case 'number':

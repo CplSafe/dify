@@ -44,11 +44,13 @@ const ContentItem = ({
     return null
 
   const renderInput = () => {
+    const fieldOptions = (formInputField as { options?: string[] }).options || []
+
     switch (formInputField.type) {
       case 'paragraph':
         return (
           <Textarea
-            className="h-[104px] sm:text-xs"
+            className="h-[128px] rounded-xl sm:text-xs"
             value={inputs[fieldName] ?? ''}
             onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
               onInputChange(fieldName, e.target.value)
@@ -58,15 +60,17 @@ const ContentItem = ({
         )
 
       case 'text-input':
+      case 'text_input':
       case 'url':
         return (
           <Input
             type={formInputField.type === 'url' ? 'url' : 'text'}
+            size="large"
             value={inputs[fieldName] ?? ''}
             onChange={(e: ChangeEvent<HTMLInputElement>) => {
               onInputChange(fieldName, e.target.value)
             }}
-            data-testid="content-item-text-input"
+            data-testid="content-item-input"
           />
         )
 
@@ -84,14 +88,18 @@ const ContentItem = ({
 
       case 'select':
         return (
-          <Input
-            type="text"
-            value={inputs[fieldName] ?? ''}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+          <select
+            className="w-full rounded-lg border border-components-panel-border-subtle bg-components-input-bg-normal px-4 py-3 text-text-primary outline-hidden hover:border-components-input-border-hover focus:border-components-input-border-active"
+            value={inputs[fieldName] ?? fieldOptions[0] ?? ''}
+            onChange={(e) => {
               onInputChange(fieldName, e.target.value)
             }}
-            data-testid="content-item-select-input"
-          />
+            data-testid="content-item-select"
+          >
+            {fieldOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
         )
 
       case 'checkbox':

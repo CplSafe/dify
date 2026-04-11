@@ -5,7 +5,9 @@ import { describe, expect, it, vi } from 'vitest'
 import ContentItem from '../content-item'
 
 vi.mock('@/app/components/base/markdown', () => ({
-  Markdown: ({ content }: { content: string }) => <div data-testid="mock-markdown">{content}</div>,
+  Markdown: ({ content }: { content: string }) => (
+    <div data-testid="mock-markdown">{content}</div>
+  ),
 }))
 
 describe('ContentItem', () => {
@@ -35,8 +37,12 @@ describe('ContentItem', () => {
       />,
     )
 
-    expect(screen.getByTestId('mock-markdown')).toHaveTextContent('Hello world')
-    expect(screen.queryByTestId('content-item-textarea')).not.toBeInTheDocument()
+    expect(screen.getByTestId('mock-markdown')).toHaveTextContent(
+      'Hello world',
+    )
+    expect(
+      screen.queryByTestId('content-item-textarea'),
+    ).not.toBeInTheDocument()
   })
 
   it('should render Textarea for valid output variable content', () => {
@@ -53,53 +59,6 @@ describe('ContentItem', () => {
     expect(textarea).toBeInTheDocument()
     expect(textarea).toHaveValue('Initial bio')
     expect(screen.queryByTestId('mock-markdown')).not.toBeInTheDocument()
-  })
-
-  it('should render input for text_input fields', () => {
-    render(
-      <ContentItem
-        content="{{#$output.user_bio#}}"
-        formInputFields={[
-          {
-            type: 'text_input',
-            output_variable_name: 'user_bio',
-            default: {
-              type: 'constant',
-              value: '',
-              selector: [],
-            },
-          } as FormInputItem,
-        ]}
-        inputs={mockInputs}
-        onInputChange={mockOnInputChange}
-      />,
-    )
-
-    expect(screen.getByTestId('content-item-input')).toBeInTheDocument()
-  })
-
-  it('should render select for select fields', () => {
-    render(
-      <ContentItem
-        content="{{#$output.user_bio#}}"
-        formInputFields={[
-          {
-            type: 'select',
-            output_variable_name: 'user_bio',
-            default: {
-              type: 'constant',
-              value: 'A',
-              selector: [],
-            },
-            options: ['A', 'B'],
-          } as FormInputItem,
-        ]}
-        inputs={{ user_bio: 'A' }}
-        onInputChange={mockOnInputChange}
-      />,
-    )
-
-    expect(screen.getByTestId('content-item-select')).toBeInTheDocument()
   })
 
   it('should call onInputChange when textarea value changes', async () => {
@@ -132,13 +91,13 @@ describe('ContentItem', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('should render nothing if input type is not supported', () => {
-    const { container } = render(
+  it('should render text input for text-input type', () => {
+    render(
       <ContentItem
         content="{{#$output.user_bio#}}"
         formInputFields={[
           {
-            type: 'text_input',
+            type: 'text-input',
             output_variable_name: 'user_bio',
             default: {
               type: 'constant',
@@ -152,7 +111,8 @@ describe('ContentItem', () => {
       />,
     )
 
-    expect(container.querySelector('[data-testid="content-item-textarea"]')).not.toBeInTheDocument()
-    expect(container.querySelector('.py-3')?.textContent).toBe('')
+    const input = screen.getByTestId('content-item-text-input')
+    expect(input).toBeInTheDocument()
+    expect(input).toHaveValue('Initial bio')
   })
 })

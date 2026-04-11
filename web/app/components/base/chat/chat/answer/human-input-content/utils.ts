@@ -31,13 +31,39 @@ export const splitByOutputVar = (content: string): string[] => {
   return parts.filter(part => part.length > 0)
 }
 
-export const initializeInputs = (formInputs: FormInputItem[], defaultValues: Record<string, string> = {}) => {
+export const initializeInputs = (
+  formInputs: FormInputItem[],
+  defaultValues: Record<string, string> = {},
+) => {
   const initialInputs: Record<string, any> = {}
   formInputs.forEach((item) => {
-    if (item.type === 'text-input' || item.type === 'text_input' || item.type === 'paragraph')
-      initialInputs[item.output_variable_name] = item.default.type === 'variable' ? defaultValues[item.output_variable_name] || '' : item.default.value
-    else
-      initialInputs[item.output_variable_name] = undefined
+    const resolvedDefault
+      = item.default.type === 'variable'
+        ? defaultValues[item.output_variable_name] || ''
+        : item.default.value
+
+    switch (item.type) {
+      case 'text-input':
+      case 'paragraph':
+      case 'select':
+      case 'number':
+      case 'url':
+      case 'json':
+      case 'json_object':
+        initialInputs[item.output_variable_name] = resolvedDefault ?? ''
+        break
+      case 'checkbox':
+        initialInputs[item.output_variable_name] = resolvedDefault === 'true'
+        break
+      case 'file':
+      case 'file-list':
+      case 'files':
+        initialInputs[item.output_variable_name] = undefined
+        break
+      default:
+        initialInputs[item.output_variable_name] = resolvedDefault ?? ''
+        break
+    }
   })
   return initialInputs
 }
@@ -55,10 +81,7 @@ export const getRelativeTime = (
 ) => {
   const dayjsLocale = localeMap[locale] ?? 'en'
 
-  return dayjs
-    .utc(utcTimestamp)
-    .locale(dayjsLocale)
-    .fromNow()
+  return dayjs.utc(utcTimestamp).locale(dayjsLocale).fromNow()
 }
 
 export const isRelativeTimeSameOrAfter = (utcTimestamp: string | number) => {

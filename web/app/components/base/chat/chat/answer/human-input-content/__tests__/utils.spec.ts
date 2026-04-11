@@ -10,27 +10,26 @@ import {
   splitByOutputVar,
 } from '../utils'
 
-const createInput = (overrides: Partial<FormInputItem>): FormInputItem => ({
-  label: 'field',
-  variable: 'field',
-  required: false,
-  max_length: 128,
-  type: InputVarType.textInput,
-  default: {
-    type: 'constant' as const,
-    value: '',
-    selector: [], // Dummy selector
-  },
-  output_variable_name: 'field',
-  ...overrides,
-} as unknown as FormInputItem)
+const createInput = (overrides: Partial<FormInputItem>): FormInputItem =>
+  ({
+    label: 'field',
+    variable: 'field',
+    required: false,
+    max_length: 128,
+    type: InputVarType.textInput,
+    default: { type: 'constant' as const, value: '', selector: [] },
+    output_variable_name: 'field',
+    ...overrides,
+  }) as unknown as FormInputItem
 
 describe('human-input utils', () => {
   describe('getButtonStyle', () => {
     it('should map all supported button styles', () => {
       expect(getButtonStyle(UserActionButtonType.Primary)).toBe('primary')
       expect(getButtonStyle(UserActionButtonType.Default)).toBe('secondary')
-      expect(getButtonStyle(UserActionButtonType.Accent)).toBe('secondary-accent')
+      expect(getButtonStyle(UserActionButtonType.Accent)).toBe(
+        'secondary-accent',
+      )
       expect(getButtonStyle(UserActionButtonType.Ghost)).toBe('ghost')
     })
 
@@ -55,7 +54,7 @@ describe('human-input utils', () => {
 
   describe('initializeInputs', () => {
     it('should initialize text fields with constants and variable defaults', () => {
-      const formInputs = [
+      const inputs = [
         createInput({
           type: InputVarType.textInput,
           output_variable_name: 'name',
@@ -68,27 +67,24 @@ describe('human-input utils', () => {
         }),
       ]
 
-      expect(initializeInputs(formInputs, { bio: 'Lives in Berlin' })).toEqual({
+      expect(initializeInputs(inputs, { bio: 'Lives in Berlin' })).toEqual({
         name: 'John',
         bio: 'Lives in Berlin',
       })
     })
 
-    it('should set non text-like inputs to undefined', () => {
-      const formInputs = [
-        createInput({
-          type: InputVarType.select,
-          output_variable_name: 'role',
-        }),
-      ]
+    it('should initialize select inputs with empty string default', () => {
+      const inputs = [createInput({ type: InputVarType.select, output_variable_name: 'role' })]
+      expect(initializeInputs(inputs)).toEqual({ role: '' })
+    })
 
-      expect(initializeInputs(formInputs)).toEqual({
-        role: undefined,
-      })
+    it('should set file inputs to undefined', () => {
+      const inputs = [createInput({ type: InputVarType.singleFile, output_variable_name: 'attachment' })]
+      expect(initializeInputs(inputs)).toEqual({ attachment: undefined })
     })
 
     it('should fallback to empty string when variable default is missing', () => {
-      const formInputs = [
+      const inputs = [
         createInput({
           type: InputVarType.textInput,
           output_variable_name: 'summary',
@@ -96,9 +92,7 @@ describe('human-input utils', () => {
         }),
       ]
 
-      expect(initializeInputs(formInputs, {})).toEqual({
-        summary: '',
-      })
+      expect(initializeInputs(inputs, {})).toEqual({ summary: '' })
     })
   })
 

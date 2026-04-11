@@ -1,63 +1,67 @@
-'use client'
-import type { MailSendResponse } from '@/service/use-common'
-import { useCallback, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import Button from '@/app/components/base/button'
-import Input from '@/app/components/base/input'
-import { toast } from '@/app/components/base/ui/toast'
-import Split from '@/app/signin/split'
-import { emailRegex } from '@/config'
-import { useLocale } from '@/context/i18n'
-import Link from '@/next/link'
-import { useSendMail } from '@/service/use-common'
+"use client";
+import type { MailSendResponse } from "@/service/use-common";
+import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
+import Button from "@/app/components/base/button";
+import Input from "@/app/components/base/input";
+import { toast } from "@/app/components/base/ui/toast";
+import Split from "@/app/signin/split";
+import { emailRegex } from "@/config";
+import { useLocale } from "@/context/i18n";
+import Link from "@/next/link";
+import { useSearchParams } from "@/next/navigation";
+import { useSendMail } from "@/service/use-common";
 
 type Props = {
-  onSuccess: (email: string, payload: string) => void
-}
-export default function Form({
-  onSuccess,
-}: Props) {
-  const { t } = useTranslation()
-  const [email, setEmail] = useState('')
-  const locale = useLocale()
+  onSuccess: (email: string, payload: string) => void;
+};
+export default function Form({ onSuccess }: Props) {
+  const { t } = useTranslation();
+  const [email, setEmail] = useState("");
+  const locale = useLocale();
+  const searchParams = useSearchParams();
+  const inviteCode = searchParams.get("invite_code");
 
-  const { mutateAsync: submitMail, isPending } = useSendMail()
+  const { mutateAsync: submitMail, isPending } = useSendMail();
 
   const handleSubmit = useCallback(async () => {
-    if (isPending)
-      return
+    if (isPending) return;
 
     if (!email) {
-      toast.error(t('error.emailEmpty', { ns: 'login' }))
-      return
+      toast.error(t("error.emailEmpty", { ns: "login" }));
+      return;
     }
     if (!emailRegex.test(email)) {
-      toast.error(t('error.emailInValid', { ns: 'login' }))
-      return
+      toast.error(t("error.emailInValid", { ns: "login" }));
+      return;
     }
-    const res = await submitMail({ email, language: locale })
-    if ((res as MailSendResponse).result === 'success')
-      onSuccess(email, (res as MailSendResponse).data)
-  }, [email, locale, submitMail, t, isPending, onSuccess])
+    const res = await submitMail({ email, language: locale });
+    if ((res as MailSendResponse).result === "success")
+      onSuccess(email, (res as MailSendResponse).data);
+  }, [email, locale, submitMail, t, isPending, onSuccess]);
 
   return (
-    <form onSubmit={(e) => {
-      e.preventDefault()
-      handleSubmit()
-    }}
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        handleSubmit();
+      }}
     >
       <div className="mb-3">
-        <label htmlFor="email" className="system-md-semibold my-2 text-text-secondary">
-          {t('email', { ns: 'login' })}
+        <label
+          htmlFor="email"
+          className="system-md-semibold my-2 text-text-secondary"
+        >
+          {t("email", { ns: "login" })}
         </label>
         <div className="mt-1">
           <Input
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
             id="email"
             type="email"
             autoComplete="email"
-            placeholder={t('emailPlaceholder', { ns: 'login' }) || ''}
+            placeholder={t("emailPlaceholder", { ns: "login" }) || ""}
             tabIndex={1}
           />
         </div>
@@ -70,18 +74,22 @@ export default function Form({
           disabled={isPending || !email}
           className="w-full"
         >
-          {t('signup.verifyMail', { ns: 'login' })}
+          {t("signup.verifyMail", { ns: "login" })}
         </Button>
       </div>
       <Split className="mb-5 mt-4" />
 
       <div className="text-[13px] font-medium leading-4 text-text-secondary">
-        <span>{t('signup.haveAccount', { ns: 'login' })}</span>
+        <span>{t("signup.haveAccount", { ns: "login" })}</span>
         <Link
           className="text-text-accent"
-          href="/signin"
+          href={
+            inviteCode
+              ? `/signin?invite_code=${encodeURIComponent(inviteCode)}`
+              : "/signin"
+          }
         >
-          {t('signup.signIn', { ns: 'login' })}
+          {t("signup.signIn", { ns: "login" })}
         </Link>
       </div>
 
@@ -110,7 +118,6 @@ export default function Form({
           </div>
         </>
       )} */}
-
     </form>
-  )
+  );
 }

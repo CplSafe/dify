@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Theme } from '../../embedded-chatbot/theme/theme-context'
 import type { EnableType, OnSend } from '../../types'
 import type { InputForm } from '../type'
@@ -23,6 +24,7 @@ import Operation from './operation'
 type ChatInputAreaProps = {
   readonly?: boolean
   botName?: string
+  placeholder?: string
   showFeatureBar?: boolean
   showFileUpload?: boolean
   featureBarDisabled?: boolean
@@ -35,6 +37,9 @@ type ChatInputAreaProps = {
   theme?: Theme | null
   isResponding?: boolean
   disabled?: boolean
+  appearance?: 'default' | 'homepage'
+  extraActions?: ReactNode
+  hideSpeechButton?: boolean
   /**
    * Controls whether pressing Enter sends the message.
    * - true (default): Enter sends, Shift+Enter inserts newline
@@ -43,7 +48,7 @@ type ChatInputAreaProps = {
    */
   sendOnEnter?: boolean
 }
-const ChatInputArea = ({ readonly, botName, showFeatureBar, showFileUpload, featureBarDisabled, onFeatureBarClick, visionConfig, speechToTextConfig = { enabled: false }, onSend, inputs = {}, inputsForm = [], theme, isResponding, disabled, sendOnEnter = true }: ChatInputAreaProps) => {
+const ChatInputArea = ({ readonly, botName, placeholder, showFeatureBar, showFileUpload, featureBarDisabled, onFeatureBarClick, visionConfig, speechToTextConfig = { enabled: false }, onSend, inputs = {}, inputsForm = [], theme, isResponding, disabled, appearance = 'default', extraActions, hideSpeechButton, sendOnEnter = true }: ChatInputAreaProps) => {
   const { t } = useTranslation()
   const { wrapperRef, textareaRef, textValueRef, holdSpaceRef, handleTextareaResize, isMultipleLine } = useTextAreaHeight()
   const [query, setQuery] = useState('')
@@ -135,24 +140,78 @@ const ChatInputArea = ({ readonly, botName, showFeatureBar, showFileUpload, feat
       toast.error(t('voiceInput.notAllow', { ns: 'common' }))
     })
   }, [t])
-  const operation = (<Operation ref={holdSpaceRef} readonly={readonly} fileConfig={visionConfig} speechToTextConfig={speechToTextConfig} onShowVoiceInput={handleShowVoiceInput} onSend={handleSend} theme={theme} />)
+  const isHomepage = appearance === 'homepage'
+  const inputPlaceholder = placeholder || decode(t(readonly ? 'chat.inputDisabledPlaceholder' : 'chat.inputPlaceholder', { ns: 'common', botName }) || '')
+  const shouldRenderOperationBelow = isMultipleLine || isHomepage
+  const operation = (
+    <Operation
+      ref={holdSpaceRef}
+      readonly={readonly}
+      fileConfig={visionConfig}
+      speechToTextConfig={speechToTextConfig}
+      onShowVoiceInput={handleShowVoiceInput}
+      onSend={handleSend}
+      theme={theme}
+      appearance={appearance}
+      extraActions={extraActions}
+      hideSpeechButton={hideSpeechButton}
+    />
+  )
   return (
     <>
-      <div className={cn('relative z-10 overflow-hidden rounded-xl border border-components-chat-input-border bg-components-panel-bg-blur pb-[9px] shadow-md', isDragActive && 'border border-dashed border-components-option-card-option-selected-border', disabled && 'pointer-events-none border-components-panel-border opacity-50 shadow-none')}>
-        <div className="relative max-h-[158px] overflow-y-auto overflow-x-hidden px-[9px] pt-[9px]">
+      <div className={cn(
+        'relative z-10 overflow-hidden rounded-xl border border-components-chat-input-border bg-components-panel-bg-blur pb-[9px] shadow-md',
+        isHomepage && 'rounded-[30px] border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,255,255,0.94))] pb-4 shadow-[0_20px_44px_rgba(129,140,248,0.14)]',
+        isDragActive && 'border border-dashed border-components-option-card-option-selected-border',
+        disabled && 'pointer-events-none border-components-panel-border opacity-50 shadow-none',
+      )}
+      >
+        <div className={cn(
+          'relative max-h-[158px] overflow-y-auto overflow-x-hidden px-[9px] pt-[9px]',
+          isHomepage && 'max-h-none px-5 pt-5',
+        )}
+        >
           <FileListInChatInput fileConfig={visionConfig!} />
           <div ref={wrapperRef} className="flex items-center justify-between">
             <div className="relative flex w-full grow items-center">
               <div ref={textValueRef} className="pointer-events-none invisible absolute h-auto w-auto whitespace-pre p-1 leading-6 body-lg-regular">
                 {query}
               </div>
-              <Textarea ref={ref => textareaRef.current = ref as any} className={cn('w-full resize-none bg-transparent p-1 leading-6 text-text-primary outline-none body-lg-regular')} placeholder={decode(t(readonly ? 'chat.inputDisabledPlaceholder' : 'chat.inputPlaceholder', { ns: 'common', botName }) || '')} autoFocus minRows={1} value={query} onChange={e => handleQueryChange(e.target.value)} onKeyDown={handleKeyDown} onCompositionStart={handleCompositionStart} onCompositionEnd={handleCompositionEnd} onPaste={handleClipboardPasteFile} onDragEnter={handleDragFileEnter} onDragLeave={handleDragFileLeave} onDragOver={handleDragFileOver} onDrop={handleDropFile} readOnly={readonly} />
+              <Textarea
+                ref={ref => textareaRef.current = ref as any}
+                className={cn(
+                  'w-full resize-none bg-transparent p-1 leading-6 text-text-primary outline-none body-lg-regular',
+                  isHomepage && 'min-h-[160px] p-0 text-[18px] leading-8 text-[#344054] placeholder:text-[#c8ced8]',
+                )}
+                placeholder={inputPlaceholder}
+                autoFocus
+                minRows={1}
+                value={query}
+                onChange={e => handleQueryChange(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onCompositionStart={handleCompositionStart}
+                onCompositionEnd={handleCompositionEnd}
+                onPaste={handleClipboardPasteFile}
+                onDragEnter={handleDragFileEnter}
+                onDragLeave={handleDragFileLeave}
+                onDragOver={handleDragFileOver}
+                onDrop={handleDropFile}
+                readOnly={readonly}
+              />
             </div>
-            {!isMultipleLine && operation}
+            {!shouldRenderOperationBelow && operation}
           </div>
           {showVoiceInput && (<VoiceInput onCancel={() => setShowVoiceInput(false)} onConverted={text => handleQueryChange(text)} />)}
         </div>
-        {isMultipleLine && (<div className="px-[9px]">{operation}</div>)}
+        {shouldRenderOperationBelow && (
+          <div className={cn(
+            'px-[9px]',
+            isHomepage && 'border-t border-[#eef2ff] px-5 pt-3',
+          )}
+          >
+            {operation}
+          </div>
+        )}
       </div>
       {showFeatureBar && (<FeatureBar showFileUpload={showFileUpload} disabled={featureBarDisabled} onFeatureBarClick={readonly ? noop : onFeatureBarClick} hideEditEntrance={readonly} />)}
     </>

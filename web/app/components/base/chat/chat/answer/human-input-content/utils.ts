@@ -34,7 +34,7 @@ export const splitByOutputVar = (content: string): string[] => {
 export const initializeInputs = (formInputs: FormInputItem[], defaultValues: Record<string, string> = {}) => {
   const initialInputs: Record<string, any> = {}
   formInputs.forEach((item) => {
-    if (item.type === 'text-input' || item.type === 'paragraph')
+    if (item.type === 'text-input' || item.type === 'text_input' || item.type === 'paragraph')
       initialInputs[item.output_variable_name] = item.default.type === 'variable' ? defaultValues[item.output_variable_name] || '' : item.default.value
     else
       initialInputs[item.output_variable_name] = undefined

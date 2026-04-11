@@ -1,7 +1,7 @@
 'use client'
 import type { FC } from 'react'
-import type { InstalledApp } from '@/models/explore'
 import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
+import type { InstalledApp } from '@/models/explore'
 import {
   useEffect,
   useState,
@@ -38,6 +38,7 @@ const ChatWithHistory: FC<ChatWithHistoryProps> = ({
     sidebarCollapseState,
   } = useChatWithHistoryContext()
   const isSidebarCollapsed = sidebarCollapseState
+  const hideAppCenter = true
   const customConfig = appData?.custom_config
   const site = appData?.site
   const chatPageBackgroundStyle = site?.chat_page_background_color ? { backgroundColor: site.chat_page_background_color } : undefined
@@ -57,14 +58,15 @@ const ChatWithHistory: FC<ChatWithHistoryProps> = ({
   useDocumentTitle(site?.title || 'Chat')
 
   return (
-    <div className={cn(
-      'flex h-full bg-background-default-burn',
-      isMobile && 'flex-col',
-      className,
-    )}
+    <div
+      className={cn(
+        'flex h-full bg-background-default-burn',
+        isMobile && 'flex-col',
+        className,
+      )}
       style={chatPageBackgroundStyle}
     >
-      {!isMobile && (
+      {!isMobile && !hideAppCenter && (
         <div className={cn(
           'flex w-[236px] flex-col p-1 pr-0 transition-all duration-200 ease-in-out',
           isSidebarCollapsed && 'w-0 overflow-hidden p-0!',
@@ -73,11 +75,11 @@ const ChatWithHistory: FC<ChatWithHistoryProps> = ({
           <Sidebar />
         </div>
       )}
-      {isMobile && (
+      {isMobile && !hideAppCenter && (
         <HeaderInMobile />
       )}
-      <div className={cn('relative grow p-2', isMobile && 'h-[calc(100%-56px)] p-0')}>
-        {isSidebarCollapsed && (
+      <div className={cn('relative grow p-2', isMobile && !hideAppCenter && 'h-[calc(100%-56px)] p-0', hideAppCenter && 'p-0')}>
+        {isSidebarCollapsed && !hideAppCenter && (
           <div
             className={cn(
               'absolute top-0 z-20 flex h-full w-[256px] flex-col p-2 transition-all duration-500 ease-in-out',
@@ -97,7 +99,7 @@ const ChatWithHistory: FC<ChatWithHistoryProps> = ({
           )}
           style={chatPageBackgroundStyle}
         >
-          {!isMobile && <Header />}
+          {!isMobile && !hideAppCenter && <Header />}
           {appChatListDataLoading && (
             <Loading type="app" />
           )}

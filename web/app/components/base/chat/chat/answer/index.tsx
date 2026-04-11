@@ -199,13 +199,13 @@ const Answer: FC<AnswerProps> = ({
           )}
         </div>
       )}
-      <div className="chat-answer-container group ml-2.5 w-0 grow pb-3 md:ml-4 md:pb-4" ref={containerRef} data-testid="chat-answer-container">
+      <div className={cn('group w-0 grow pb-3 md:pb-4', hideAvatar ? 'ml-0' : 'ml-2.5 md:ml-4')} ref={containerRef} data-testid="chat-answer-container">
         {/* Block 1: Workflow Process + Human Input Forms */}
         {hasHumanInputs && (
-          <div className={cn('group relative pr-10', chatAnswerContainerInner)} data-testid="chat-answer-container-humaninput">
+          <div className={cn('group relative pr-1 md:pr-6', chatAnswerContainerInner)} data-testid="chat-answer-container-humaninput">
             <div
               ref={humanInputFormContainerRef}
-              className={cn('relative inline-block w-full max-w-full rounded-2xl bg-chat-bubble-bg px-4 py-3 text-text-primary body-lg-regular')}
+              className={cn('relative inline-block w-full max-w-full rounded-[28px] border border-components-panel-border-subtle bg-background-section px-4 py-4 text-text-primary shadow-lg body-lg-regular md:px-5')}
             >
               {
                 !responding && contentIsEmpty && !hasAgentThoughts && (
@@ -270,11 +270,11 @@ const Answer: FC<AnswerProps> = ({
 
         {/* Block 2: Response Content (when human inputs exist) */}
         {hasHumanInputs && (responding || !contentIsEmpty || hasAgentThoughts) && (
-          <div className={cn('group relative mt-2 pr-1 md:pr-10', chatAnswerContainerInner)}>
-            <div className="absolute -top-2 left-6 h-3 w-0.5 bg-chat-answer-human-input-form-divider-bg" />
+          <div className={cn('group relative mt-3 pr-1 md:pr-6', chatAnswerContainerInner)}>
+            <div className="absolute -top-3 left-8 h-4 w-0.5 bg-chat-answer-human-input-form-divider-bg" />
             <div
               ref={contentRef}
-              className="relative inline-block w-full max-w-full rounded-2xl bg-chat-bubble-bg px-3.5 py-2.5 text-text-primary body-lg-regular md:px-4 md:py-3"
+              className="relative inline-block w-full max-w-full rounded-[24px] border border-components-panel-border-subtle bg-background-default px-4 py-3 text-text-primary shadow-sm body-lg-regular md:px-5 md:py-4"
             >
               {
                 !responding && (

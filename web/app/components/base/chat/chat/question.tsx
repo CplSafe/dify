@@ -159,7 +159,7 @@ const Question: FC<QuestionProps> = ({
 
   return (
     <div className="mb-2 flex justify-end last:mb-0">
-      <div className={cn('group relative mr-4 flex max-w-full items-start overflow-x-hidden pl-14', isEditing && 'flex-1')}>
+      <div className={cn('group relative flex max-w-full items-start overflow-x-hidden', hideAvatar ? 'mr-0' : 'mr-4 pl-14', isEditing && 'flex-1')}>
         <div className={cn('mr-2 gap-1', isEditing ? 'hidden' : 'flex')}>
           <div
             data-testid="action-container"

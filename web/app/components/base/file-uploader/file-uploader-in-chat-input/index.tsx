@@ -1,8 +1,5 @@
 import type { FileUpload } from '@/app/components/base/features/types'
 import {
-  RiAttachmentLine,
-} from '@remixicon/react'
-import {
   memo,
   useCallback,
 } from 'react'
@@ -14,22 +11,29 @@ import FileFromLinkOrLocal from '../file-from-link-or-local'
 type FileUploaderInChatInputProps = {
   fileConfig: FileUpload
   readonly?: boolean
+  triggerClassName?: string
+  triggerIconClassName?: string
+  triggerLabel?: string
 }
 const FileUploaderInChatInput = ({
   fileConfig,
   readonly,
+  triggerClassName,
+  triggerIconClassName,
+  triggerLabel,
 }: FileUploaderInChatInputProps) => {
   const renderTrigger = useCallback((open: boolean) => {
     return (
       <ActionButton
         size="l"
-        className={cn(open && 'bg-state-base-hover')}
+        className={cn(open && 'bg-state-base-hover', triggerClassName)}
         disabled={readonly}
       >
-        <RiAttachmentLine className="h-5 w-5" />
+        <span className={cn('i-ri-attachment-line h-5 w-5', triggerIconClassName)} />
+        {triggerLabel && <span className="ml-2">{triggerLabel}</span>}
       </ActionButton>
     )
-  }, [])
+  }, [readonly, triggerClassName, triggerIconClassName, triggerLabel])
 
   if (readonly)
     return renderTrigger(false)

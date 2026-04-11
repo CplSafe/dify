@@ -68,5 +68,6 @@ export type FormInputItemDefault = {
 export type FormInputItem = {
   type: InputVarType
   output_variable_name: string
+  options?: string[]
   default: FormInputItemDefault
 }

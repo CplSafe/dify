@@ -269,14 +269,12 @@ const ChatWrapper = ({
   }, [chatList, currentConversationId])
 
   const showHomepage = useMemo(() => {
-    if (!appData?.site.enable_homepage)
-      return false
     if (currentConversationId || respondingState)
       return false
     if (!allInputsHidden && inputsForms.length > 0)
       return false
     return messageList.length === 0
-  }, [allInputsHidden, appData?.site.enable_homepage, currentConversationId, inputsForms.length, messageList.length, respondingState])
+  }, [allInputsHidden, currentConversationId, inputsForms.length, messageList.length, respondingState])
 
   const handleSubmitHumanInputForm = useCallback(async (formToken: string, formData: any) => {
     if (isInstalledApp)
@@ -333,84 +331,97 @@ const ChatWrapper = ({
     const welcomeMessage = chatList.find(item => item.isOpeningStatement)
     if (showHomepage) {
       const homepageDescription = appData?.site.description || ''
-      const homepageTitle = '益阳赫山'
+      const homepageTitle = appData?.site.title || '构界Agent'
+      const quickActions = [
+        '热门生成',
+        '商品链接智能成片',
+        '商品营销短视频',
+        '海外商品介绍视频',
+      ]
 
       return (
         <div className="px-4 py-4 md:px-6 md:py-6">
-          <div className="relative mx-auto min-h-[calc(100vh-210px)] w-full max-w-[760px] overflow-hidden rounded-[36px] border border-white/60 bg-[linear-gradient(145deg,#fdf2f8_0%,#fff7ed_42%,#f8fafc_100%)] shadow-[0_30px_80px_rgba(249,115,22,0.14)]">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_14%,rgba(251,113,133,0.28),transparent_34%),radial-gradient(circle_at_80%_22%,rgba(253,186,116,0.26),transparent_30%),radial-gradient(circle_at_52%_72%,rgba(255,255,255,0.72),transparent_44%)]" />
-            <div className="absolute -left-16 top-28 h-56 w-56 rounded-full bg-[rgba(255,255,255,0.32)] blur-3xl" />
-            <div className="absolute -right-8 bottom-40 h-48 w-48 rounded-full bg-[rgba(255,255,255,0.26)] blur-3xl" />
+          <div className="relative mx-auto min-h-[calc(100vh-160px)] w-full max-w-[1480px] overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,#ffffff_0%,#f8faff_48%,#eef2ff_100%)] shadow-[0_28px_80px_rgba(99,102,241,0.12)]">
+            <div className="inset-0 pointer-events-none absolute bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,0.98),rgba(255,255,255,0.72)_34%,transparent_54%),radial-gradient(circle_at_82%_10%,rgba(196,181,253,0.22),transparent_28%),radial-gradient(circle_at_50%_100%,rgba(191,219,254,0.16),transparent_32%)]" />
+            <div className="pointer-events-none absolute inset-x-5 inset-y-5 rounded-[28px] border border-[#e5e7f3] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]" />
 
-            <div className="relative flex min-h-[calc(100vh-210px)] flex-col px-5 pb-6 pt-4 md:px-8 md:pb-8 md:pt-5">
-              <div className="inline-flex w-fit items-center gap-2 rounded-full bg-[rgba(255,255,255,0.88)] px-4 py-2 text-[15px] font-semibold text-[#f97316] shadow-[0_10px_30px_rgba(255,255,255,0.55)]">
-                <div className="i-ri-map-pin-2-fill h-4 w-4" />
-                <span>{homepageTitle}</span>
+            <div className="relative flex min-h-[calc(100vh-160px)] flex-col px-7 pt-6 pb-7 md:px-10 md:pt-7 md:pb-10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4 text-[#344054]">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#e4e7ec] bg-white shadow-[0_8px_20px_rgba(99,102,241,0.08)]">
+                    <AppIcon
+                      size="large"
+                      iconType={appData?.site.icon_type}
+                      icon={appData?.site.icon}
+                      background={appData?.site.icon_background}
+                      imageUrl={appData?.site.icon_url}
+                    />
+                  </div>
+                  <div className="text-[18px] font-semibold">{homepageTitle}</div>
+                </div>
               </div>
 
-              <div className="flex flex-1 flex-col items-center justify-start pt-4 text-center md:pt-6">
-                <div className="pointer-events-none absolute left-[18%] top-[24%] h-32 w-32 rounded-full border-[6px] border-[#fb7185]/45" />
-                <div className="pointer-events-none absolute right-[16%] top-[30%] h-24 w-24 rounded-full border-[5px] border-[#fdba74]/40" />
-                <div className="pointer-events-none absolute left-[22%] top-[43%] h-3 w-3 rounded-full bg-[#fb7185]" />
-                <div className="pointer-events-none absolute right-[24%] top-[41%] h-4 w-4 rounded-full bg-[#fdba74]" />
-
-                <div className="mt-2 flex w-full max-w-[360px] flex-col items-center md:max-w-[440px]">
-                  <div className="w-full text-center text-[38px] font-black italic leading-none tracking-[0.04em] text-[#f97316] drop-shadow-[0_10px_22px_rgba(249,115,22,0.18)] md:text-[56px]">
-                    赫山
+              <div className="flex flex-1 flex-col items-center justify-center pt-8 text-center md:pt-10">
+                <div className="max-w-[860px]">
+                  <h1 className="text-[44px] leading-[1.12] font-black tracking-[-0.03em] text-[#111827] md:text-[64px]">
+                    Hi, 欢迎使用
+                    {' '}
+                    <span className="bg-[linear-gradient(90deg,#4f6cf7_0%,#8b5cf6_58%,#c084fc_100%)] bg-clip-text text-transparent">
+                      {homepageTitle}
+                    </span>
+                  </h1>
+                  <div className="mt-6 text-[14px] tracking-[0.62em] text-[#667085] md:text-[16px]">
+                    让 好 内 容 快 人 一 步
                   </div>
-                  <div className="mt-1 w-full text-center text-[66px] font-black italic leading-none tracking-[0.02em] text-[#ef4444] drop-shadow-[0_18px_30px_rgba(239,68,68,0.18)] md:text-[104px]">
-                    百事通
-                  </div>
-                </div>
-
-                <div className="relative mt-2 flex w-full max-w-[390px] justify-center md:mt-3 md:max-w-[420px]">
-                  <div className="absolute inset-x-12 bottom-4 h-12 rounded-full bg-[radial-gradient(circle,rgba(249,115,22,0.2),transparent_68%)] blur-2xl" />
-                  <div className="absolute inset-x-10 top-6 h-[72%] rounded-[36px] bg-[radial-gradient(circle_at_50%_20%,rgba(255,255,255,0.55),rgba(255,255,255,0.08)_56%,transparent_78%)] blur-xl" />
-                  <div className="absolute left-1/2 top-[18%] h-[64%] w-[58%] -translate-x-1/2 rounded-[42px] bg-[linear-gradient(180deg,rgba(255,255,255,0.18),rgba(255,255,255,0.04))] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-[1px]" />
-                  <img
-                    src="/logo/webapphome-transparent.png"
-                    alt="赫事通首页形象"
-                    className="relative z-10 w-full max-w-[300px] select-none object-contain drop-shadow-[0_40px_42px_rgba(124,45,18,0.2)] saturate-[1.12] contrast-[1.04] brightness-[1.01] md:max-w-[348px]"
-                  />
-                  <div className="pointer-events-none absolute left-1/2 top-[12%] z-20 h-[18%] w-[34%] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.3),transparent_72%)] blur-2xl" />
-                </div>
-
-                {!!homepageDescription && (
-                  <div className="mt-4 max-w-[520px] text-sm leading-6 text-[#7c2d12]/70 md:mt-5">
-                    <Markdown className="!text-[#7c2d12]/70" content={homepageDescription} mode="static" />
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#fb7185,#f97316)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(249,115,22,0.24)] transition hover:translate-y-[-1px] hover:shadow-[0_18px_34px_rgba(249,115,22,0.28)]"
-                  onClick={() => doSend('特殊人群办理入口', [])}
-                >
-                  <span className="i-ri-user-heart-line h-4 w-4" />
-                  <span>特殊人群办理入口</span>
-                  <span className="i-ri-arrow-right-line h-4 w-4" />
-                </button>
-              </div>
-
-              <div className="mx-auto mt-3 w-full max-w-[640px] md:mt-4">
-                <div className="rounded-[28px] bg-[rgba(255,255,255,0.42)] p-0 shadow-[0_22px_40px_rgba(249,115,22,0.12)] backdrop-blur-sm">
-                  <FeaturesProvider features={homepageFeaturesData}>
-                    <div className="[&>div:first-child]:rounded-[24px] [&>div:first-child]:border-0 [&>div:first-child]:bg-white [&>div:first-child]:shadow-[0_12px_28px_rgba(124,45,18,0.12)] [&>div:first-child>div:first-child]:px-[14px] [&>div:first-child>div:first-child]:pt-[12px] [&_textarea]:px-0 [&_textarea]:text-[18px] [&_textarea]:text-[#7c2d12] [&_textarea]:placeholder:text-[#9ca3af]">
-                      <ChatInputArea
-                        botName={appData?.site.title}
-                        showFeatureBar={false}
-                        showFileUpload
-                        featureBarDisabled={respondingState || inputDisabled}
-                        visionConfig={appConfig.file_upload}
-                        speechToTextConfig={appConfig.speech_to_text}
-                        onSend={(message, files) => doSend(message, files)}
-                        inputs={(currentConversationId ? currentConversationInputs : newConversationInputs) as Record<string, unknown>}
-                        inputsForm={inputsForms}
-                        isResponding={respondingState}
-                        disabled={inputDisabled}
-                      />
+                  {!!homepageDescription && (
+                    <div className="mx-auto mt-5 max-w-[620px] text-sm leading-6 text-[#667085]">
+                      <Markdown className="!text-[#667085]" content={homepageDescription} mode="static" />
                     </div>
-                  </FeaturesProvider>
+                  )}
+                </div>
+
+                <div className="mt-10 w-full max-w-[860px] px-4 md:px-8">
+                  <div className="rounded-[34px] bg-[linear-gradient(135deg,#5f82f7_0%,#6ea7ff_34%,#b56cff_100%)] p-[4px] shadow-[0_24px_60px_rgba(99,102,241,0.2)]">
+                    <FeaturesProvider features={homepageFeaturesData}>
+                      <div className="overflow-hidden rounded-[30px] bg-[linear-gradient(180deg,rgba(255,255,255,0.8),rgba(255,255,255,0.98))]">
+                        <div className="bg-white/88 px-5 pt-5 pb-4 md:px-6 md:pt-6 md:pb-5">
+                          <ChatInputArea
+                            botName={appData?.site.title}
+                            placeholder="请输入您想要创作的内容"
+                            appearance="homepage"
+                            showFeatureBar={false}
+                            showFileUpload
+                            featureBarDisabled={respondingState || inputDisabled}
+                            visionConfig={appConfig.file_upload}
+                            speechToTextConfig={appConfig.speech_to_text}
+                            onSend={(message, files) => doSend(message, files)}
+                            inputs={(currentConversationId ? currentConversationInputs : newConversationInputs) as Record<string, unknown>}
+                            inputsForm={inputsForms}
+                            isResponding={respondingState}
+                            disabled={inputDisabled}
+                            hideSpeechButton
+                            extraActions={(
+                              <>
+                                <button type="button" className="inline-flex h-11 items-center gap-2 rounded-[16px] border border-[#d9def1] bg-white px-5 text-[15px] font-medium text-[#475467] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition hover:border-[#c7d2fe] hover:bg-[#f8faff]">
+                                  <span className="i-ri-global-line h-[18px] w-[18px] text-[#667085]" />
+                                  <span>抖音商品URL/ID</span>
+                                </button>
+                              </>
+                            )}
+                          />
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3 px-5 pt-2 pb-6 text-[14px] text-[#667085] md:px-6 md:pb-7 md:text-[15px]">
+                          {quickActions.map((item, index) => (
+                            <div key={item} className="flex items-center gap-5">
+                              <button type="button" className="transition hover:text-[#4f46e5]">{item}</button>
+                              {index < quickActions.length - 1 && <span className="hidden text-[#c0c6d9] md:inline">|</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </FeaturesProvider>
+                  </div>
                 </div>
               </div>
             </div>
@@ -439,7 +450,7 @@ const ChatWrapper = ({
               imageUrl={appData?.site.icon_url}
             />
             <div className="w-0 grow">
-              <div className="grow rounded-2xl bg-chat-bubble-bg px-4 py-3 text-text-primary body-lg-regular">
+              <div className="grow rounded-2xl bg-chat-bubble-bg px-4 py-3 body-lg-regular text-text-primary">
                 <Markdown content={welcomeMessage.content} mode="static" />
                 <SuggestedQuestions item={welcomeMessage} />
               </div>
@@ -458,12 +469,11 @@ const ChatWrapper = ({
           imageUrl={appData?.site.icon_url}
         />
         <div className="max-w-[768px] px-4">
-          <Markdown className="!text-text-tertiary !body-2xl-regular" content={welcomeMessage.content} mode="static" />
+          <Markdown className="!body-2xl-regular !text-text-tertiary" content={welcomeMessage.content} mode="static" />
         </div>
       </div>
     )
   }, [
-    appConfig.opening_statement,
     appData?.site.description,
     appData?.site.title,
     appData?.site.icon,
@@ -475,10 +485,8 @@ const ChatWrapper = ({
     currentConversationId,
     currentConversationInputs,
     doSend,
-    appId,
     appConfig.file_upload,
     appConfig.speech_to_text,
-    appData?.site.title,
     homepageFeaturesData,
     inputsForms,
     inputDisabled,
@@ -540,6 +548,7 @@ const ChatWrapper = ({
         inputDisabled={inputDisabled}
         sidebarCollapseState={sidebarCollapseState}
         questionIcon={questionIcon}
+        hideAvatar
       />
     </div>
   )

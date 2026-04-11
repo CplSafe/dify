@@ -33,16 +33,16 @@ const HumanInputForm = ({
 
   return (
     <>
-      {contentList.map((content, index) => (
+      {contentList.map(content => (
         <ContentItem
-          key={index}
+          key={`${formData.node_id}-${content}`}
           content={content}
           formInputFields={formData.inputs}
           inputs={inputs}
           onInputChange={handleInputsChange}
         />
       ))}
-      <div className="flex flex-wrap gap-1 py-1">
+      <div className="mt-4 flex flex-wrap gap-2 py-1">
         {formData.actions.map((action: UserAction) => (
           <Button
             key={action.id}
@@ -50,6 +50,7 @@ const HumanInputForm = ({
             variant={getButtonStyle(action.button_style) as ButtonProps['variant']}
             onClick={() => submit(formToken, action.id, inputs)}
             data-testid="action-button"
+            className="min-w-36 rounded-xl"
           >
             {action.title}
           </Button>

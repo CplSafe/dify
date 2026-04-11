@@ -75,7 +75,13 @@ class EmailRegisterSendEmailApi(Resource):
 
         with sessionmaker(db.engine).begin() as session:
             account = AccountService.get_account_by_email_with_case_fallback(args.email, session=session)
-        token = AccountService.send_email_register_email(email=normalized_email, account=account, language=language)
+            # Read fields inside the session to avoid DetachedInstanceError after session closes
+            account_name = account.name if account else None
+        token = AccountService.send_email_register_email(
+            email=normalized_email,
+            account_name=account_name,
+            language=language,
+        )
         return {"result": "success", "data": token}
 
 

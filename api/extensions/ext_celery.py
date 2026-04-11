@@ -204,6 +204,13 @@ def init_app(app: DifyApp) -> Celery:
             "schedule": timedelta(minutes=dify_config.API_TOKEN_LAST_USED_UPDATE_INTERVAL),
         }
 
+    # Creator rebate daily settlement — always enabled, runs at 02:00 daily
+    imports.append("schedule.rebate_settlement_task")
+    beat_schedule["rebate_settlement_task"] = {
+        "task": "schedule.rebate_settlement_task.rebate_settlement_task",
+        "schedule": crontab(minute="0", hour="2"),
+    }
+
     if dify_config.ENTERPRISE_ENABLED and dify_config.ENTERPRISE_TELEMETRY_ENABLED:
         imports.append("tasks.enterprise_telemetry_task")
     celery_app.conf.update(beat_schedule=beat_schedule, imports=imports)

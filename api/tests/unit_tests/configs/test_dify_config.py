@@ -120,7 +120,7 @@ def test_flask_configs(monkeypatch: pytest.MonkeyPatch):
 
     assert config["CONSOLE_WEB_URL"] == "https://example.com"
     assert config["CONSOLE_CORS_ALLOW_ORIGINS"] == ["https://example.com"]
-    assert config["WEB_API_CORS_ALLOW_ORIGINS"] == ["http://127.0.0.1:3000", "*"]
+    assert config["WEB_API_CORS_ALLOW_ORIGINS"] == ["*"]
 
     assert str(config["CODE_EXECUTION_ENDPOINT"]) == "http://127.0.0.1:8194/"
     assert str(URL(str(config["CODE_EXECUTION_ENDPOINT"])) / "v1") == "http://127.0.0.1:8194/v1"

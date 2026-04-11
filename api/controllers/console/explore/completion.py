@@ -1,9 +1,12 @@
 import logging
+from collections.abc import Generator
+from json import dumps
 from typing import Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from graphon.model_runtime.errors.invoke import InvokeError
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import select
 from werkzeug.exceptions import InternalServerError, NotFound
 
 import services
@@ -30,14 +33,46 @@ from libs import helper
 from libs.datetime_utils import naive_utc_now
 from libs.login import current_user
 from models import Account
+from models.creator import MarketplaceApp
 from models.model import AppMode
 from services.app_generate_service import AppGenerateService
 from services.app_task_service import AppTaskService
 from services.errors.llm import InvokeRateLimitError
+from services.user_billing_service import UserBillingService
 
 from .. import console_ns
 
 logger = logging.getLogger(__name__)
+_INSUFFICIENT_BALANCE_MESSAGE = "余额不足，请先前往[充值页](/creator/balance)处理后再继续生成。"
+
+
+def _creator_marketplace_balance_insufficient(app_id: str, account: Account) -> bool:
+    marketplace_entry = db.session.scalar(
+        select(MarketplaceApp).where(
+            MarketplaceApp.app_id == str(app_id),
+            MarketplaceApp.is_active == True,  # noqa: E712
+        )
+    )
+    return bool(marketplace_entry) and not UserBillingService.check_balance_positive(account.id)
+
+
+def _creator_marketplace_balance_stream_response(conversation_id: str | None = None) -> Generator[str, None, None]:
+    message_id = str(uuid4())
+    safe_conversation_id = conversation_id or ""
+    yield f"data: {dumps({
+        'event': 'message',
+        'conversation_id': safe_conversation_id,
+        'task_id': '',
+        'id': message_id,
+        'answer': _INSUFFICIENT_BALANCE_MESSAGE,
+    }, ensure_ascii=False)}\n\n"
+    yield f"data: {dumps({
+        'event': 'message_end',
+        'conversation_id': safe_conversation_id,
+        'id': message_id,
+        'metadata': {'retriever_resources': []},
+        'files': [],
+    }, ensure_ascii=False)}\n\n"
 
 
 class CompletionMessageExplorePayload(BaseModel):
@@ -98,6 +133,10 @@ class CompletionApi(InstalledAppResource):
         try:
             if not isinstance(current_user, Account):
                 raise ValueError("current_user must be an Account instance")
+            if _creator_marketplace_balance_insufficient(app_model.id, current_user):
+                if streaming:
+                    return helper.compact_generate_response(_creator_marketplace_balance_stream_response())
+                return {"message": _INSUFFICIENT_BALANCE_MESSAGE}, 402
             response = AppGenerateService.generate(
                 app_model=app_model, user=current_user, args=args, invoke_from=InvokeFrom.EXPLORE, streaming=streaming
             )
@@ -171,6 +210,10 @@ class ChatApi(InstalledAppResource):
         try:
             if not isinstance(current_user, Account):
                 raise ValueError("current_user must be an Account instance")
+            if _creator_marketplace_balance_insufficient(app_model.id, current_user):
+                return helper.compact_generate_response(
+                    _creator_marketplace_balance_stream_response(payload.conversation_id)
+                )
             response = AppGenerateService.generate(
                 app_model=app_model, user=current_user, args=args, invoke_from=InvokeFrom.EXPLORE, streaming=True
             )

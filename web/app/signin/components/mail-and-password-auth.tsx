@@ -14,6 +14,7 @@ import { login } from '@/service/common'
 import { setWebAppAccessToken } from '@/service/webapp-auth'
 import { encryptPassword } from '@/utils/encryption'
 import { resolvePostLoginRedirect } from '../utils/post-login-redirect'
+import { resolveHomeRoute } from '../utils/resolve-home-route'
 
 type MailAndPasswordAuthProps = {
   isInvite: boolean
@@ -75,8 +76,8 @@ export default function MailAndPasswordAuth({ isInvite, isEmailSetup, allowRegis
           router.replace(`/signin/invite-settings?${searchParams.toString()}`)
         }
         else {
-          const redirectUrl = resolvePostLoginRedirect()
-          router.replace(redirectUrl || '/apps')
+          const redirectUrl = resolvePostLoginRedirect() || await resolveHomeRoute()
+          router.replace(redirectUrl)
         }
       }
       else {

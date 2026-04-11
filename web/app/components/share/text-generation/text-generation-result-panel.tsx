@@ -1,4 +1,5 @@
 import type { FC } from 'react'
+import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import type { InputValueTypes, Task, TextGenerationRunControl } from './types'
 import type { PromptConfig } from '@/models/debug'
 import type { SiteInfo } from '@/models/share'
@@ -33,6 +34,7 @@ type TextGenerationResultPanelProps = {
   moreLikeThisEnabled: boolean
   noPendingTask: boolean
   onHideResultPanel: () => void
+  onResultCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
   onRunControlChange: (control: TextGenerationRunControl | null) => void
   onRunStart: () => void
   onShowResultPanel: () => void
@@ -66,6 +68,7 @@ const TextGenerationResultPanel: FC<TextGenerationResultPanelProps> = ({
   moreLikeThisEnabled,
   noPendingTask,
   onHideResultPanel,
+  onResultCompleted,
   onRunControlChange,
   onRunStart,
   onShowResultPanel,
@@ -98,6 +101,7 @@ const TextGenerationResultPanel: FC<TextGenerationResultPanelProps> = ({
       handleSaveMessage={handleSaveMessage}
       taskId={task?.id}
       onCompleted={handleCompleted}
+      onResultCompleted={onResultCompleted}
       visionConfig={visionConfig}
       completionFiles={completionFiles}
       isShowTextToSpeech={textToSpeechEnabled}

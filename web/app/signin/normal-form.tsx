@@ -18,6 +18,7 @@ import SocialAuth from './components/social-auth'
 import SSOAuth from './components/sso-auth'
 import Split from './split'
 import { resolvePostLoginRedirect } from './utils/post-login-redirect'
+import { resolveHomeRoute } from './utils/resolve-home-route'
 
 const NormalForm = () => {
   const { t } = useTranslation()
@@ -42,8 +43,8 @@ const NormalForm = () => {
     try {
       if (isLoggedIn) {
         setIsRedirecting(true)
-        const redirectUrl = resolvePostLoginRedirect()
-        router.replace(redirectUrl || '/apps')
+        const redirectUrl = resolvePostLoginRedirect() || await resolveHomeRoute()
+        router.replace(redirectUrl)
         return
       }
 

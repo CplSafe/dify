@@ -82,4 +82,8 @@ export type HttpNodeType = CommonNodeType & {
   authorization: Authorization
   timeout: Timeout
   ssl_verify?: boolean
+  /** JSON field name in the HTTP response body from which to read token count. */
+  token_field_name?: string
+  /** Price charged per 1000 tokens (from response) consumed by this node (in CNY). */
+  billing_price_per_k_tokens?: number
 }

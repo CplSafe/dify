@@ -105,6 +105,8 @@ The `.env.example` file provided in the Docker setup is extensive and covers a w
 1. **CORS Configuration**:
 
    - `WEB_API_CORS_ALLOW_ORIGINS`, `CONSOLE_CORS_ALLOW_ORIGINS`: Settings for cross-origin resource sharing.
+   - Set either value to `*` to allow any frontend origin during local or LAN debugging.
+   - To restrict access, use a comma-separated list such as `http://localhost:3000,http://192.168.1.23:3000`.
 
 1. **OpenTelemetry Configuration**:
 

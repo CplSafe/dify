@@ -300,6 +300,80 @@ def validate_dataset_token[R](view: Callable[..., R]) -> Callable[..., R]:
     return decorated
 
 
+def _resolve_ugak_token(auth_token: str, scope: str | None) -> "ApiToken":
+    """Validate a ugak- prefixed user global API key and return a token-like object.
+
+    Looks up the UserGlobalApiKey, finds the target app (from request body or first
+    active MarketplaceApp), and returns a CachedApiToken with the app/tenant info.
+    """
+    from models.creator import MarketplaceApp, UserGlobalApiKey
+    from services.api_token_service import CachedApiToken
+
+    ugak = db.session.scalar(
+        select(UserGlobalApiKey).where(UserGlobalApiKey.token == auth_token)
+    )
+    if ugak is None:
+        raise Unauthorized("Invalid API key.")
+
+    # Determine which app to use: prefer explicit app_id from request, else first active app
+    request_json = request.get_json(silent=True, force=True) or {}
+    app_id = request.args.get("app_id") or request_json.get("app_id")
+
+    if app_id:
+        marketplace_entry = db.session.scalar(
+            select(MarketplaceApp).where(
+                MarketplaceApp.app_id == str(app_id),
+                MarketplaceApp.is_active == True,  # noqa: E712
+            )
+        )
+        if not marketplace_entry:
+            raise Unauthorized("App is not available in the creator marketplace.")
+    else:
+        marketplace_entry = db.session.scalar(
+            select(MarketplaceApp)
+            .where(MarketplaceApp.is_active == True)  # noqa: E712
+            .order_by(MarketplaceApp.display_order.asc())
+            .limit(1)
+        )
+        if not marketplace_entry:
+            raise Unauthorized("No active marketplace apps available.")
+        app_id = marketplace_entry.app_id
+
+    app_model = db.session.get(App, str(app_id))
+    if not app_model:
+        raise Unauthorized("The app no longer exists.")
+
+    # Try to find an existing ApiToken for this app; if none exists, create a synthetic one
+    existing_token = db.session.scalar(
+        select(ApiToken).where(
+            ApiToken.app_id == str(app_id),
+            ApiToken.type == "app",
+        ).limit(1)
+    )
+
+    if existing_token:
+        return cast(ApiToken, CachedApiToken(
+            id=str(existing_token.id),
+            app_id=str(existing_token.app_id) if existing_token.app_id else None,
+            tenant_id=str(existing_token.tenant_id) if existing_token.tenant_id else None,
+            type=str(existing_token.type),
+            token=existing_token.token,
+            last_used_at=existing_token.last_used_at,
+            created_at=existing_token.created_at,
+        ))
+
+    # No real ApiToken exists — build a synthetic one from the app model
+    return cast(ApiToken, CachedApiToken(
+        id=ugak.id,
+        app_id=str(app_id),
+        tenant_id=str(app_model.tenant_id),
+        type="app",
+        token=auth_token,
+        last_used_at=ugak.last_used_at,
+        created_at=ugak.created_at,
+    ))
+
+
 def validate_and_get_api_token(scope: str | None = None):
     """
     Validate and get API token with Redis caching.
@@ -310,6 +384,9 @@ def validate_and_get_api_token(scope: str | None = None):
 
     The last_used_at field is updated asynchronously via Celery task
     to avoid blocking the request.
+
+    ugak- prefixed tokens (User Global API Keys) are handled separately:
+    they bypass the normal cache flow and resolve via the UserGlobalApiKey table.
     """
     auth_header = request.headers.get("Authorization")
     if auth_header is None or " " not in auth_header:
@@ -320,6 +397,10 @@ def validate_and_get_api_token(scope: str | None = None):
 
     if auth_scheme != "bearer":
         raise Unauthorized("Authorization scheme must be 'Bearer'")
+
+    # Handle user global API keys (ugak- prefix) directly without cache
+    if auth_token.startswith("ugak-"):
+        return _resolve_ugak_token(auth_token, scope)
 
     # Try to get token from cache first
     # Returns a CachedApiToken (plain Python object), not a SQLAlchemy model

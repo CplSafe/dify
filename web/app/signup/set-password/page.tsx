@@ -12,6 +12,7 @@ import { useRouter, useSearchParams } from '@/next/navigation'
 import { useMailRegister } from '@/service/use-common'
 import { cn } from '@/utils/classnames'
 import { sendGAEvent } from '@/utils/gtag'
+import { resolveHomeRoute } from '@/app/signin/utils/resolve-home-route'
 
 const parseUtmInfo = () => {
   const utmInfoStr = Cookies.get('utm_info')
@@ -80,7 +81,7 @@ const ChangePasswordForm = () => {
         Cookies.remove('utm_info') // Clean up: remove utm_info cookie
 
         toast.success(t('api.actionSuccess', { ns: 'common' }))
-        router.replace('/apps')
+        router.replace(await resolveHomeRoute())
       }
     }
     catch (error) {

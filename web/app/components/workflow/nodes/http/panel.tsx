@@ -49,6 +49,8 @@ const Panel: FC<NodePanelProps<HttpNodeType>> = ({
     hideCurlPanel,
     handleCurlImport,
     handleSSLVerifyChange,
+    handleTokenFieldNameChange,
+    handleHttpBillingPriceChange,
   } = useConfig(id, data)
   // To prevent prompt editor in body not update data.
   if (!isDataReady)
@@ -138,6 +140,38 @@ const Panel: FC<NodePanelProps<HttpNodeType>> = ({
             />
           )}
         >
+        </Field>
+
+        {/* Billing: token field name from response */}
+        <Field
+          title={t(`${i18nPrefix}.tokenFieldName`, { ns: 'workflow', defaultValue: 'Token field name in response' })}
+          tooltip={t(`${i18nPrefix}.tokenFieldNameTip`, { ns: 'workflow', defaultValue: 'JSON field in the HTTP response body that contains the token count (e.g. "usage.total_tokens")' })}
+        >
+          <input
+            type="text"
+            className="w-full rounded-lg border border-components-input-border-active bg-components-input-bg-normal px-3 py-2 text-sm text-components-input-text-filled outline-none placeholder:text-components-input-text-placeholder disabled:cursor-not-allowed disabled:opacity-50"
+            value={inputs.token_field_name ?? ''}
+            placeholder="usage.total_tokens"
+            disabled={readOnly}
+            onChange={e => handleTokenFieldNameChange(e.target.value)}
+          />
+        </Field>
+
+        {/* Billing: price per 1k tokens */}
+        <Field
+          title={t(`${i18nPrefix}.billingPricePerKTokens`, { ns: 'workflow', defaultValue: 'Price per 1K tokens (CNY)' })}
+          tooltip={t(`${i18nPrefix}.billingPricePerKTokensTip`, { ns: 'workflow', defaultValue: 'Cost charged per 1000 tokens read from the response token field' })}
+        >
+          <input
+            type="number"
+            min={0}
+            step={0.001}
+            className="w-full rounded-lg border border-components-input-border-active bg-components-input-bg-normal px-3 py-2 text-sm text-components-input-text-filled outline-none placeholder:text-components-input-text-placeholder disabled:cursor-not-allowed disabled:opacity-50"
+            value={inputs.billing_price_per_k_tokens ?? ''}
+            placeholder="0.002"
+            disabled={readOnly}
+            onChange={e => handleHttpBillingPriceChange(e.target.value === '' ? undefined : Number(e.target.value))}
+          />
         </Field>
       </div>
       <Split />

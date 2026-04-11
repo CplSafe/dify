@@ -17,7 +17,7 @@ export const hasImageChild = (children: MdastNode[] | undefined): boolean => {
 }
 
 export const isValidUrl = (url: string): boolean => {
-  const validPrefixes = ['http:', 'https:', '//', 'mailto:', 'tel:']
+  const validPrefixes = ['http:', 'https:', '//', 'mailto:', 'tel:', '/']
   if (ALLOW_UNSAFE_DATA_SCHEME)
     validPrefixes.push('data:')
   return validPrefixes.some(prefix => url.startsWith(prefix))

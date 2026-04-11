@@ -18,6 +18,8 @@ export type LLMNodeType = CommonNodeType & {
   structured_output_enabled?: boolean
   structured_output?: StructuredOutput
   reasoning_format?: 'tagged' | 'separated'
+  /** Price charged per 1000 tokens consumed by this node (in CNY). */
+  billing_price_per_k_tokens?: number
 }
 
 export enum Type {

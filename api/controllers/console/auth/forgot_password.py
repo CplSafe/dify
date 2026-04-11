@@ -104,12 +104,15 @@ class ForgotPasswordSendEmailApi(Resource):
 
         with sessionmaker(db.engine).begin() as session:
             account = AccountService.get_account_by_email_with_case_fallback(args.email, session=session)
+            # Read fields inside session to avoid DetachedInstanceError after session closes
+            account_exists = account is not None
 
         token = AccountService.send_reset_password_email(
-            account=account,
+            account=None,
             email=normalized_email,
             language=language,
             is_allow_register=FeatureService.get_system_features().is_allow_register,
+            account_exists=account_exists,
         )
 
         return {"result": "success", "data": token}

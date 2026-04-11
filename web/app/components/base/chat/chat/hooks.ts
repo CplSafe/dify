@@ -5,6 +5,7 @@ import type {
   Inputs,
 } from '../types'
 import type { InputForm } from './type'
+import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import type AudioPlayer from '@/app/components/base/audio-btn/audio'
 import type { FileEntity } from '@/app/components/base/file-uploader/types'
 import type { Annotation } from '@/models/log'
@@ -49,6 +50,7 @@ type SendCallback = {
   onGetConversationMessages?: (conversationId: string, getAbortController: GetAbortController) => Promise<any>
   onGetSuggestedQuestions?: (responseItemId: string, getAbortController: GetAbortController) => Promise<any>
   onConversationComplete?: (conversationId: string) => void
+  onMessageCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
   isPublicAPI?: boolean
 }
 
@@ -63,6 +65,13 @@ export const useChat = (
   clearChatList?: boolean,
   clearChatListCallback?: (state: boolean) => void,
 ) => {
+  const buildChatErrorMessage = useCallback((message?: string, code?: string) => {
+    const normalizedMessage = message?.trim() || '请求失败，请稍后重试'
+    if (code === 'payment_required' || normalizedMessage.includes('余额不足'))
+      return '余额不足，请先前往[充值页](/creator/balance)处理后再继续生成。'
+    return normalizedMessage
+  }, [])
+
   const { t } = useTranslation()
   const { formatTime } = useTimestamp()
   const conversationIdRef = useRef('')
@@ -238,8 +247,10 @@ export const useChat = (
     messageId: string,
     workflowRunId: string,
     {
+      onGetConversationMessages,
       onGetSuggestedQuestions,
       onConversationComplete,
+      onMessageCompleted,
       isPublicAPI,
     }: SendCallback,
   ) => {
@@ -281,6 +292,25 @@ export const useChat = (
 
         if (onConversationComplete)
           onConversationComplete(conversationIdRef.current)
+
+        if (conversationIdRef.current && !hasStopRespondedRef.current && onGetConversationMessages) {
+          const { data }: any = await onGetConversationMessages(
+            conversationIdRef.current,
+            newAbortController => conversationMessagesAbortControllerRef.current = newAbortController,
+          )
+          const newResponseItem = data.find((item: any) => item.id === messageId)
+          if (newResponseItem) {
+            await onMessageCompleted?.({
+              content: newResponseItem.answer,
+              success: true,
+              query: newResponseItem.query,
+              inputs: newResponseItem.inputs,
+              messageId: newResponseItem.id,
+              workflowRunId: newResponseItem.workflow_run_id || workflowRunId,
+              conversationId: conversationIdRef.current,
+            })
+          }
+        }
 
         if (config?.suggested_questions_after_answer?.enabled && !hasStopRespondedRef.current && onGetSuggestedQuestions) {
           try {
@@ -375,8 +405,12 @@ export const useChat = (
           responseItem.content = messageReplace.answer
         })
       },
-      onError() {
+      onError(message, code) {
         handleResponding(false)
+        updateChatTreeNode(messageId, {
+          content: buildChatErrorMessage(message, code),
+          isError: true,
+        })
       },
       onWorkflowStarted: ({ workflow_run_id, task_id }) => {
         handleResponding(true)
@@ -629,6 +663,7 @@ export const useChat = (
       onGetConversationMessages,
       onGetSuggestedQuestions,
       onConversationComplete,
+      onMessageCompleted,
       isPublicAPI,
     }: SendCallback,
   ) => {
@@ -790,6 +825,16 @@ export const useChat = (
               query: newResponseItem.query,
             },
           })
+
+          await onMessageCompleted?.({
+            content: newResponseItem.answer,
+            success: true,
+            query: newResponseItem.query,
+            inputs: newResponseItem.inputs,
+            messageId: newResponseItem.id,
+            workflowRunId: newResponseItem.workflow_run_id || responseItem.workflow_run_id,
+            conversationId: conversationIdRef.current,
+          })
         }
         if (config?.suggested_questions_after_answer?.enabled && !hasStopRespondedRef.current && onGetSuggestedQuestions) {
           try {
@@ -908,8 +953,13 @@ export const useChat = (
       onMessageReplace: (messageReplace) => {
         responseItem.content = messageReplace.answer
       },
-      onError() {
+      onError(message, code) {
         handleResponding(false)
+        responseItem.content = buildChatErrorMessage(
+          typeof message === 'string' ? message : undefined,
+          typeof code === 'string' ? code : undefined,
+        )
+        responseItem.isError = true
         updateCurrentQAOnTree({
           placeholderQuestionId,
           questionItem,
@@ -1175,6 +1225,7 @@ export const useChat = (
     config?.suggested_questions_after_answer,
     updateCurrentQAOnTree,
     updateChatTreeNode,
+    buildChatErrorMessage,
     handleResponding,
     formatTime,
     createAudioPlayerManager,

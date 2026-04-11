@@ -14,6 +14,7 @@ import { useRouter, useSearchParams } from '@/next/navigation'
 import { emailLoginWithCode, sendEMailLoginCode } from '@/service/common'
 import { encryptVerificationCode } from '@/utils/encryption'
 import { resolvePostLoginRedirect } from '../utils/post-login-redirect'
+import { resolveHomeRoute } from '../utils/resolve-home-route'
 
 export default function CheckCode() {
   const { t, i18n } = useTranslation()
@@ -51,8 +52,8 @@ export default function CheckCode() {
           router.replace(`/signin/invite-settings?${searchParams.toString()}`)
         }
         else {
-          const redirectUrl = resolvePostLoginRedirect()
-          router.replace(redirectUrl || '/apps')
+          const redirectUrl = resolvePostLoginRedirect() || await resolveHomeRoute()
+          router.replace(redirectUrl)
         }
       }
     }

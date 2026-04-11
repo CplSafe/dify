@@ -119,6 +119,8 @@ class AppGenerateEntity(BaseModel):
     #
     # Note: The `user_id` field does not indicate whether the user is a platform user or an end user.
     user_id: str
+    tenant_id: str | None = None
+    user_from: UserFrom | None = None
 
     # extras
     stream: bool

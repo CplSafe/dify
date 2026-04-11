@@ -494,8 +494,10 @@ class AccountService:
         email: str | None = None,
         language: str = "en-US",
         is_allow_register: bool = False,
+        account_exists: bool | None = None,
     ):
-        account_email = account.email if account else email
+        # Prefer plain email string to avoid DetachedInstanceError when account is detached.
+        account_email = (account.email if account else None) or email
         if account_email is None:
             raise ValueError("Email must be provided.")
 
@@ -506,7 +508,9 @@ class AccountService:
 
         code, token = cls.generate_reset_password_token(account_email, account)
 
-        if account:
+        # account_exists takes priority; fall back to checking account object
+        has_account = account_exists if account_exists is not None else (account is not None)
+        if has_account:
             send_reset_password_mail_task.delay(
                 language=language,
                 to=account_email,
@@ -524,35 +528,38 @@ class AccountService:
     @classmethod
     def send_email_register_email(
         cls,
-        account: Account | None = None,
         email: str | None = None,
+        account: Account | None = None,
+        account_name: str | None = None,
         language: str = "en-US",
     ):
-        account_email = account.email if account else email
-        if account_email is None:
+        # Support both old-style (account object) and new-style (account_name string) callers.
+        # Prefer not passing the account object to avoid DetachedInstanceError after session closes.
+        resolved_email = (account.email if account else None) or email
+        resolved_name = account_name or (account.name if account else None)
+        if resolved_email is None:
             raise ValueError("Email must be provided.")
 
-        if cls.email_register_rate_limiter.is_rate_limited(account_email):
+        if cls.email_register_rate_limiter.is_rate_limited(resolved_email):
             from controllers.console.auth.error import EmailRegisterRateLimitExceededError
 
             raise EmailRegisterRateLimitExceededError(int(cls.email_register_rate_limiter.time_window / 60))
 
-        code, token = cls.generate_email_register_token(account_email)
+        code, token = cls.generate_email_register_token(resolved_email)
 
-        if account:
+        if resolved_name is not None:
             send_email_register_mail_task_when_account_exist.delay(
                 language=language,
-                to=account_email,
-                account_name=account.name,
+                to=resolved_email,
+                account_name=resolved_name,
             )
-
         else:
             send_email_register_mail_task.delay(
                 language=language,
-                to=account_email,
+                to=resolved_email,
                 code=code,
             )
-        cls.email_register_rate_limiter.increment_rate_limit(account_email)
+        cls.email_register_rate_limiter.increment_rate_limit(resolved_email)
         return token
 
     @classmethod
@@ -1385,6 +1392,8 @@ class RegisterService:
 
             account.last_login_ip = ip_address
             account.initialized_at = naive_utc_now()
+            # The first account created via setup is the system admin
+            account.is_system_admin = True
 
             TenantService.create_owner_tenant_if_not_exist(account=account, is_setup=True)
 

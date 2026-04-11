@@ -8,9 +8,11 @@ export const ACCOUNT_SETTING_TAB = {
   API_BASED_EXTENSION: 'api-based-extension',
   CUSTOM: 'custom',
   LANGUAGE: 'language',
+  USER_MANAGEMENT: 'user-management',
+  REBATE_CONFIG: 'rebate-config',
 } as const
 
-export type AccountSettingTab = typeof ACCOUNT_SETTING_TAB[keyof typeof ACCOUNT_SETTING_TAB]
+export type AccountSettingTab = (typeof ACCOUNT_SETTING_TAB)[keyof typeof ACCOUNT_SETTING_TAB]
 
 export const DEFAULT_ACCOUNT_SETTING_TAB = ACCOUNT_SETTING_TAB.MEMBERS
 

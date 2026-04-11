@@ -6,6 +6,7 @@ import type {
   OnSend,
 } from '../types'
 import type { FileUpload } from '@/app/components/base/features/types'
+import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import AnswerIcon from '@/app/components/base/answer-icon'
@@ -19,6 +20,7 @@ import { FILE_EXTS } from '@/app/components/base/prompt-editor/constants'
 import { InputVarType, SupportUploadFileTypes } from '@/app/components/workflow/types'
 import {
   AppSourceType,
+  fetchChatList,
   fetchSuggestedQuestions,
   getUrl,
   stopChatMessageResponding,
@@ -34,7 +36,11 @@ import { useChat } from '../chat/hooks'
 import { getLastAnswer, isValidGeneratedAnswer } from '../utils'
 import { useChatWithHistoryContext } from './context'
 
-const ChatWrapper = () => {
+const ChatWrapper = ({
+  onMessageCompleted,
+}: {
+  onMessageCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
+}) => {
   const { t } = useTranslation()
   const {
     appParams,
@@ -207,13 +213,15 @@ const ChatWrapper = () => {
       handleSwitchSibling(
         lastPausedNode.id,
         {
+          onGetConversationMessages: conversationId => fetchChatList(conversationId, appSourceType, appId),
           onGetSuggestedQuestions: responseItemId => fetchSuggestedQuestions(responseItemId, appSourceType, appId),
           onConversationComplete: currentConversationId ? undefined : handleNewConversationCompleted,
+          onMessageCompleted,
           isPublicAPI: appSourceType === AppSourceType.webApp,
         },
       )
     }
-  }, [appId, appPrevChatTree, appSourceType, currentConversationId, handleNewConversationCompleted, handleSwitchSibling])
+  }, [appId, appPrevChatTree, appSourceType, currentConversationId, handleNewConversationCompleted, handleSwitchSibling, onMessageCompleted])
 
   const doSend: OnSend = useCallback((message, files, isRegenerate = false, parentAnswer: ChatItem | null = null) => {
     const data: any = {
@@ -228,12 +236,14 @@ const ChatWrapper = () => {
       getUrl('chat-messages', appSourceType, appId || ''),
       data,
       {
+        onGetConversationMessages: conversationId => fetchChatList(conversationId, appSourceType, appId),
         onGetSuggestedQuestions: responseItemId => fetchSuggestedQuestions(responseItemId, appSourceType, appId),
         onConversationComplete: isHistoryConversation ? undefined : handleNewConversationCompleted,
+        onMessageCompleted,
         isPublicAPI: appSourceType === AppSourceType.webApp,
       },
     )
-  }, [inputsForms, currentConversationId, currentConversationInputs, newConversationInputs, chatList, handleSend, appSourceType, appId, isHistoryConversation, handleNewConversationCompleted])
+  }, [inputsForms, currentConversationId, currentConversationInputs, newConversationInputs, chatList, handleSend, appSourceType, appId, isHistoryConversation, handleNewConversationCompleted, onMessageCompleted])
 
   const doRegenerate = useCallback((chatItem: ChatItem, editedQuestion?: { message: string, files?: FileEntity[] }) => {
     const question = editedQuestion ? chatItem : chatList.find(item => item.id === chatItem.parentMessageId)!
@@ -243,11 +253,13 @@ const ChatWrapper = () => {
 
   const doSwitchSibling = useCallback((siblingMessageId: string) => {
     handleSwitchSibling(siblingMessageId, {
+      onGetConversationMessages: conversationId => fetchChatList(conversationId, appSourceType, appId),
       onGetSuggestedQuestions: responseItemId => fetchSuggestedQuestions(responseItemId, appSourceType, appId),
       onConversationComplete: currentConversationId ? undefined : handleNewConversationCompleted,
+      onMessageCompleted,
       isPublicAPI: appSourceType === AppSourceType.webApp,
     })
-  }, [handleSwitchSibling, currentConversationId, handleNewConversationCompleted, appSourceType, appId])
+  }, [handleSwitchSibling, currentConversationId, handleNewConversationCompleted, appSourceType, appId, onMessageCompleted])
 
   const messageList = useMemo(() => {
     if (currentConversationId || chatList.length > 1)
@@ -453,6 +465,7 @@ const ChatWrapper = () => {
   }, [
     appConfig.opening_statement,
     appData?.site.description,
+    appData?.site.title,
     appData?.site.icon,
     appData?.site.icon_background,
     appData?.site.icon_type,
@@ -462,6 +475,7 @@ const ChatWrapper = () => {
     currentConversationId,
     currentConversationInputs,
     doSend,
+    appId,
     appConfig.file_upload,
     appConfig.speech_to_text,
     appData?.site.title,

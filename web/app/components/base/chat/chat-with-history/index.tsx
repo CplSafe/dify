@@ -1,6 +1,7 @@
 'use client'
 import type { FC } from 'react'
 import type { InstalledApp } from '@/models/explore'
+import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import {
   useEffect,
   useState,
@@ -22,9 +23,11 @@ import Sidebar from './sidebar'
 
 type ChatWithHistoryProps = {
   className?: string
+  onMessageCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
 }
 const ChatWithHistory: FC<ChatWithHistoryProps> = ({
   className,
+  onMessageCompleted,
 }) => {
   const {
     appData,
@@ -99,7 +102,7 @@ const ChatWithHistory: FC<ChatWithHistoryProps> = ({
             <Loading type="app" />
           )}
           {!appChatListDataLoading && (
-            <ChatWrapper key={chatShouldReloadKey} />
+            <ChatWrapper key={chatShouldReloadKey} onMessageCompleted={onMessageCompleted} />
           )}
         </div>
       </div>
@@ -110,10 +113,12 @@ const ChatWithHistory: FC<ChatWithHistoryProps> = ({
 type ChatWithHistoryWrapProps = {
   installedAppInfo?: InstalledApp
   className?: string
+  onMessageCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
 }
 const ChatWithHistoryWrap: FC<ChatWithHistoryWrapProps> = ({
   installedAppInfo,
   className,
+  onMessageCompleted,
 }) => {
   const media = useBreakpoints()
   const isMobile = media === MediaType.mobile
@@ -202,7 +207,7 @@ const ChatWithHistoryWrap: FC<ChatWithHistoryWrapProps> = ({
       initUserVariables,
     }}
     >
-      <ChatWithHistory className={className} />
+      <ChatWithHistory className={className} onMessageCompleted={onMessageCompleted} />
     </ChatWithHistoryContext.Provider>
   )
 }
@@ -210,11 +215,13 @@ const ChatWithHistoryWrap: FC<ChatWithHistoryWrapProps> = ({
 const ChatWithHistoryWrapWithCheckToken: FC<ChatWithHistoryWrapProps> = ({
   installedAppInfo,
   className,
+  onMessageCompleted,
 }) => {
   return (
     <ChatWithHistoryWrap
       installedAppInfo={installedAppInfo}
       className={className}
+      onMessageCompleted={onMessageCompleted}
     />
   )
 }

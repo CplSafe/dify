@@ -17,6 +17,7 @@ import { activateMember } from '@/service/common'
 import { useInvitationCheck } from '@/service/use-common'
 import { timezones } from '@/utils/timezone'
 import { resolvePostLoginRedirect } from '../utils/post-login-redirect'
+import { resolveHomeRoute } from '../utils/resolve-home-route'
 
 export default function InviteSettingsPage() {
   const { t } = useTranslation()
@@ -53,8 +54,8 @@ export default function InviteSettingsPage() {
       if (res.result === 'success') {
         // Tokens are now stored in cookies by the backend
         await setLocaleOnClient(language, false)
-        const redirectUrl = resolvePostLoginRedirect()
-        router.replace(redirectUrl || '/apps')
+        const redirectUrl = resolvePostLoginRedirect() || await resolveHomeRoute()
+        router.replace(redirectUrl)
       }
     }
     catch {

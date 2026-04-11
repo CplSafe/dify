@@ -1,4 +1,5 @@
 'use client'
+import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import type { AccessMode } from '@/models/access-control'
 import type { AppData } from '@/models/share'
 import * as React from 'react'
@@ -14,8 +15,10 @@ import AppUnavailable from '../../base/app-unavailable'
 
 const InstalledApp = ({
   id,
+  onResultCompleted,
 }: {
   id: string
+  onResultCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
 }) => {
   const { data, isPending: isPendingInstalledApps, isFetching: isFetchingInstalledApps } = useGetInstalledApps()
   const installedApp = data?.installed_apps?.find(item => item.id === id)
@@ -118,13 +121,17 @@ const InstalledApp = ({
   return (
     <div className="h-full bg-background-default py-2 pl-0 pr-2 sm:p-2">
       {installedApp?.app.mode !== AppModeEnum.COMPLETION && installedApp?.app.mode !== AppModeEnum.WORKFLOW && (
-        <ChatWithHistory installedAppInfo={installedApp} className="overflow-hidden rounded-2xl shadow-md" />
+        <ChatWithHistory
+          installedAppInfo={installedApp}
+          className="overflow-hidden rounded-2xl shadow-md"
+          onMessageCompleted={onResultCompleted}
+        />
       )}
       {installedApp?.app.mode === AppModeEnum.COMPLETION && (
-        <TextGenerationApp isInstalledApp installedAppInfo={installedApp} />
+        <TextGenerationApp isInstalledApp installedAppInfo={installedApp} onResultCompleted={onResultCompleted} />
       )}
       {installedApp?.app.mode === AppModeEnum.WORKFLOW && (
-        <TextGenerationApp isWorkflow isInstalledApp installedAppInfo={installedApp} />
+        <TextGenerationApp isWorkflow isInstalledApp installedAppInfo={installedApp} onResultCompleted={onResultCompleted} />
       )}
     </div>
   )

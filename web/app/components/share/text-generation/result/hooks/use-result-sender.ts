@@ -1,5 +1,6 @@
 import type { ResultInputValue } from '../result-request'
 import type { ResultRunStateController } from './use-result-run-state'
+import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import type { PromptConfig } from '@/models/debug'
 import type { VisionFile, VisionSettings } from '@/types/app'
 import { useCallback, useEffect, useRef } from 'react'
@@ -28,6 +29,7 @@ type UseResultSenderOptions = {
   isWorkflow: boolean
   notify: Notify
   onCompleted: (completionRes: string, taskId?: number, success?: boolean) => void
+  onResultCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
   onRunStart: () => void
   onShowRes: () => void
   promptConfig: PromptConfig | null
@@ -54,6 +56,7 @@ export const useResultSender = ({
   isWorkflow,
   notify,
   onCompleted,
+  onResultCompleted,
   onRunStart,
   onShowRes,
   promptConfig,
@@ -107,7 +110,15 @@ export const useResultSender = ({
       await sleep(TEXT_GENERATION_TIMEOUT_MS)
       if (!isEnd) {
         runState.setRespondingFalse()
-        onCompleted(runState.getCompletionRes(), taskId, false)
+        const completionRes = runState.getCompletionRes()
+        onCompleted(completionRes, taskId, false)
+        void onResultCompleted?.({
+          content: completionRes,
+          success: false,
+          inputs,
+          messageId: tempMessageId || undefined,
+          workflowRunId: isWorkflow ? tempMessageId || undefined : undefined,
+        })
         runState.resetRunState()
         isTimeout = true
       }
@@ -161,7 +172,15 @@ export const useResultSender = ({
         runState.setRespondingFalse()
         runState.resetRunState()
         runState.setMessageId(tempMessageId)
-        onCompleted(runState.getCompletionRes(), taskId, true)
+        const completionRes = runState.getCompletionRes()
+        onCompleted(completionRes, taskId, true)
+        void onResultCompleted?.({
+          content: completionRes,
+          success: true,
+          inputs,
+          messageId: tempMessageId || undefined,
+          workflowRunId: isWorkflow ? tempMessageId || undefined : undefined,
+        })
         isEnd = true
       },
       onMessageReplace: (messageReplace) => {
@@ -176,7 +195,15 @@ export const useResultSender = ({
 
         runState.setRespondingFalse()
         runState.resetRunState()
-        onCompleted(runState.getCompletionRes(), taskId, false)
+        const completionRes = runState.getCompletionRes()
+        onCompleted(completionRes, taskId, false)
+        void onResultCompleted?.({
+          content: completionRes,
+          success: false,
+          inputs,
+          messageId: tempMessageId || undefined,
+          workflowRunId: isWorkflow ? tempMessageId || undefined : undefined,
+        })
         isEnd = true
       },
       getAbortController: (abortController) => {
@@ -195,6 +222,7 @@ export const useResultSender = ({
     isWorkflow,
     notify,
     onCompleted,
+    onResultCompleted,
     onRunStart,
     onShowRes,
     promptConfig,

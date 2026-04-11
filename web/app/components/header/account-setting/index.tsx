@@ -13,6 +13,8 @@ import {
 import MenuDialog from '@/app/components/header/account-setting/menu-dialog'
 import { useAppContext } from '@/context/app-context'
 import { useProviderContext } from '@/context/provider-context'
+import RebateConfigPage from './rebate-config-page'
+import UserManagementPage from './user-management-page'
 import useBreakpoints, { MediaType } from '@/hooks/use-breakpoints'
 import { cn } from '@/utils/classnames'
 import Button from '../../base/button'
@@ -50,7 +52,7 @@ export default function AccountSetting({
   const activeMenu = activeTab
   const { t } = useTranslation()
   const { enableBilling, enableReplaceWebAppLogo } = useProviderContext()
-  const { isCurrentWorkspaceDatasetOperator } = useAppContext()
+  const { isCurrentWorkspaceDatasetOperator, isSystemAdmin } = useAppContext()
 
   const workplaceGroupItems: GroupItem[] = (() => {
     if (isCurrentWorkspaceDatasetOperator)
@@ -103,6 +105,23 @@ export default function AccountSetting({
         icon: <span className={cn('i-ri-color-filter-line', iconClassName)} />,
         activeIcon: <span className={cn('i-ri-color-filter-fill', iconClassName)} />,
       })
+    }
+
+    if (isSystemAdmin) {
+      items.push(
+        {
+          key: ACCOUNT_SETTING_TAB.USER_MANAGEMENT,
+          name: '用户管理',
+          icon: <span className={cn('i-ri-shield-user-line', iconClassName)} />,
+          activeIcon: <span className={cn('i-ri-shield-user-fill', iconClassName)} />,
+        },
+        {
+          key: ACCOUNT_SETTING_TAB.REBATE_CONFIG,
+          name: '返点配置',
+          icon: <span className={cn('i-ri-money-cny-circle-line', iconClassName)} />,
+          activeIcon: <span className={cn('i-ri-money-cny-circle-fill', iconClassName)} />,
+        },
+      )
     }
 
     return items
@@ -233,6 +252,8 @@ export default function AccountSetting({
               {activeMenu === ACCOUNT_SETTING_TAB.API_BASED_EXTENSION && <ApiBasedExtensionPage />}
               {activeMenu === ACCOUNT_SETTING_TAB.CUSTOM && <CustomPage />}
               {activeMenu === ACCOUNT_SETTING_TAB.LANGUAGE && <LanguagePage />}
+              {activeMenu === ACCOUNT_SETTING_TAB.USER_MANAGEMENT && <UserManagementPage />}
+              {activeMenu === ACCOUNT_SETTING_TAB.REBATE_CONFIG && <RebateConfigPage />}
             </div>
           </ScrollArea>
         </div>

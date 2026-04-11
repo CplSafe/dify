@@ -30,7 +30,7 @@ type AppContextProviderProps = {
 export const AppContextProvider: FC<AppContextProviderProps> = ({ children }) => {
   const queryClient = useQueryClient()
   const systemFeatures = useGlobalPublicStore(s => s.systemFeatures)
-  const { data: userProfileResp } = useUserProfile()
+  const { data: userProfileResp, isPending: isLoadingUserProfile } = useUserProfile()
   const { data: currentWorkspaceResp, isPending: isLoadingCurrentWorkspace, isFetching: isValidatingCurrentWorkspace } = useCurrentWorkspace()
   const langGeniusVersionQuery = useLangGeniusVersion(
     userProfileResp?.meta.currentVersion,
@@ -58,6 +58,7 @@ export const AppContextProvider: FC<AppContextProviderProps> = ({ children }) =>
   const isCurrentWorkspaceOwner = useMemo(() => currentWorkspace.role === 'owner', [currentWorkspace.role])
   const isCurrentWorkspaceEditor = useMemo(() => ['owner', 'admin', 'editor'].includes(currentWorkspace.role), [currentWorkspace.role])
   const isCurrentWorkspaceDatasetOperator = useMemo(() => currentWorkspace.role === 'dataset_operator', [currentWorkspace.role])
+  const isSystemAdmin = useMemo(() => userProfile?.is_system_admin === true, [userProfile?.is_system_admin])
 
   const mutateUserProfile = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['common', 'user-profile'] })
@@ -138,8 +139,9 @@ export const AppContextProvider: FC<AppContextProviderProps> = ({ children }) =>
       isCurrentWorkspaceOwner,
       isCurrentWorkspaceEditor,
       isCurrentWorkspaceDatasetOperator,
+      isSystemAdmin,
       mutateCurrentWorkspace,
-      isLoadingCurrentWorkspace,
+      isLoadingCurrentWorkspace: isLoadingCurrentWorkspace || isLoadingUserProfile,
       isValidatingCurrentWorkspace,
     }}
     >

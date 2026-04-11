@@ -67,6 +67,7 @@ const Panel: FC<NodePanelProps<LLMNodeType>> = ({
     handleStructureOutputChange,
     filterJinja2InputVar,
     handleReasoningFormatChange,
+    handleBillingPriceChange,
   } = useConfig(id, data)
 
   const model = inputs.model
@@ -270,6 +271,23 @@ const Panel: FC<NodePanelProps<LLMNodeType>> = ({
           onChange={handleReasoningFormatChange}
           readonly={readOnly}
         />
+
+        {/* Billing: price per 1k tokens */}
+        <Field
+          title={t('nodes.llm.billingPricePerKTokens', { ns: 'workflow', defaultValue: 'Price per 1K tokens (CNY)' })}
+          tooltip={t('nodes.llm.billingPricePerKTokensTip', { ns: 'workflow', defaultValue: 'Cost charged per 1000 tokens consumed by this node' })}
+        >
+          <input
+            type="number"
+            min={0}
+            step={0.001}
+            className="w-full rounded-lg border border-components-input-border-active bg-components-input-bg-normal px-3 py-2 text-sm text-components-input-text-filled outline-none placeholder:text-components-input-text-placeholder disabled:cursor-not-allowed disabled:opacity-50"
+            value={inputs.billing_price_per_k_tokens ?? ''}
+            placeholder="0.002"
+            disabled={readOnly}
+            onChange={e => handleBillingPriceChange(e.target.value === '' ? undefined : Number(e.target.value))}
+          />
+        </Field>
       </div>
       <Split />
       <OutputVars

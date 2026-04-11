@@ -28,7 +28,7 @@ from core.app.apps.workflow.app_queue_manager import WorkflowAppQueueManager
 from core.app.apps.workflow.app_runner import WorkflowAppRunner
 from core.app.apps.workflow.generate_response_converter import WorkflowAppGenerateResponseConverter
 from core.app.apps.workflow.generate_task_pipeline import WorkflowAppGenerateTaskPipeline
-from core.app.entities.app_invoke_entities import InvokeFrom, WorkflowAppGenerateEntity
+from core.app.entities.app_invoke_entities import InvokeFrom, UserFrom, WorkflowAppGenerateEntity
 from core.app.entities.task_entities import WorkflowAppBlockingResponse, WorkflowAppStreamResponse
 from core.app.layers.pause_state_persist_layer import PauseStateLayerConfig, PauseStatePersistenceLayer
 from core.db.session_factory import session_factory
@@ -39,6 +39,7 @@ from core.repositories.factory import WorkflowExecutionRepository, WorkflowNodeE
 from extensions.ext_database import db
 from factories import file_factory
 from libs.flask_utils import preserve_flask_contexts
+from libs.helper import extract_tenant_id
 from models.account import Account
 from models.enums import WorkflowRunTriggeredFrom
 from models.model import App, EndUser
@@ -181,6 +182,8 @@ class WorkflowAppGenerator(BaseAppGenerator):
                 inputs=inputs,
                 files=list(system_files),
                 user_id=user.id,
+                tenant_id=extract_tenant_id(user),
+                user_from=UserFrom.ACCOUNT if isinstance(user, Account) else UserFrom.END_USER,
                 stream=streaming,
                 invoke_from=invoke_from,
                 call_depth=call_depth,
@@ -390,6 +393,8 @@ class WorkflowAppGenerator(BaseAppGenerator):
             inputs={},
             files=[],
             user_id=user.id,
+            tenant_id=extract_tenant_id(user),
+            user_from=UserFrom.ACCOUNT if isinstance(user, Account) else UserFrom.END_USER,
             stream=streaming,
             invoke_from=InvokeFrom.DEBUGGER,
             extras={"auto_generate_conversation_name": False},
@@ -476,6 +481,8 @@ class WorkflowAppGenerator(BaseAppGenerator):
             inputs={},
             files=[],
             user_id=user.id,
+            tenant_id=extract_tenant_id(user),
+            user_from=UserFrom.ACCOUNT if isinstance(user, Account) else UserFrom.END_USER,
             stream=streaming,
             invoke_from=InvokeFrom.DEBUGGER,
             extras={"auto_generate_conversation_name": False},

@@ -39,7 +39,7 @@ from graphon.graph_events import (
 )
 from graphon.node_events import NodeRunResult
 
-from core.app.entities.app_invoke_entities import AdvancedChatAppGenerateEntity, WorkflowAppGenerateEntity
+from core.app.entities.app_invoke_entities import AdvancedChatAppGenerateEntity, UserFrom, WorkflowAppGenerateEntity
 from core.ops.entities.trace_entity import TraceTaskName
 from core.ops.ops_trace_manager import TraceQueueManager, TraceTask
 from core.repositories.factory import WorkflowExecutionRepository, WorkflowNodeExecutionRepository
@@ -181,6 +181,7 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
 
         self._workflow_execution_repository.save(execution)
         self._enqueue_trace_task(execution)
+        self._bill_workflow_run(execution)
 
     def _handle_graph_run_partial_succeeded(self, event: GraphRunPartialSucceededEvent) -> None:
         execution = self._get_workflow_execution()
@@ -191,6 +192,7 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
 
         self._workflow_execution_repository.save(execution)
         self._enqueue_trace_task(execution)
+        self._bill_workflow_run(execution)
 
     def _handle_graph_run_failed(self, event: GraphRunFailedEvent) -> None:
         execution = self._get_workflow_execution()
@@ -202,6 +204,7 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
         self._fail_running_node_executions(error_message=event.error)
         self._workflow_execution_repository.save(execution)
         self._enqueue_trace_task(execution)
+        self._bill_workflow_run(execution)
 
     def _handle_graph_run_aborted(self, event: GraphRunAbortedEvent) -> None:
         execution = self._get_workflow_execution()
@@ -212,6 +215,7 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
         self._fail_running_node_executions(error_message=execution.error_message or "")
         self._workflow_execution_repository.save(execution)
         self._enqueue_trace_task(execution)
+        self._bill_workflow_run(execution)
 
     def _handle_graph_run_paused(self, event: GraphRunPausedEvent) -> None:
         execution = self._get_workflow_execution()
@@ -419,3 +423,63 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
     def _system_variables(self) -> Mapping[str, Any]:
         runtime_state = self.graph_runtime_state
         return runtime_state.variable_pool.get_by_prefix(SYSTEM_VARIABLE_NODE_ID)
+
+    def _bill_workflow_run(self, execution: "WorkflowExecution") -> None:
+        """Deduct billing for consumed tokens after any terminal workflow state.
+
+        This runs for succeeded, partial-succeeded, failed, and aborted runs so
+        that tokens consumed before an early termination are still billed.
+        Only bills for platform accounts (not end-users).
+        """
+        import logging
+        from decimal import Decimal
+
+        from services.user_billing_service import UserBillingService
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            user_from = self._application_generate_entity.user_from
+            tenant_id = (
+                self._application_generate_entity.tenant_id
+                or self._application_generate_entity.app_config.tenant_id
+            )
+
+            # Only bill platform accounts, not embedded end-users
+            if user_from != UserFrom.ACCOUNT:
+                return
+
+            account_id = self._application_generate_entity.user_id
+            total_tokens = execution.total_tokens or 0
+
+            if total_tokens <= 0:
+                return
+
+            # Read default price from workflow graph config (nodes set billing_price_per_k_tokens)
+            # We use a global default of 0.002 CNY per 1k tokens if not configured
+            price_per_1k = Decimal("0.002")
+            try:
+                graph_data = self._workflow_info.graph_data or {}
+                nodes = graph_data.get("nodes", [])
+                # Find the smallest non-zero price across all configured nodes
+                configured_prices = []
+                for node in nodes:
+                    node_data = node.get("data", {})
+                    raw_price = node_data.get("billing_price_per_k_tokens")
+                    if raw_price:
+                        configured_prices.append(Decimal(str(raw_price)))
+                if configured_prices:
+                    # Use the average configured price
+                    price_per_1k = sum(configured_prices) / len(configured_prices)
+            except Exception as exc:
+                logger.debug("Failed to resolve workflow billing price, using default: %s", exc)
+
+            UserBillingService.deduct_for_workflow_run(
+                account_id=account_id,
+                tenant_id=tenant_id,
+                workflow_run_id=str(execution.id_),
+                total_tokens=total_tokens,
+                price_per_1k_tokens=price_per_1k,
+            )
+        except Exception:
+            logger.exception("Failed to bill workflow run %s", execution.id_)

@@ -107,3 +107,9 @@ class ComplianceRateLimitError(BaseHTTPException):
     error_code = "compliance_rate_limit"
     description = "Rate limit exceeded for downloading compliance report."
     code = 429
+
+
+class SystemAdminRequired(BaseHTTPException):
+    error_code = "system_admin_required"
+    description = "This API is restricted to system administrators only."
+    code = 403

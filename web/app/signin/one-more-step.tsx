@@ -12,6 +12,7 @@ import { useRouter, useSearchParams } from '@/next/navigation'
 import { useOneMoreStep } from '@/service/use-common'
 import { timezones } from '@/utils/timezone'
 import Input from '../components/base/input'
+import { resolveHomeRoute } from './utils/resolve-home-route'
 
 type IState = {
   invitation_code: string
@@ -65,7 +66,7 @@ const OneMoreStep = () => {
         interface_language: state.interface_language,
         timezone: state.timezone,
       })
-      router.push('/apps')
+      router.push(await resolveHomeRoute())
     }
     catch (error: any) {
       if (error && error.status === 400)

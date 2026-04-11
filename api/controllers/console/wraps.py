@@ -22,7 +22,7 @@ from models.model import DifySetup
 from services.feature_service import FeatureService, LicenseStatus
 from services.operation_service import OperationService
 
-from .error import NotInitValidateError, NotSetupError, UnauthorizedAndForceLogout
+from .error import NotInitValidateError, NotSetupError, SystemAdminRequired, UnauthorizedAndForceLogout
 
 # Field names for decryption
 FIELD_NAME_PASSWORD = "password"
@@ -31,6 +31,19 @@ FIELD_NAME_CODE = "code"
 # Error messages for decryption failures
 ERROR_MSG_INVALID_ENCRYPTED_DATA = "Invalid encrypted data"
 ERROR_MSG_INVALID_ENCRYPTED_CODE = "Invalid encrypted code"
+
+
+def system_admin_required[**P, R](view: Callable[P, R]) -> Callable[P, R]:
+    """Restrict a view to system administrators only."""
+
+    @wraps(view)
+    def decorated(*args: P.args, **kwargs: P.kwargs) -> R:
+        current_user, _ = current_account_with_tenant()
+        if not getattr(current_user, "is_system_admin", False):
+            raise SystemAdminRequired()
+        return view(*args, **kwargs)
+
+    return decorated
 
 
 def account_initialization_required[**P, R](view: Callable[P, R]) -> Callable[P, R]:

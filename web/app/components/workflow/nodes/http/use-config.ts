@@ -54,26 +54,17 @@ const useConfig = (id: string, payload: HttpNodeType) => {
     }
   }, [defaultConfig])
 
-  const handleMethodChange = useCallback((method: Method) => {
-    const newInputs = produce(inputs, (draft: HttpNodeType) => {
-      draft.method = method
-    })
-    setInputs(newInputs)
-  }, [inputs, setInputs])
-
-  const handleUrlChange = useCallback((url: string) => {
-    const newInputs = produce(inputs, (draft: HttpNodeType) => {
-      draft.url = url
-    })
-    setInputs(newInputs)
+  const updateInputs = useCallback(<K extends keyof HttpNodeType>(field: K, value: HttpNodeType[K]) => {
+    setInputs(produce(inputs, (draft) => {
+      draft[field] = value
+    }))
   }, [inputs, setInputs])
 
   const handleFieldChange = useCallback((field: string) => {
     return (value: string) => {
-      const newInputs = produce(inputs, (draft: HttpNodeType) => {
+      setInputs(produce(inputs, (draft) => {
         (draft as any)[field] = value
-      })
-      setInputs(newInputs)
+      }))
     }
   }, [inputs, setInputs])
 
@@ -93,36 +84,11 @@ const useConfig = (id: string, payload: HttpNodeType) => {
     toggleIsKeyValueEdit: toggleIsParamKeyValueEdit,
   } = useKeyValueList(inputs.params, handleFieldChange('params'))
 
-  const setBody = useCallback((data: Body) => {
-    const newInputs = produce(inputs, (draft: HttpNodeType) => {
-      draft.body = data
-    })
-    setInputs(newInputs)
-  }, [inputs, setInputs])
-
   // authorization
   const [isShowAuthorization, {
     setTrue: showAuthorization,
     setFalse: hideAuthorization,
   }] = useBoolean(false)
-
-  const setAuthorization = useCallback((authorization: Authorization) => {
-    const newInputs = produce(inputs, (draft: HttpNodeType) => {
-      draft.authorization = authorization
-    })
-    setInputs(newInputs)
-  }, [inputs, setInputs])
-
-  const setTimeout = useCallback((timeout: Timeout) => {
-    const newInputs = produce(inputs, (draft: HttpNodeType) => {
-      draft.timeout = timeout
-    })
-    setInputs(newInputs)
-  }, [inputs, setInputs])
-
-  const filterVar = useCallback((varPayload: Var) => {
-    return [VarType.string, VarType.number, VarType.secret].includes(varPayload.type)
-  }, [])
 
   // curl import panel
   const [isShowCurlPanel, {
@@ -131,22 +97,18 @@ const useConfig = (id: string, payload: HttpNodeType) => {
   }] = useBoolean(false)
 
   const handleCurlImport = useCallback((newNode: HttpNodeType) => {
-    const newInputs = produce(inputs, (draft: HttpNodeType) => {
+    setInputs(produce(inputs, (draft) => {
       draft.method = newNode.method
       draft.url = newNode.url
       draft.headers = newNode.headers
       draft.params = newNode.params
       draft.body = newNode.body
-    })
-    setInputs(newInputs)
+    }))
   }, [inputs, setInputs])
 
-  const handleSSLVerifyChange = useCallback((checked: boolean) => {
-    const newInputs = produce(inputs, (draft: HttpNodeType) => {
-      draft.ssl_verify = checked
-    })
-    setInputs(newInputs)
-  }, [inputs, setInputs])
+  const filterVar = useCallback((varPayload: Var) => {
+    return [VarType.string, VarType.number, VarType.secret].includes(varPayload.type)
+  }, [])
 
   return {
     readOnly,
@@ -155,8 +117,8 @@ const useConfig = (id: string, payload: HttpNodeType) => {
     handleVarListChange,
     handleAddVariable,
     filterVar,
-    handleMethodChange,
-    handleUrlChange,
+    handleMethodChange: useCallback((method: Method) => updateInputs('method', method), [updateInputs]),
+    handleUrlChange: useCallback((url: string) => updateInputs('url', url), [updateInputs]),
     // headers
     headers,
     setHeaders,
@@ -170,20 +132,22 @@ const useConfig = (id: string, payload: HttpNodeType) => {
     isParamKeyValueEdit,
     toggleIsParamKeyValueEdit,
     // body
-    setBody,
+    setBody: useCallback((data: Body) => updateInputs('body', data), [updateInputs]),
     // ssl verify
-    handleSSLVerifyChange,
+    handleSSLVerifyChange: useCallback((checked: boolean) => updateInputs('ssl_verify', checked), [updateInputs]),
     // authorization
     isShowAuthorization,
     showAuthorization,
     hideAuthorization,
-    setAuthorization,
-    setTimeout,
+    setAuthorization: useCallback((authorization: Authorization) => updateInputs('authorization', authorization), [updateInputs]),
+    setTimeout: useCallback((timeout: Timeout) => updateInputs('timeout', timeout), [updateInputs]),
     // curl import
     isShowCurlPanel,
     showCurlPanel,
     hideCurlPanel,
     handleCurlImport,
+    handleTokenFieldNameChange: useCallback((name: string) => updateInputs('token_field_name', name || undefined), [updateInputs]),
+    handleHttpBillingPriceChange: useCallback((price: number | undefined) => updateInputs('billing_price_per_k_tokens', price), [updateInputs]),
   }
 }
 

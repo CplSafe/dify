@@ -1,5 +1,6 @@
 'use client'
 import type { FC } from 'react'
+import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import type { PromptConfig } from '@/models/debug'
 import type { SiteInfo } from '@/models/share'
 import type { AppSourceType } from '@/service/share'
@@ -34,6 +35,7 @@ type IResultProps = {
   handleSaveMessage: (messageId: string) => void
   taskId?: number
   onCompleted: (completionRes: string, taskId?: number, success?: boolean) => void
+  onResultCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
   visionConfig: VisionSettings
   completionFiles: VisionFile[]
   siteInfo: SiteInfo | null
@@ -44,7 +46,7 @@ type IResultProps = {
   } | null) => void
   hideInlineStopButton?: boolean
 }
-const Result: FC<IResultProps> = ({ isWorkflow, isCallBatchAPI, isPC, isMobile, appSourceType, appId, isError, isShowTextToSpeech, promptConfig, moreLikeThisEnabled, inputs, controlSend, controlRetry, controlStopResponding, onShowRes, handleSaveMessage, taskId, onCompleted, visionConfig, completionFiles, siteInfo, onRunStart, onRunControlChange, hideInlineStopButton = false }) => {
+const Result: FC<IResultProps> = ({ isWorkflow, isCallBatchAPI, isPC, isMobile, appSourceType, appId, isError, isShowTextToSpeech, promptConfig, moreLikeThisEnabled, inputs, controlSend, controlRetry, controlStopResponding, onShowRes, handleSaveMessage, taskId, onCompleted, onResultCompleted, visionConfig, completionFiles, siteInfo, onRunStart, onRunControlChange, hideInlineStopButton = false }) => {
   const notify = useCallback(({ type, message }: { type: 'error' | 'info' | 'success' | 'warning', message: string }) => {
     toast(message, { type })
   }, [])
@@ -68,6 +70,7 @@ const Result: FC<IResultProps> = ({ isWorkflow, isCallBatchAPI, isPC, isMobile, 
     isWorkflow,
     notify,
     onCompleted,
+    onResultCompleted,
     onRunStart,
     onShowRes,
     promptConfig,

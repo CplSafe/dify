@@ -50,6 +50,12 @@ def payload_patch(payload_data):
     )
 
 
+@pytest.fixture(autouse=True)
+def creator_balance_check_patch():
+    with patch.object(completion_module, "_creator_marketplace_balance_insufficient", return_value=False):
+        yield
+
+
 class TestCompletionApi:
     def test_post_success(self, app, completion_app, user, payload_patch):
         api = completion_module.CompletionApi()
@@ -219,6 +225,30 @@ class TestCompletionApi:
             with pytest.raises(completion_module.CompletionRequestError):
                 method(completion_app)
 
+    def test_streaming_balance_insufficient_returns_sse_message(self, app, completion_app, user):
+        api = completion_module.CompletionApi()
+        method = unwrap(api.post)
+        payload = {"inputs": {}, "query": "hi", "response_mode": "streaming"}
+
+        with (
+            app.test_request_context("/", json={}),
+            patch.object(
+                type(completion_module.console_ns),
+                "payload",
+                new_callable=PropertyMock,
+                return_value=payload,
+            ),
+            patch.object(completion_module, "current_user", user),
+            patch.object(completion_module, "_creator_marketplace_balance_insufficient", return_value=True),
+        ):
+            result = method(completion_app)
+
+        body = result.get_data(as_text=True)
+        assert result.status_code == 200
+        assert result.mimetype == "text/event-stream"
+        assert '"event": "message"' in body
+        assert completion_module._INSUFFICIENT_BALANCE_MESSAGE in body
+
 
 class TestCompletionStopApi:
     def test_stop_success(self, completion_app, user):
@@ -295,6 +325,24 @@ class TestChatApi:
         ):
             with pytest.raises(InvokeRateLimitHttpError):
                 method(chat_app)
+
+    def test_balance_insufficient_returns_sse_message(self, app, chat_app, user, payload_patch):
+        api = completion_module.ChatApi()
+        method = unwrap(api.post)
+
+        with (
+            app.test_request_context("/", json={}),
+            payload_patch,
+            patch.object(completion_module, "current_user", user),
+            patch.object(completion_module, "_creator_marketplace_balance_insufficient", return_value=True),
+        ):
+            result = method(chat_app)
+
+        body = result.get_data(as_text=True)
+        assert result.status_code == 200
+        assert result.mimetype == "text/event-stream"
+        assert '"event": "message"' in body
+        assert completion_module._INSUFFICIENT_BALANCE_MESSAGE in body
 
     def test_conversation_completed_chat(self, app, chat_app, user, payload_patch):
         api = completion_module.ChatApi()

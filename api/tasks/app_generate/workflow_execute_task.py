@@ -102,16 +102,23 @@ class AppExecutionParams(BaseModel):
         workflow_run_id: str | None = None,
     ):
         user_params: _Account | _EndUser
+        tenant_id: str | None
         if isinstance(user, Account):
             user_params = _Account(user_id=user.id)
+            tenant_id = user.current_tenant_id
         elif isinstance(user, EndUser):
             user_params = _EndUser(end_user_id=user.id)
+            tenant_id = user.tenant_id
         else:
             raise AssertionError("this statement should be unreachable.")
+
+        if not tenant_id:
+            tenant_id = app_model.tenant_id
+
         return cls(
             app_id=app_model.id,
             workflow_id=workflow.id,
-            tenant_id=app_model.tenant_id,
+            tenant_id=tenant_id,
             app_mode=AppMode.value_of(app_model.mode),
             user=user_params,
             args=args,

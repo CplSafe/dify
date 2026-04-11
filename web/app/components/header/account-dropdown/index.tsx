@@ -104,7 +104,7 @@ export default function AppSelector() {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
 
   const { t } = useTranslation()
-  const { userProfile, langGeniusVersionInfo } = useAppContext()
+  const { userProfile, langGeniusVersionInfo, isSystemAdmin } = useAppContext()
   const { isEducationAccount } = useProviderContext()
   const { setShowAccountSettingModal } = useModalContext()
 
@@ -218,6 +218,18 @@ export default function AppSelector() {
               <DropdownMenuSeparator className="my-0! bg-divider-subtle" />
             </>
           )} */}
+          {isSystemAdmin && (
+            <>
+              <AccountMenuSection>
+                <AccountMenuActionItem
+                  iconClassName="i-ri-video-line"
+                  label="创作者平台"
+                  onClick={() => router.push('/creator')}
+                />
+              </AccountMenuSection>
+              <DropdownMenuSeparator className="my-0! bg-divider-subtle" />
+            </>
+          )}
           <AccountMenuSection>
             <DropdownMenuItem
               closeOnClick={false}

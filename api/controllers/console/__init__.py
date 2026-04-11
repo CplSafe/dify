@@ -1,6 +1,6 @@
 from importlib import import_module
 
-from flask import Blueprint
+from flask import Blueprint, jsonify, request
 from flask_restx import Namespace
 
 from libs.external_api import ExternalApi
@@ -15,6 +15,72 @@ api = ExternalApi(
 )
 
 console_ns = Namespace("console", description="Console management API operations", path="/")
+
+# Paths that non-admin (creator) users are allowed to access.
+# Everything else requires is_system_admin=True.
+_CREATOR_ALLOWED_PREFIXES = (
+    "/console/api/creator/",
+    "/console/api/installed-apps",
+    "/console/api/login",
+    "/console/api/logout",
+    "/console/api/refresh-token",
+    "/console/api/email-register",
+    "/console/api/forgot-password",
+    "/console/api/system-features",
+    "/console/api/features",
+    "/console/api/setup",
+    "/console/api/version",
+    "/console/api/ping",
+    "/console/api/activate/check",
+    "/console/api/activate",
+    "/console/api/account/profile",
+    "/console/api/account/avatar",
+    "/console/api/account/name",
+    "/console/api/account/interface-language",
+    "/console/api/workspaces/current",
+    "/console/api/datasets/retrieval-setting",
+)
+
+
+@bp.before_request
+def _enforce_creator_access_control():
+    """Block non-admin users from accessing admin-only APIs."""
+    # Skip OPTIONS (CORS preflight)
+    if request.method == "OPTIONS":
+        return None
+
+    # Skip if no auth token — unauthenticated requests are handled by login_required decorators.
+    # Accessing current_user here would trigger request_loader which raises Unauthorized
+    # for token-less requests, breaking public endpoints like /login and /system-features.
+    from libs.token import extract_access_token
+    if not extract_access_token(request):
+        return None
+
+    from flask_login import current_user
+
+    user = getattr(current_user, "_get_current_object", lambda: current_user)()
+    # Not logged in yet — let auth layer handle it
+    if not user or not getattr(user, "is_authenticated", False):
+        return None
+
+    # System admins have unrestricted access
+    if getattr(user, "is_system_admin", False):
+        return None
+
+    # Non-admin users: only allow whitelisted prefixes
+    path = request.path
+    if any(path.startswith(prefix) for prefix in _CREATOR_ALLOWED_PREFIXES):
+        return None
+
+    return (
+        jsonify({
+            "code": "system_admin_required",
+            "message": "This API is restricted to system administrators only.",
+            "status": 403,
+        }),
+        403,
+    )
+
 
 RESOURCE_MODULES = (
     "controllers.console.app.app_import",
@@ -85,6 +151,9 @@ from .auth import (
 
 # Import billing controllers
 from .billing import billing, compliance
+
+# Import creator controllers
+from .creator import api_key, balance, marketplace, works
 
 # Import datasets controllers
 from .datasets import (

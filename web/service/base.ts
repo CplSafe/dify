@@ -149,6 +149,13 @@ function unicodeToChar(text: string) {
   })
 }
 
+function isInsufficientBalanceMessage(message?: string, code?: string | number) {
+  const normalizedMessage = message || ''
+  return code === 'payment_required'
+    || code === 402
+    || normalizedMessage.includes('余额不足')
+}
+
 const WBB_APP_LOGIN_PATH = '/webapp-signin'
 function requiredWebSSOLogin(message?: string, code?: number) {
   const params = new URLSearchParams()
@@ -532,9 +539,19 @@ export const ssePost = async (
         }
         else {
           res.json().then((data) => {
-            toast.error(data.message || 'Server Error')
+            const message = data.message || 'Server Error'
+            if (isInsufficientBalanceMessage(message, data.code)) {
+              onData?.(message, true, {
+                conversationId: undefined,
+                messageId: '',
+              })
+              onCompleted?.(true, message)
+              return
+            }
+
+            toast.error(message)
+            onError?.(message, data.code)
           })
-          onError?.('Server Error')
         }
         return
       }

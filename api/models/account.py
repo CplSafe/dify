@@ -108,6 +108,9 @@ class Account(UserMixin, TypeBase):
         EnumText(AccountStatus, length=16), server_default=sa.text("'active'"), default=AccountStatus.ACTIVE
     )
     initialized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    is_system_admin: Mapped[bool] = mapped_column(
+        sa.Boolean, server_default=sa.text("false"), default=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp(), nullable=False, init=False
     )

@@ -17,6 +17,22 @@ from pydantic_settings import BaseSettings
 from .hosted_service import HostedServiceConfig
 
 
+def _parse_cors_allow_origins(raw_value: str) -> list[str]:
+    """
+    Normalise comma-separated CORS settings.
+
+    A single ``*`` should mean "allow any origin" even if operators append
+    additional hosts in the same env var. This keeps local/LAN debugging
+    predictable for credentialed console requests where an explicit wildcard
+    intent matters more than the extra list entries.
+    """
+
+    origins = [origin.strip() for origin in raw_value.split(",") if origin.strip()]
+    if "*" in origins:
+        return ["*"]
+    return origins
+
+
 class SecurityConfig(BaseSettings):
     """
     Security-related configurations for the application
@@ -487,7 +503,7 @@ class HttpConfig(BaseSettings):
 
     @computed_field
     def CONSOLE_CORS_ALLOW_ORIGINS(self) -> list[str]:
-        return self.inner_CONSOLE_CORS_ALLOW_ORIGINS.split(",")
+        return _parse_cors_allow_origins(self.inner_CONSOLE_CORS_ALLOW_ORIGINS)
 
     inner_WEB_API_CORS_ALLOW_ORIGINS: str = Field(
         description="",
@@ -497,7 +513,7 @@ class HttpConfig(BaseSettings):
 
     @computed_field
     def WEB_API_CORS_ALLOW_ORIGINS(self) -> list[str]:
-        return self.inner_WEB_API_CORS_ALLOW_ORIGINS.split(",")
+        return _parse_cors_allow_origins(self.inner_WEB_API_CORS_ALLOW_ORIGINS)
 
     HTTP_REQUEST_MAX_CONNECT_TIMEOUT: int = Field(
         ge=1, description="Maximum connection timeout in seconds for HTTP requests", default=10

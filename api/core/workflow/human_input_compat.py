@@ -19,7 +19,7 @@ from graphon.nodes.base.variable_template_parser import VariableTemplateParser
 from graphon.runtime import VariablePool
 from graphon.variables.consts import SELECTORS_LENGTH
 from markdown.extensions.tables import TableExtension
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, TypeAdapter, field_validator
 
 
 class DeliveryMethodType(enum.StrEnum):
@@ -143,6 +143,24 @@ class EmailDeliveryConfig(BaseModel):
 class _DeliveryMethodBase(BaseModel):
     enabled: bool = True
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def _coerce_invalid_uuid(cls, v: object) -> object:
+        """Auto-generate a UUID when the stored value is not a valid UUID string.
+
+        Workflow graphs may persist non-UUID delivery method IDs
+        (e.g. 'dm-webapp-review'). Instead of raising a validation error,
+        silently replace them with a fresh UUID so the workflow can run.
+        """
+        if isinstance(v, uuid.UUID):
+            return v
+        if isinstance(v, str):
+            try:
+                return uuid.UUID(v)
+            except ValueError:
+                return uuid.uuid4()
+        return v
 
     def extract_variable_selectors(self) -> Sequence[Sequence[str]]:
         return ()

@@ -24,7 +24,7 @@ class MarketplaceService:
     """Handles app marketplace publishing and retrieval."""
 
     @classmethod
-    def publish_app(cls, *, app_id: str, published_by: str) -> MarketplaceApp:
+    def publish_app(cls, *, app_id: str, published_by: str, is_default: bool = False) -> MarketplaceApp:
         """Publish a workflow app to the marketplace.
 
         Only super admins should call this. The app becomes immediately visible
@@ -52,9 +52,14 @@ class MarketplaceService:
                 db.session.commit()
             return existing
 
+        # If setting as default, clear any existing default first
+        if is_default:
+            cls._clear_default()
+
         marketplace_app = MarketplaceApp(
             app_id=app_id,
             published_by=published_by,
+            is_default=is_default,
         )
         db.session.add(marketplace_app)
         db.session.commit()
@@ -123,3 +128,85 @@ class MarketplaceService:
             select(MarketplaceApp)
             .where(MarketplaceApp.app_id == app_id, MarketplaceApp.is_active.is_(True))
         ) is not None
+
+    @classmethod
+    def set_default_app(cls, *, app_id: str) -> MarketplaceApp:
+        """Set a marketplace app as the default creator homepage app.
+
+        Only one app can be default at a time. The previous default is unset.
+        """
+        marketplace_app = db.session.scalar(
+            select(MarketplaceApp).where(
+                MarketplaceApp.app_id == app_id,
+                MarketplaceApp.is_active.is_(True),
+            )
+        )
+        if not marketplace_app:
+            raise ValueError(f"App {app_id} is not published in the marketplace")
+
+        cls._clear_default()
+        marketplace_app.is_default = True
+        db.session.commit()
+        logger.info("Set app %s as default creator app", app_id)
+        return marketplace_app
+
+    @classmethod
+    def get_default_app(cls) -> dict | None:
+        """Return the default creator homepage app, or the first active app."""
+        marketplace_app = db.session.scalar(
+            select(MarketplaceApp).where(
+                MarketplaceApp.is_active.is_(True),
+                MarketplaceApp.is_default.is_(True),
+            )
+        )
+        # Fallback: first active app by display_order
+        if not marketplace_app:
+            marketplace_app = db.session.scalar(
+                select(MarketplaceApp)
+                .where(MarketplaceApp.is_active.is_(True))
+                .order_by(MarketplaceApp.display_order, MarketplaceApp.published_at.desc())
+                .limit(1)
+            )
+        if not marketplace_app:
+            return None
+
+        app = db.session.scalar(select(App).where(App.id == marketplace_app.app_id))
+        if not app:
+            return None
+
+        from graphon.file import helpers as file_helpers
+
+        from models.model import IconType
+
+        icon_url = None
+        if app.icon_type == IconType.IMAGE and app.icon:
+            try:
+                icon_url = file_helpers.get_signed_file_url(app.icon)
+            except Exception:
+                icon_url = None
+
+        return {
+            "id": marketplace_app.id,
+            "app_id": marketplace_app.app_id,
+            "app_name": app.name,
+            "app_description": app.description,
+            "app_mode": app.mode,
+            "app_icon": app.icon,
+            "app_icon_type": app.icon_type,
+            "app_icon_background": app.icon_background,
+            "icon_url": icon_url,
+            "is_default": marketplace_app.is_default,
+        }
+
+    @classmethod
+    def _clear_default(cls) -> None:
+        """Clear the is_default flag on all marketplace apps."""
+        current_defaults = list(
+            db.session.scalars(
+                select(MarketplaceApp).where(MarketplaceApp.is_default.is_(True))
+            ).all()
+        )
+        for app in current_defaults:
+            app.is_default = False
+        if current_defaults:
+            db.session.flush()

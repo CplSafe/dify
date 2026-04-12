@@ -1,9 +1,11 @@
 """Marketplace endpoints.
 
-GET  /creator/marketplace/apps    — list active marketplace apps (all authenticated users)
-POST /creator/marketplace/apps    — publish an app (super admin only)
+GET  /creator/marketplace/apps          — list active marketplace apps (all authenticated users)
+POST /creator/marketplace/apps          — publish an app (super admin only)
 DELETE /creator/marketplace/apps/<app_id> — unpublish (super admin only)
 GET  /creator/marketplace/apps/<app_id>/status — check publish status
+GET  /creator/marketplace/default-app   — get the default creator homepage app
+POST /creator/marketplace/default-app   — set the default creator homepage app (super admin only)
 """
 
 from flask import request
@@ -46,10 +48,13 @@ class MarketplaceAppsApi(Resource):
             from werkzeug.exceptions import BadRequest
             raise BadRequest("app_id is required")
 
+        is_default = payload.get("is_default", False)
+
         try:
             marketplace_app = MarketplaceService.publish_app(
                 app_id=app_id,
                 published_by=current_user.id,
+                is_default=is_default,
             )
         except ValueError as e:
             from werkzeug.exceptions import BadRequest
@@ -189,3 +194,39 @@ class MarketplaceAppInstallApi(Resource):
         db.session.commit()
 
         return {"installed_app_id": str(new_installed_app.id), "already_installed": False}, 201
+
+
+@console_ns.route("/creator/marketplace/default-app")
+class MarketplaceDefaultAppApi(Resource):
+
+    @setup_required
+    @login_required
+    @account_initialization_required
+    def get(self):
+        """Get the default creator homepage app."""
+        default_app = MarketplaceService.get_default_app()
+        if not default_app:
+            return {"data": None}
+        return {"data": default_app}
+
+    @setup_required
+    @login_required
+    @account_initialization_required
+    def post(self):
+        """Set a marketplace app as the default creator homepage app (super admin only)."""
+        current_user, _ = current_account_with_tenant()
+        _require_system_admin(current_user)
+
+        payload = request.get_json() or {}
+        app_id = payload.get("app_id")
+        if not app_id:
+            from werkzeug.exceptions import BadRequest
+            raise BadRequest("app_id is required")
+
+        try:
+            marketplace_app = MarketplaceService.set_default_app(app_id=app_id)
+        except ValueError as e:
+            from werkzeug.exceptions import BadRequest
+            raise BadRequest(str(e))
+
+        return marketplace_app.to_dict()

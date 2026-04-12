@@ -130,6 +130,7 @@ class MarketplaceApp(TypeBase):
     )
     display_order: Mapped[int] = mapped_column(sa.Integer, server_default="0", default=0)
     is_active: Mapped[bool] = mapped_column(sa.Boolean, server_default=sa.text("true"), default=True)
+    is_default: Mapped[bool] = mapped_column(sa.Boolean, server_default=sa.text("false"), default=False)
 
     def to_dict(self) -> dict:
         return {
@@ -139,6 +140,7 @@ class MarketplaceApp(TypeBase):
             "published_at": self.published_at.isoformat(),
             "display_order": self.display_order,
             "is_active": self.is_active,
+            "is_default": self.is_default,
         }
 
 

@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { RiAddLine, RiHome4Line, RiLayoutGridLine, RiTimeLine, RiVideoLine } from '@remixicon/react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { RiHome4Line, RiLayoutGridLine, RiVideoLine, RiAddLine, RiTimeLine } from '@remixicon/react'
-import { cn } from '@/utils/classnames'
+import { useEffect, useState } from 'react'
 import { get } from '@/service/base'
+import { cn } from '@/utils/classnames'
 import CreatorUserMenu from './user-menu'
 
 type MarketplaceApp = {
@@ -85,8 +85,8 @@ export default function CreatorSidebar() {
           </Link>
         </div>
 
-        {/* App Marketplace section */}
-        <div className="px-3 mt-4">
+        {/* App Marketplace section - 暂时隐藏创意中心和应用市场 */}
+        {/* <div className="px-3 mt-4">
           <div className="mb-2 flex items-center justify-between px-3">
             <span className="text-xs font-medium uppercase text-text-quaternary tracking-wider">创意中心</span>
           </div>
@@ -142,7 +142,7 @@ export default function CreatorSidebar() {
             <RiAddLine className="h-4 w-4" />
             <span>应用市场</span>
           </Link>
-        </div>
+        </div> */}
 
         {/* Distribution section */}
         <div className="px-3 mt-6">

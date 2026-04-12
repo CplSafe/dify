@@ -323,7 +323,7 @@ def _resolve_ugak_token(auth_token: str, scope: str | None) -> "ApiToken":
         marketplace_entry = db.session.scalar(
             select(MarketplaceApp).where(
                 MarketplaceApp.app_id == str(app_id),
-                MarketplaceApp.is_active == True,  # noqa: E712
+                MarketplaceApp.is_active == True,
             )
         )
         if not marketplace_entry:
@@ -331,7 +331,7 @@ def _resolve_ugak_token(auth_token: str, scope: str | None) -> "ApiToken":
     else:
         marketplace_entry = db.session.scalar(
             select(MarketplaceApp)
-            .where(MarketplaceApp.is_active == True)  # noqa: E712
+            .where(MarketplaceApp.is_active == True)
             .order_by(MarketplaceApp.display_order.asc())
             .limit(1)
         )

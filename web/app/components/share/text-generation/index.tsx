@@ -1,7 +1,7 @@
 'use client'
 import type { FC } from 'react'
-import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import type { InputValueTypes, TextGenerationRunControl } from './types'
+import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import type { InstalledApp } from '@/models/explore'
 import type { VisionFile } from '@/types/app'
 import { useBoolean } from 'ahooks'

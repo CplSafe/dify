@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
 import { RiAddLine, RiDeleteBinLine, RiFileCopyLine, RiLoader4Line } from '@remixicon/react'
+import { useCallback, useEffect, useState } from 'react'
 import Button from '@/app/components/base/button'
 import { toast } from '@/app/components/base/ui/toast'
 import { del, get, post } from '@/service/base'
@@ -76,7 +76,7 @@ export default function InvitationTab() {
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleString('zh-CN', { hour12: false })
 
-  const STATUS_MAP: Record<string, { label: string; color: string }> = {
+  const STATUS_MAP: Record<string, { label: string, color: string }> = {
     pending: { label: '待使用', color: 'bg-state-warning-hover text-state-warning-text' },
     used: { label: '已使用', color: 'bg-state-success-hover text-state-success-text' },
     revoked: { label: '已撤销', color: 'bg-gray-100 text-gray-500' },
@@ -116,7 +116,7 @@ export default function InvitationTab() {
             )
           : (
               <div className="divide-y divide-divider-subtle rounded-xl border border-divider-regular overflow-hidden">
-                {invitations.map(inv => {
+                {invitations.map((inv) => {
                   const status = STATUS_MAP[inv.status] || STATUS_MAP.pending
                   return (
                     <div key={inv.id} className="flex items-center gap-4 px-4 py-3">
@@ -129,15 +129,26 @@ export default function InvitationTab() {
                           </span>
                         </div>
                         <div className="mt-1 text-xs text-text-quaternary">
-                          创建于 {formatDate(inv.created_at)}
+                          创建于
+                          {' '}
+                          {formatDate(inv.created_at)}
                           {inv.invitee_name && (
                             <span className="ml-2">
-                              → <span className="text-text-secondary">{inv.invitee_name}</span>
-                              <span className="ml-1 text-text-quaternary">({inv.invitee_email})</span>
+                              →
+                              {' '}
+                              <span className="text-text-secondary">{inv.invitee_name}</span>
+                              <span className="ml-1 text-text-quaternary">
+                                (
+                                {inv.invitee_email}
+                                )
+                              </span>
                             </span>
                           )}
                           {inv.used_at && (
-                            <span className="ml-2">绑定于 {formatDate(inv.used_at)}</span>
+                            <span className="ml-2">
+                              绑定于
+                              {formatDate(inv.used_at)}
+                            </span>
                           )}
                         </div>
                       </div>

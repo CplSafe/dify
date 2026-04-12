@@ -7,19 +7,19 @@
  * but operates on the user-level /creator/api-key endpoint instead of per-app keys.
  */
 
-import { useCallback, useEffect, useState } from 'react'
 import { PlusIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { RiDeleteBinLine, RiKey2Line } from '@remixicon/react'
+import { useCallback, useEffect, useState } from 'react'
 import ActionButton from '@/app/components/base/action-button'
 import Button from '@/app/components/base/button'
 import Confirm from '@/app/components/base/confirm'
 import CopyFeedback from '@/app/components/base/copy-feedback'
 import Loading from '@/app/components/base/loading'
 import Modal from '@/app/components/base/modal'
-import InputCopy from '@/app/components/develop/secret-key/input-copy'
 import { toast } from '@/app/components/base/ui/toast'
-import { del, get, post } from '@/service/base'
+import InputCopy from '@/app/components/develop/secret-key/input-copy'
 import s from '@/app/components/develop/secret-key/style.module.css'
+import { del, get, post } from '@/service/base'
 
 export type CreatorApiKey = {
   id: string

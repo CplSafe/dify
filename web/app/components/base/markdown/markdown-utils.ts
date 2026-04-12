@@ -15,7 +15,7 @@ const LABELED_PHONE_PATTERN = new RegExp(
 )
 const CODE_OR_LINK_PLACEHOLDER_PREFIX = '__MARKDOWN_PHONE_PLACEHOLDER__'
 const IMAGE_GALLERY_TAG = 'image-gallery'
-const IMAGE_LINE_PATTERN = /^!\[[^\]]*]\(([^)\n]+)\)$/
+const IMAGE_LINE_PATTERN = /^!\[[^\]]*\]\(([^)\n]+)\)$/
 
 const normalizeTelHref = (value: string) => {
   const trimmed = value.trim()
@@ -42,7 +42,7 @@ export const preprocessPhoneLinks = (content: string) => {
   let processedContent = content
     .replace(/```[\s\S]*?```/g, preserveSegment)
     .replace(/`[^`\n]+`/g, preserveSegment)
-    .replace(/!?\[[^\]]*?\]\([^)\n]+?\)/g, preserveSegment)
+    .replace(/!?\[[^\]]*\]\([^)\n]+\)/g, preserveSegment)
     .replace(/<[^>\n]+>/g, preserveSegment)
 
   processedContent = processedContent.replace(LABELED_PHONE_PATTERN, (_match, prefix: string, phone: string) => {

@@ -15,7 +15,6 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from libs.datetime_utils import naive_utc_now
 from models.creator import BillingRecord, BillingRecordType, UserBalance
 from models.engine import db
 
@@ -69,7 +68,7 @@ class UserBillingService:
         amount = (Decimal(total_tokens) / Decimal(1000)) * price_per_1k_tokens
         amount = amount.quantize(Decimal("0.000001"))
 
-        if amount <= Decimal("0"):
+        if amount <= Decimal(0):
             return None
 
         # Update balance (may go negative)
@@ -100,7 +99,7 @@ class UserBillingService:
     @classmethod
     def topup(cls, *, account_id: str, amount: Decimal, description: str = "") -> BillingRecord:
         """Add credits to a user's balance. Called by super admin."""
-        if amount <= Decimal("0"):
+        if amount <= Decimal(0):
             raise ValueError("Top-up amount must be positive")
 
         balance = cls.get_or_create_balance(account_id)

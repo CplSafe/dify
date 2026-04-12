@@ -53,7 +53,7 @@ class UserBalance(TypeBase):
         StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
     )
     account_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
-    balance: Mapped[Decimal] = mapped_column(sa.Numeric(precision=20, scale=6), server_default="0", default=Decimal("0"))
+    balance: Mapped[Decimal] = mapped_column(sa.Numeric(precision=20, scale=6), server_default="0", default=Decimal(0))
     currency: Mapped[str] = mapped_column(String(10), server_default="CNY", default="CNY")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp(), nullable=False, init=False
@@ -64,7 +64,7 @@ class UserBalance(TypeBase):
 
     def is_sufficient(self) -> bool:
         """Return True if balance > 0."""
-        return self.balance > Decimal("0")
+        return self.balance > Decimal(0)
 
 
 class BillingRecord(TypeBase):
@@ -303,10 +303,10 @@ class RebateConfig(TypeBase):
         StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
     )
     rebate_rate: Mapped[Decimal] = mapped_column(
-        sa.Numeric(precision=10, scale=4), server_default="10", default=Decimal("10")
+        sa.Numeric(precision=10, scale=4), server_default="10", default=Decimal(10)
     )  # default 10%
     cost_rate: Mapped[Decimal] = mapped_column(
-        sa.Numeric(precision=10, scale=4), server_default="0", default=Decimal("0")
+        sa.Numeric(precision=10, scale=4), server_default="0", default=Decimal(0)
     )  # default 0 = no cost deduction
     settlement_hour: Mapped[int] = mapped_column(
         sa.Integer, server_default="2", default=2
@@ -371,10 +371,10 @@ class RebateRecord(TypeBase):
     )  # snapshot of rate at settlement time
     # --- fields with defaults must come after non-default fields ---
     cost_amount: Mapped[Decimal] = mapped_column(
-        sa.Numeric(precision=20, scale=6), server_default="0", default=Decimal("0")
+        sa.Numeric(precision=20, scale=6), server_default="0", default=Decimal(0)
     )  # cost deducted
     cost_rate: Mapped[Decimal] = mapped_column(
-        sa.Numeric(precision=10, scale=4), server_default="0", default=Decimal("0")
+        sa.Numeric(precision=10, scale=4), server_default="0", default=Decimal(0)
     )  # snapshot of cost rate
     currency: Mapped[str] = mapped_column(String(10), server_default="CNY", default="CNY")
     created_at: Mapped[datetime] = mapped_column(

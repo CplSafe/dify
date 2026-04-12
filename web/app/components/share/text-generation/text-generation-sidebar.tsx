@@ -1,6 +1,14 @@
 import type { FC, RefObject } from 'react'
-import type { InputValueTypes, TextGenerationCustomConfig, TextGenerationRunControl } from './types'
-import type { PromptConfig, SavedMessage, TextToSpeechConfig } from '@/models/debug'
+import type {
+  InputValueTypes,
+  TextGenerationCustomConfig,
+  TextGenerationRunControl,
+} from './types'
+import type {
+  PromptConfig,
+  SavedMessage,
+  TextToSpeechConfig,
+} from '@/models/debug'
 import type { SiteInfo } from '@/models/share'
 import type { VisionFile, VisionSettings } from '@/types/app'
 import type { SystemFeatures } from '@/types/feature'
@@ -74,11 +82,20 @@ const TextGenerationSidebar: FC<TextGenerationSidebarProps> = ({
     <div
       className={cn(
         'relative flex h-full shrink-0 flex-col',
-        isPC ? 'w-[600px] max-w-[50%]' : resultExisted ? 'h-[calc(100%-64px)]' : '',
+        isPC
+          ? 'w-[360px] max-w-[40%]'
+          : resultExisted
+            ? 'h-[calc(100%-64px)]'
+            : '',
         isInstalledApp && 'rounded-l-2xl',
       )}
     >
-      <div className={cn('shrink-0 space-y-4 border-b border-divider-subtle', isPC ? 'bg-components-panel-bg p-8 pb-0' : 'p-4 pb-0')}>
+      <div
+        className={cn(
+          'shrink-0 space-y-4 border-b border-divider-subtle',
+          isPC ? 'bg-components-panel-bg p-8 pb-0' : 'p-4 pb-0',
+        )}
+      >
         <div className="flex items-center gap-3">
           <AppIcon
             size={isPC ? 'large' : 'small'}
@@ -87,30 +104,46 @@ const TextGenerationSidebar: FC<TextGenerationSidebarProps> = ({
             background={siteInfo.icon_background || appDefaultIconBackground}
             imageUrl={siteInfo.icon_url}
           />
-          <div className="grow truncate text-text-secondary system-md-semibold">{siteInfo.title}</div>
-          <MenuDropdown hideLogout={isInstalledApp || accessMode === AccessMode.PUBLIC} data={siteInfo} />
+          <div className="grow truncate text-text-secondary system-md-semibold">
+            {siteInfo.title}
+          </div>
+          <MenuDropdown
+            hideLogout={isInstalledApp || accessMode === AccessMode.PUBLIC}
+            data={siteInfo}
+          />
         </div>
         {siteInfo.description && (
-          <div className="text-text-tertiary system-xs-regular">{siteInfo.description}</div>
+          <div className="text-text-tertiary system-xs-regular">
+            {siteInfo.description}
+          </div>
         )}
         <TabHeader
           items={[
-            { id: 'create', name: t('generation.tabs.create', { ns: 'share' }) },
+            {
+              id: 'create',
+              name: t('generation.tabs.create', { ns: 'share' }),
+            },
             { id: 'batch', name: t('generation.tabs.batch', { ns: 'share' }) },
             ...(!isWorkflow
-              ? [{
-                  id: 'saved',
-                  name: t('generation.tabs.saved', { ns: 'share' }),
-                  isRight: true,
-                  icon: <span aria-hidden className="i-ri-bookmark-3-line h-4 w-4" />,
-                  extra: savedMessages.length > 0
-                    ? (
-                        <Badge className="ml-1">
-                          {savedMessages.length}
-                        </Badge>
-                      )
-                    : null,
-                }]
+              ? [
+                  {
+                    id: 'saved',
+                    name: t('generation.tabs.saved', { ns: 'share' }),
+                    isRight: true,
+                    icon: (
+                      <span
+                        aria-hidden
+                        className="i-ri-bookmark-3-line h-4 w-4"
+                      />
+                    ),
+                    extra:
+                      savedMessages.length > 0
+                        ? (
+                            <Badge className="ml-1">{savedMessages.length}</Badge>
+                          )
+                        : null,
+                  },
+                ]
               : []),
           ]}
           value={currentTab}
@@ -121,7 +154,10 @@ const TextGenerationSidebar: FC<TextGenerationSidebarProps> = ({
         className={cn(
           'h-0 grow overflow-y-auto bg-components-panel-bg',
           isPC ? 'px-8' : 'px-4',
-          !isPC && resultExisted && customConfig?.remove_webapp_brand && 'rounded-b-2xl border-b-[0.5px] border-divider-regular',
+          !isPC
+          && resultExisted
+          && customConfig?.remove_webapp_brand
+          && 'rounded-b-2xl border-b-[0.5px] border-divider-regular',
         )}
       >
         <div className={cn(currentTab === 'create' ? 'block' : 'hidden')}>
@@ -159,15 +195,34 @@ const TextGenerationSidebar: FC<TextGenerationSidebarProps> = ({
           className={cn(
             'flex shrink-0 items-center gap-1.5 bg-components-panel-bg py-3',
             isPC ? 'px-8' : 'px-4',
-            !isPC && resultExisted && 'rounded-b-2xl border-b-[0.5px] border-divider-regular',
+            !isPC
+            && resultExisted
+            && 'rounded-b-2xl border-b-[0.5px] border-divider-regular',
           )}
         >
-          <div className="text-text-tertiary system-2xs-medium-uppercase">{t('chat.poweredBy', { ns: 'share' })}</div>
-          {systemFeatures.branding.enabled && systemFeatures.branding.workspace_logo
-            ? <img src={systemFeatures.branding.workspace_logo} alt="logo" className="block h-5 w-auto" />
+          <div className="text-text-tertiary system-2xs-medium-uppercase">
+            {t('chat.poweredBy', { ns: 'share' })}
+          </div>
+          {systemFeatures.branding.enabled
+            && systemFeatures.branding.workspace_logo
+            ? (
+                <img
+                  src={systemFeatures.branding.workspace_logo}
+                  alt="logo"
+                  className="block h-5 w-auto"
+                />
+              )
             : customConfig?.replace_webapp_logo
-              ? <img src={customConfig.replace_webapp_logo} alt="logo" className="block h-5 w-auto" />
-              : <DifyLogo size="small" />}
+              ? (
+                  <img
+                    src={customConfig.replace_webapp_logo}
+                    alt="logo"
+                    className="block h-5 w-auto"
+                  />
+                )
+              : (
+                  <DifyLogo size="small" />
+                )}
         </div>
       )}
     </div>

@@ -3,8 +3,8 @@ import type { FC } from 'react'
 import * as React from 'react'
 import { useState } from 'react'
 import { Carousel } from '@/app/components/base/carousel'
-import ImagePreviewer from '@/app/components/datasets/common/image-previewer'
 import ImagePreview from '@/app/components/base/image-uploader/image-preview'
+import ImagePreviewer from '@/app/components/datasets/common/image-previewer'
 import { cn } from '@/utils/classnames'
 import s from './style.module.css'
 
@@ -71,7 +71,10 @@ const ImageGallery: FC<Props> = ({
                   data-testid="gallery-image-button"
                 >
                   <div className={s.markdownCardHeader}>
-                    <span className={s.markdownCardTitle}>流程图 {index + 1}</span>
+                    <span className={s.markdownCardTitle}>
+                      流程图
+                      {index + 1}
+                    </span>
                     <span className={s.markdownCardMeta}>点击查看</span>
                   </div>
                   <img
@@ -83,7 +86,11 @@ const ImageGallery: FC<Props> = ({
                   />
                   <div className={s.markdownCardFooter}>
                     <span className={s.markdownCardCaption}>左右滑动查看</span>
-                    <span className={s.markdownCardIndex}>{index + 1}/{imgNum}</span>
+                    <span className={s.markdownCardIndex}>
+                      {index + 1}
+                      /
+                      {imgNum}
+                    </span>
                   </div>
                 </button>
               </Carousel.Item>

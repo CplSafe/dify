@@ -1,6 +1,6 @@
 import type { FC } from 'react'
-import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import type { InputValueTypes, Task, TextGenerationRunControl } from './types'
+import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import type { PromptConfig } from '@/models/debug'
 import type { SiteInfo } from '@/models/share'
 import type { AppSourceType } from '@/service/share'

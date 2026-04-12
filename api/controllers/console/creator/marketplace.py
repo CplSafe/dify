@@ -104,7 +104,7 @@ class MarketplaceAppDetailApi(Resource):
         marketplace_entry = db.session.scalar(
             select(MarketplaceApp).where(
                 MarketplaceApp.app_id == str(app_id),
-                MarketplaceApp.is_active == True,  # noqa: E712
+                MarketplaceApp.is_active == True,
             )
         )
         if not marketplace_entry:
@@ -151,7 +151,7 @@ class MarketplaceAppInstallApi(Resource):
         marketplace_entry = db.session.scalar(
             select(MarketplaceApp).where(
                 MarketplaceApp.app_id == str(app_id),
-                MarketplaceApp.is_active == True,  # noqa: E712
+                MarketplaceApp.is_active == True,
             )
         )
         if not marketplace_entry:

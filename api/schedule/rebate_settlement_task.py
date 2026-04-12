@@ -104,7 +104,7 @@ def rebate_settlement_task():
     click.echo(f"Found consumption for {len(consumption_rows)} invitees.")
 
     # 5. Calculate and distribute rebates
-    total_rebate_distributed = Decimal("0")
+    total_rebate_distributed = Decimal(0)
     records_created = 0
 
     for invitee_account_id, consumption_abs in consumption_rows:
@@ -135,12 +135,12 @@ def rebate_settlement_task():
 
         # Calculate rebate
         if cost_rate > 0:
-            profit = consumption * (Decimal("1") - cost_rate / Decimal("100"))
-            rebate_amount = profit * rebate_rate / Decimal("100")
-            cost_amount = consumption * cost_rate / Decimal("100")
+            profit = consumption * (Decimal(1) - cost_rate / Decimal(100))
+            rebate_amount = profit * rebate_rate / Decimal(100)
+            cost_amount = consumption * cost_rate / Decimal(100)
         else:
-            rebate_amount = consumption * rebate_rate / Decimal("100")
-            cost_amount = Decimal("0")
+            rebate_amount = consumption * rebate_rate / Decimal(100)
+            cost_amount = Decimal(0)
 
         rebate_amount = rebate_amount.quantize(Decimal("0.000001"))
         cost_amount = cost_amount.quantize(Decimal("0.000001"))

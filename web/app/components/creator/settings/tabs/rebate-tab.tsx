@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
 import { RiLoader4Line } from '@remixicon/react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from '@/app/components/base/ui/toast'
 import { get } from '@/service/base'
 
@@ -39,7 +39,7 @@ export default function RebateTab() {
     setLoading(true)
     try {
       const [recordsResp, summaryResp] = await Promise.all([
-        get<{ data: RebateRecord[]; total: number }>(`/creator/rebate/records?page=${page}&per_page=${perPage}`),
+        get<{ data: RebateRecord[], total: number }>(`/creator/rebate/records?page=${page}&per_page=${perPage}`),
         get<RebateSummary>('/creator/rebate/summary'),
       ])
       setRecords(recordsResp.data || [])
@@ -68,13 +68,15 @@ export default function RebateTab() {
           <div className="rounded-xl border border-divider-regular bg-components-panel-bg p-4">
             <div className="text-xs text-text-quaternary">累计返点收入</div>
             <div className="mt-1 text-xl font-bold text-state-success-text">
-              ¥{Number(summary.total_rebate).toFixed(2)}
+              ¥
+              {Number(summary.total_rebate).toFixed(2)}
             </div>
           </div>
           <div className="rounded-xl border border-divider-regular bg-components-panel-bg p-4">
             <div className="text-xs text-text-quaternary">下级累计消耗</div>
             <div className="mt-1 text-xl font-bold text-text-primary">
-              ¥{Number(summary.total_consumption).toFixed(2)}
+              ¥
+              {Number(summary.total_consumption).toFixed(2)}
             </div>
           </div>
           <div className="rounded-xl border border-divider-regular bg-components-panel-bg p-4">
@@ -118,15 +120,22 @@ export default function RebateTab() {
                     {records.map(r => (
                       <div key={r.id} className="flex h-10 items-center border-b border-divider-subtle text-sm text-text-secondary last:border-b-0">
                         <div className="w-28 shrink-0 px-3 text-text-tertiary">{r.settlement_date}</div>
-                        <div className="w-32 shrink-0 truncate px-3">{r.invitee_name || r.invitee_account_id.slice(0, 8) + '...'}</div>
-                        <div className="w-28 shrink-0 px-3 text-right font-mono">¥{Number(r.consumption_amount).toFixed(2)}</div>
+                        <div className="w-32 shrink-0 truncate px-3">{r.invitee_name || `${r.invitee_account_id.slice(0, 8)}...`}</div>
+                        <div className="w-28 shrink-0 px-3 text-right font-mono">
+                          ¥
+                          {Number(r.consumption_amount).toFixed(2)}
+                        </div>
                         <div className="w-28 shrink-0 px-3 text-right font-mono text-text-quaternary">
                           {Number(r.cost_amount) > 0 ? `¥${Number(r.cost_amount).toFixed(2)}` : '-'}
                         </div>
                         <div className="w-28 shrink-0 px-3 text-right font-mono font-medium text-state-success-text">
-                          +¥{Number(r.rebate_amount).toFixed(2)}
+                          +¥
+                          {Number(r.rebate_amount).toFixed(2)}
                         </div>
-                        <div className="w-20 shrink-0 px-3 text-right text-text-quaternary">{Number(r.rebate_rate)}%</div>
+                        <div className="w-20 shrink-0 px-3 text-right text-text-quaternary">
+                          {Number(r.rebate_rate)}
+                          %
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -134,7 +143,12 @@ export default function RebateTab() {
                   {/* Pagination */}
                   {totalPages > 1 && (
                     <div className="mt-3 flex items-center justify-between text-xs text-text-tertiary">
-                      <div>共 {total} 条记录</div>
+                      <div>
+                        共
+                        {total}
+                        {' '}
+                        条记录
+                      </div>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -144,7 +158,13 @@ export default function RebateTab() {
                         >
                           上一页
                         </button>
-                        <span>{page} / {totalPages}</span>
+                        <span>
+                          {page}
+                          {' '}
+                          /
+                          {' '}
+                          {totalPages}
+                        </span>
                         <button
                           type="button"
                           disabled={page >= totalPages}

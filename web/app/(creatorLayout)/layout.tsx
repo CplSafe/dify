@@ -3,11 +3,11 @@ import * as React from 'react'
 import { AppInitializer } from '@/app/components/app-initializer'
 import AmplitudeProvider from '@/app/components/base/amplitude'
 import GA, { GaType } from '@/app/components/base/ga'
+import CreatorSidebar from '@/app/components/creator/sidebar'
 import { AppContextProvider } from '@/context/app-context-provider'
 import { EventEmitterContextProvider } from '@/context/event-emitter-provider'
 import { ModalContextProvider } from '@/context/modal-context-provider'
 import { ProviderContextProvider } from '@/context/provider-context-provider'
-import CreatorSidebar from '@/app/components/creator/sidebar'
 
 const CreatorLayout = ({ children }: { children: ReactNode }) => {
   return (

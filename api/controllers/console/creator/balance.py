@@ -52,9 +52,10 @@ class AdminBalancesApi(Resource):
         balances, total = UserBillingService.get_all_balances(limit=limit, offset=offset)
 
         # Enrich with account names
+        from sqlalchemy import select
+
         from models.account import Account
         from models.engine import db
-        from sqlalchemy import select
 
         result = []
         for b in balances:

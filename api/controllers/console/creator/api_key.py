@@ -11,7 +11,6 @@ from sqlalchemy import select
 
 from controllers.console import console_ns
 from controllers.console.wraps import account_initialization_required, setup_required
-from libs.datetime_utils import naive_utc_now
 from libs.login import current_account_with_tenant, login_required
 from models.creator import UserGlobalApiKey
 from models.engine import db

@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
 import { RiArrowRightUpLine, RiEyeLine, RiEyeOffLine, RiLoader4Line, RiRefreshLine } from '@remixicon/react'
+import { useCallback, useEffect, useState } from 'react'
 import Button from '@/app/components/base/button'
 import { toast } from '@/app/components/base/ui/toast'
 import { CreatorKeyModal } from '@/app/components/creator/creator-key-modal'
@@ -27,10 +27,10 @@ type MarketplaceApp = {
 }
 
 const MODE_LABEL: Record<string, string> = {
-  workflow: '工作流',
+  'workflow': '工作流',
   'advanced-chat': '高级对话',
-  chat: '对话',
-  agent: 'Agent',
+  'chat': '对话',
+  'agent': 'Agent',
   'text-generation': '文本生成',
 }
 
@@ -138,8 +138,14 @@ export default function ApiKeyTab() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-xs text-text-tertiary">
-                  <div><div className="text-text-quaternary">创建时间</div><div className="mt-0.5 text-text-secondary">{formatDate(apiKey.created_at)}</div></div>
-                  <div><div className="text-text-quaternary">最后使用</div><div className="mt-0.5 text-text-secondary">{formatDate(apiKey.last_used_at)}</div></div>
+                  <div>
+                    <div className="text-text-quaternary">创建时间</div>
+                    <div className="mt-0.5 text-text-secondary">{formatDate(apiKey.created_at)}</div>
+                  </div>
+                  <div>
+                    <div className="text-text-quaternary">最后使用</div>
+                    <div className="mt-0.5 text-text-secondary">{formatDate(apiKey.last_used_at)}</div>
+                  </div>
                 </div>
 
                 <div className="mt-4 flex items-center gap-3 border-t border-divider-subtle pt-4">

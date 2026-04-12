@@ -50,7 +50,7 @@ def _creator_marketplace_balance_insufficient(app_id: str, account: Account) -> 
     marketplace_entry = db.session.scalar(
         select(MarketplaceApp).where(
             MarketplaceApp.app_id == str(app_id),
-            MarketplaceApp.is_active == True,  # noqa: E712
+            MarketplaceApp.is_active == True,
         )
     )
     return bool(marketplace_entry) and not UserBillingService.check_balance_positive(account.id)

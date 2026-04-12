@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { RiAddLine, RiUserLine, RiCoinLine, RiArrowUpLine, RiArrowDownLine } from '@remixicon/react'
-import { useAppContext } from '@/context/app-context'
+import { RiAddLine, RiArrowDownLine, RiArrowUpLine } from '@remixicon/react'
 import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useAppContext } from '@/context/app-context'
 
 type Balance = {
   account_id: string
@@ -66,7 +66,7 @@ export default function AdminBillingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           account_id: topupForm.account_id,
-          amount: parseFloat(topupForm.amount),
+          amount: Number.parseFloat(topupForm.amount),
           description: topupForm.description,
         }),
       })
@@ -197,8 +197,9 @@ export default function AdminBillingPage() {
                           </td>
                           <td className="px-4 py-3 font-mono text-xs text-text-quaternary">{b.account_id}</td>
                           <td className="px-4 py-3 text-right">
-                            <span className={`font-semibold ${parseFloat(b.balance) < 0 ? 'text-red-600' : 'text-text-primary'}`}>
-                              ¥{parseFloat(b.balance).toFixed(2)}
+                            <span className={`font-semibold ${Number.parseFloat(b.balance) < 0 ? 'text-red-600' : 'text-text-primary'}`}>
+                              ¥
+                              {Number.parseFloat(b.balance).toFixed(2)}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center">
@@ -240,7 +241,9 @@ export default function AdminBillingPage() {
                           </td>
                           <td className="px-4 py-3 font-mono text-xs text-text-quaternary">{r.account_id}</td>
                           <td className="px-4 py-3 text-right font-semibold text-text-primary">
-                            {r.record_type === 'topup' ? '+' : '-'}¥{parseFloat(r.amount).toFixed(4)}
+                            {r.record_type === 'topup' ? '+' : '-'}
+                            ¥
+                            {Number.parseFloat(r.amount).toFixed(4)}
                           </td>
                           <td className="px-4 py-3 text-text-secondary max-w-[200px] truncate">{r.description || '-'}</td>
                           <td className="px-4 py-3 text-xs text-text-quaternary">

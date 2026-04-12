@@ -26,15 +26,17 @@ const ContentWrapper = ({
 
   return (
     <div
-      className={cn('rounded-[24px] border border-components-panel-border-subtle bg-background-default/95 p-3 shadow-sm backdrop-blur-xs', className)}
+      className={cn('rounded-[32px] border border-[#E9E9EB] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)]', className)}
       data-testid="content-wrapper"
     >
-      <div className="flex items-center gap-2 px-2 pt-1 pb-2">
+      <div className="flex items-center gap-2 px-1 pt-1 pb-4 border-b border-[#F4F4F5] mb-4">
         {/* node icon */}
-        <BlockIcon type={BlockEnum.HumanInput} className="shrink-0" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+          <BlockIcon type={BlockEnum.HumanInput} className="shrink-0 scale-90" />
+        </div>
         {/* node name */}
         <div
-          className="system-sm-semibold-uppercase grow truncate text-text-primary"
+          className="text-[15px] font-bold grow truncate text-text-primary"
           title={nodeTitle}
         >
           {nodeTitle}
@@ -58,7 +60,7 @@ const ContentWrapper = ({
         )}
       </div>
       {(!showExpandIcon || isExpanded) && (
-        <div className="rounded-2xl bg-background-section px-3 py-3">
+        <div className="px-1">
           {/* human input form content */}
           {children}
         </div>

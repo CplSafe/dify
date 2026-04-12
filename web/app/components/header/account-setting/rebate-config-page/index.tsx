@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
 import { RiLoader4Line, RiSave3Line } from '@remixicon/react'
+import { useCallback, useEffect, useState } from 'react'
 import Button from '@/app/components/base/button'
 import { toast } from '@/app/components/base/ui/toast'
 import { get, put } from '@/service/base'
@@ -51,8 +51,8 @@ export default function RebateConfigPage() {
   }, [loadConfig])
 
   const handleSave = async () => {
-    const rate = parseFloat(rebateRate)
-    const cost = parseFloat(costRate)
+    const rate = Number.parseFloat(rebateRate)
+    const cost = Number.parseFloat(costRate)
     if (isNaN(rate) || rate < 0 || rate > 100) {
       toast.error('返点比例必须在 0-100 之间')
       return
@@ -93,8 +93,8 @@ export default function RebateConfigPage() {
 
   // Calculate example for preview
   const exampleConsumption = 1000
-  const rateNum = parseFloat(rebateRate) || 0
-  const costNum = parseFloat(costRate) || 0
+  const rateNum = Number.parseFloat(rebateRate) || 0
+  const costNum = Number.parseFloat(costRate) || 0
   const exampleProfit = costNum > 0
     ? exampleConsumption * (1 - costNum / 100)
     : exampleConsumption
@@ -173,7 +173,7 @@ export default function RebateConfigPage() {
             </label>
             <select
               value={settlementHour}
-              onChange={e => setSettlementHour(parseInt(e.target.value))}
+              onChange={e => setSettlementHour(Number.parseInt(e.target.value))}
               className="w-full rounded-lg border border-divider-regular bg-components-input-bg-normal px-3 py-2 text-sm text-text-primary outline-none focus:border-components-input-border-active"
             >
               {Array.from({ length: 24 }, (_, i) => (
@@ -190,15 +190,47 @@ export default function RebateConfigPage() {
         <div className="mt-6 rounded-lg bg-background-section p-4">
           <div className="mb-2 text-xs font-medium text-text-tertiary">返点计算预览</div>
           <div className="text-sm text-text-secondary">
-            假设下级用户前一天消耗 <span className="font-mono font-semibold">¥{exampleConsumption.toFixed(2)}</span>
+            假设下级用户前一天消耗
+            {' '}
+            <span className="font-mono font-semibold">
+              ¥
+              {exampleConsumption.toFixed(2)}
+            </span>
             {costNum > 0 && (
               <>
-                ，扣除成本 <span className="font-mono">{costNum}%</span> = <span className="font-mono font-semibold">¥{(exampleConsumption * costNum / 100).toFixed(2)}</span>
-                ，利润 <span className="font-mono font-semibold">¥{exampleProfit.toFixed(2)}</span>
+                ，扣除成本
+                {' '}
+                <span className="font-mono">
+                  {costNum}
+                  %
+                </span>
+                {' '}
+                =
+                {' '}
+                <span className="font-mono font-semibold">
+                  ¥
+                  {(exampleConsumption * costNum / 100).toFixed(2)}
+                </span>
+                ，利润
+                {' '}
+                <span className="font-mono font-semibold">
+                  ¥
+                  {exampleProfit.toFixed(2)}
+                </span>
               </>
             )}
-            ，返点 <span className="font-mono">{rateNum}%</span> =&nbsp;
-            <span className="font-mono font-bold text-state-success-text">¥{exampleRebate.toFixed(2)}</span>
+            ，返点
+            {' '}
+            <span className="font-mono">
+              {rateNum}
+              %
+            </span>
+            {' '}
+            =&nbsp;
+            <span className="font-mono font-bold text-state-success-text">
+              ¥
+              {exampleRebate.toFixed(2)}
+            </span>
           </div>
         </div>
       </div>
@@ -216,7 +248,8 @@ export default function RebateConfigPage() {
       {/* Last updated info */}
       {config && (
         <div className="text-xs text-text-quaternary">
-          最后更新：{new Date(config.updated_at).toLocaleString('zh-CN', { hour12: false })}
+          最后更新：
+          {new Date(config.updated_at).toLocaleString('zh-CN', { hour12: false })}
         </div>
       )}
     </div>

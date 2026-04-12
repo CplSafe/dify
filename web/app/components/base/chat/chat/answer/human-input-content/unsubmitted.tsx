@@ -1,6 +1,6 @@
 import type { UnsubmittedHumanInputContentProps } from './type'
 import ExpirationTime from './expiration-time'
-import HumanInputForm from './human-input-form'
+import HumanInputFormRefined from './human-input-form-refined'
 import Tips from './tips'
 
 export const UnsubmittedHumanInputContent = ({
@@ -15,7 +15,7 @@ export const UnsubmittedHumanInputContent = ({
   return (
     <>
       {/* Form */}
-      <HumanInputForm
+      <HumanInputFormRefined
         formData={formData}
         onSubmit={onSubmit}
       />
@@ -34,3 +34,4 @@ export const UnsubmittedHumanInputContent = ({
     </>
   )
 }
+

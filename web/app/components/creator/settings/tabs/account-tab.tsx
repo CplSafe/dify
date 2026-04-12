@@ -7,6 +7,8 @@ import { RiGraduationCapFill } from '@remixicon/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import AvatarWithEdit from '@/app/account/(commonLayout)/account-page/AvatarWithEdit'
+import EmailChangeModal from '@/app/account/(commonLayout)/account-page/email-change-modal'
 import Button from '@/app/components/base/button'
 import Input from '@/app/components/base/input'
 import PremiumBadge from '@/app/components/base/premium-badge'
@@ -17,8 +19,6 @@ import { useGlobalPublicStore } from '@/context/global-public-context'
 import { useProviderContext } from '@/context/provider-context'
 import { updateUserProfile } from '@/service/common'
 import { commonQueryKeys, useUserProfile } from '@/service/use-common'
-import AvatarWithEdit from '@/app/account/(commonLayout)/account-page/AvatarWithEdit'
-import EmailChangeModal from '@/app/account/(commonLayout)/account-page/email-change-modal'
 
 const titleClassName = 'system-sm-semibold text-text-secondary'
 
@@ -81,7 +81,8 @@ export default function AccountTab() {
   }
 
   const handleSavePassword = async () => {
-    if (!valid()) return
+    if (!valid())
+      return
     try {
       setEditing(true)
       await updateUserProfile({

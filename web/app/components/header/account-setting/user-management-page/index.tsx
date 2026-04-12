@@ -1,12 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
 import { RiArrowDownSLine, RiArrowRightSLine, RiLoader4Line, RiWalletLine } from '@remixicon/react'
-import { get, post } from '@/service/base'
-import { cn } from '@/utils/classnames'
+import { useCallback, useEffect, useState } from 'react'
 import Button from '@/app/components/base/button'
 import Input from '@/app/components/base/input'
 import { toast } from '@/app/components/base/ui/toast'
+import { get, post } from '@/service/base'
+import { cn } from '@/utils/classnames'
 
 type UserBalance = {
   account_id: string
@@ -55,7 +55,7 @@ export default function UserManagementPage() {
   const loadUsers = useCallback(async (off: number) => {
     setLoading(true)
     try {
-      const resp = await get<{ data: UserBalance[]; total: number }>('/creator/admin/balances', {
+      const resp = await get<{ data: UserBalance[], total: number }>('/creator/admin/balances', {
         params: { limit, offset: off },
       })
       setUsers(resp.data)
@@ -92,7 +92,7 @@ export default function UserManagementPage() {
     }))
 
     try {
-      const resp = await get<{ data: BillingRecord[]; total: number }>('/creator/admin/billing/records', {
+      const resp = await get<{ data: BillingRecord[], total: number }>('/creator/admin/billing/records', {
         params: { account_id: accountId, limit: 10, offset: 0 },
       })
       setExpanded(prev => ({
@@ -114,7 +114,7 @@ export default function UserManagementPage() {
       return
     const nextOffset = cur.offset + 10
     try {
-      const resp = await get<{ data: BillingRecord[]; total: number }>('/creator/admin/billing/records', {
+      const resp = await get<{ data: BillingRecord[], total: number }>('/creator/admin/billing/records', {
         params: { account_id: accountId, limit: 10, offset: nextOffset },
       })
       setExpanded(prev => ({
@@ -135,7 +135,7 @@ export default function UserManagementPage() {
   const handleTopup = async () => {
     if (!topupAccountId || !topupAmount)
       return
-    const amount = parseFloat(topupAmount)
+    const amount = Number.parseFloat(topupAmount)
     if (isNaN(amount) || amount <= 0) {
       toast.error('请输入有效的金额')
       return
@@ -235,7 +235,12 @@ export default function UserManagementPage() {
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm font-semibold text-text-primary">
             用户列表
-            <span className="ml-2 text-xs font-normal text-text-tertiary">共 {total} 人</span>
+            <span className="ml-2 text-xs font-normal text-text-tertiary">
+              共
+              {total}
+              {' '}
+              人
+            </span>
           </span>
         </div>
 
@@ -295,8 +300,11 @@ export default function UserManagementPage() {
                             user.is_sufficient
                               ? 'bg-state-success-hover text-state-success-text'
                               : 'bg-state-destructive-hover text-state-destructive-text',
-                          )}>
-                            {Number(user.balance).toFixed(2)} {user.currency}
+                          )}
+                          >
+                            {Number(user.balance).toFixed(2)}
+                            {' '}
+                            {user.currency}
                           </div>
 
                           {/* Updated at */}
@@ -335,17 +343,27 @@ export default function UserManagementPage() {
                                               rec.record_type === 'topup' || rec.record_type === 'refund'
                                                 ? 'text-state-success-text'
                                                 : 'text-state-destructive-text',
-                                            )}>
+                                            )}
+                                            >
                                               {recordTypeLabel(rec.record_type)}
-                                              {rec.description ? <span className="ml-1 text-text-quaternary font-normal">· {rec.description}</span> : null}
+                                              {rec.description
+                                                ? (
+                                                    <span className="ml-1 text-text-quaternary font-normal">
+                                                      ·
+                                                      {rec.description}
+                                                    </span>
+                                                  )
+                                                : null}
                                             </span>
                                             <span className={cn(
                                               'text-right font-medium',
                                               rec.record_type === 'topup' || rec.record_type === 'refund'
                                                 ? 'text-state-success-text'
                                                 : 'text-state-destructive-text',
-                                            )}>
-                                              {rec.record_type === 'deduction' ? '-' : '+'}{Number(rec.amount).toFixed(4)}
+                                            )}
+                                            >
+                                              {rec.record_type === 'deduction' ? '-' : '+'}
+                                              {Number(rec.amount).toFixed(4)}
                                             </span>
                                           </div>
                                         ))}
@@ -393,7 +411,10 @@ export default function UserManagementPage() {
               上一页
             </Button>
             <span className="flex items-center px-2 text-xs text-text-tertiary">
-              {Math.floor(offset / limit) + 1} / {Math.ceil(total / limit)}
+              {Math.floor(offset / limit) + 1}
+              {' '}
+              /
+              {Math.ceil(total / limit)}
             </span>
             <Button
               size="small"

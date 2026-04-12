@@ -13,8 +13,6 @@ import {
 import MenuDialog from '@/app/components/header/account-setting/menu-dialog'
 import { useAppContext } from '@/context/app-context'
 import { useProviderContext } from '@/context/provider-context'
-import RebateConfigPage from './rebate-config-page'
-import UserManagementPage from './user-management-page'
 import useBreakpoints, { MediaType } from '@/hooks/use-breakpoints'
 import { cn } from '@/utils/classnames'
 import Button from '../../base/button'
@@ -24,6 +22,8 @@ import LanguagePage from './language-page'
 import MembersPage from './members-page'
 import ModelProviderPage from './model-provider-page'
 import { useResetModelProviderListExpanded } from './model-provider-page/atoms'
+import RebateConfigPage from './rebate-config-page'
+import UserManagementPage from './user-management-page'
 
 const iconClassName = `
   w-5 h-5 mr-2

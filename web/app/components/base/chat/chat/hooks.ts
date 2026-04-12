@@ -5,9 +5,9 @@ import type {
   Inputs,
 } from '../types'
 import type { InputForm } from './type'
-import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import type AudioPlayer from '@/app/components/base/audio-btn/audio'
 import type { FileEntity } from '@/app/components/base/file-uploader/types'
+import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import type { Annotation } from '@/models/log'
 import type {
   IOnDataMoreInfo,

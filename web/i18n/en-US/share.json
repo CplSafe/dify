@@ -1,6 +1,6 @@
 {
-  "chat.chatFormTip": "Chat settings cannot be modified after the chat has started.",
   "chat.aiGeneratedDisclaimer": "AI-generated content, for reference only.",
+  "chat.chatFormTip": "Chat settings cannot be modified after the chat has started.",
   "chat.chatSettingsTitle": "New chat setup",
   "chat.collapse": "Collapse",
   "chat.configDisabled": "Previous session settings have been used for this session.",

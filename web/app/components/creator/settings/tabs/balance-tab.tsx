@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
 import { RiArrowDownLine, RiArrowUpLine, RiLoader4Line } from '@remixicon/react'
+import { useCallback, useEffect, useState } from 'react'
 import Button from '@/app/components/base/button'
 import Input from '@/app/components/base/input'
 import { toast } from '@/app/components/base/ui/toast'
@@ -86,7 +86,8 @@ export default function BalanceTab() {
   }, [loadData])
 
   const handleTopup = async () => {
-    if (!topupAccountId || !topupAmount) return
+    if (!topupAccountId || !topupAmount)
+      return
     const amount = Number(topupAmount)
     if (!amount || amount <= 0) {
       toast.error('请输入有效金额')
@@ -132,7 +133,8 @@ export default function BalanceTab() {
               <span className={cn(
                 'text-2xl font-bold',
                 balance.is_sufficient ? 'text-text-primary' : 'text-state-destructive-text',
-              )}>
+              )}
+              >
                 {Number(balance.balance).toFixed(2)}
               </span>
               <span className="ml-1 text-sm">{balance.currency}</span>
@@ -162,7 +164,13 @@ export default function BalanceTab() {
                 <option value="">请选择用户...</option>
                 {adminBalances.map(b => (
                   <option key={b.account_id} value={b.account_id}>
-                    {b.account_name}（{b.account_email}）— 余额 {Number(b.balance).toFixed(2)} {b.currency}
+                    {b.account_name}
+                    （
+                    {b.account_email}
+                    ）— 余额
+                    {Number(b.balance).toFixed(2)}
+                    {' '}
+                    {b.currency}
                   </option>
                 ))}
               </select>
@@ -223,7 +231,9 @@ export default function BalanceTab() {
                   </div>
                 </div>
                 <div className="w-[140px] shrink-0 px-4 py-3 text-text-secondary system-sm-regular">
-                  {Number(b.balance).toFixed(2)} {b.currency}
+                  {Number(b.balance).toFixed(2)}
+                  {' '}
+                  {b.currency}
                 </div>
                 <div className="w-[80px] shrink-0 px-4 py-3">
                   <span className={cn(
@@ -231,7 +241,8 @@ export default function BalanceTab() {
                     b.is_sufficient
                       ? 'bg-state-success-hover text-state-success-text'
                       : 'bg-state-destructive-hover text-state-destructive-text',
-                  )}>
+                  )}
+                  >
                     {b.is_sufficient ? '充足' : '不足'}
                   </span>
                 </div>
@@ -267,7 +278,8 @@ export default function BalanceTab() {
                           r.record_type === 'topup'
                             ? 'bg-state-success-hover text-state-success-text'
                             : 'bg-state-destructive-hover text-state-destructive-text',
-                        )}>
+                        )}
+                        >
                           {r.record_type === 'topup'
                             ? <RiArrowUpLine className="h-3.5 w-3.5" />
                             : <RiArrowDownLine className="h-3.5 w-3.5" />}
@@ -282,8 +294,10 @@ export default function BalanceTab() {
                       <div className={cn(
                         'w-[100px] shrink-0 px-4 py-3 text-right system-sm-semibold',
                         r.record_type === 'topup' ? 'text-state-success-text' : 'text-state-destructive-text',
-                      )}>
-                        {r.record_type === 'topup' ? '+' : '-'}{Number(r.amount).toFixed(2)}
+                      )}
+                      >
+                        {r.record_type === 'topup' ? '+' : '-'}
+                        {Number(r.amount).toFixed(2)}
                       </div>
                     </div>
                   ))}

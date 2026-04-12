@@ -1,6 +1,6 @@
 {
-  "chat.chatFormTip": "对话开始后，对话设置将无法修改。",
   "chat.aiGeneratedDisclaimer": "内容由 AI 生成，仅供参考",
+  "chat.chatFormTip": "对话开始后，对话设置将无法修改。",
   "chat.chatSettingsTitle": "新对话设置",
   "chat.collapse": "折叠",
   "chat.configDisabled": "此次会话已使用上次会话表单",

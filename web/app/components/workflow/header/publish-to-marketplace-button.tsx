@@ -70,7 +70,13 @@ const PublishToMarketplaceButton = () => {
       >
         <RiStoreLine className="h-4 w-4" />
         {dateLabel
-          ? <span>{dateLabel} 已发布</span>
+          ? (
+              <span>
+                {dateLabel}
+                {' '}
+                已发布
+              </span>
+            )
           : <span>发布</span>}
       </div>
     </TipPopup>

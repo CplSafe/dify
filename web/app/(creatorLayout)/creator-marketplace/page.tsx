@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { RiArrowRightLine, RiChat3Line, RiLayoutGridLine, RiTimeLine, RiVideoLine } from '@remixicon/react'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { get } from '@/service/base'
 import { cn } from '@/utils/classnames'
 
@@ -134,7 +134,8 @@ export default function CreatorMarketplacePage() {
                           <span className={cn(
                             'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-text-tertiary',
                             'bg-background-default-dimm border border-divider-subtle',
-                          )}>
+                          )}
+                          >
                             {getModeIcon(app.app_mode)}
                             {getModeLabel(app.app_mode)}
                           </span>
@@ -157,7 +158,10 @@ export default function CreatorMarketplacePage() {
                             <span>{formatDate(app.published_at)}</span>
                           </div>
                           {app.published_by_name && (
-                            <span>by {app.published_by_name}</span>
+                            <span>
+                              by
+                              {app.published_by_name}
+                            </span>
                           )}
                         </div>
                         <div className="flex items-center gap-1 text-xs font-medium text-primary-600 opacity-0 transition-opacity group-hover:opacity-100">

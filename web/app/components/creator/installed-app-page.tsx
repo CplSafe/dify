@@ -1,13 +1,14 @@
 'use client'
 
-import type { InstalledApp as InstalledAppType } from '@/models/explore'
 import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { InstalledApp as InstalledAppType } from '@/models/explore'
 import { RiLoader4Line } from '@remixicon/react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import AppUnavailable from '@/app/components/base/app-unavailable'
+import { clearCreatorHomeDraft, getCreatorHomeDraft } from '@/app/components/creator/chat-draft'
 import InstalledApp from '@/app/components/explore/installed-app'
-import { fetchInstalledAppList } from '@/service/explore'
 import { get, post } from '@/service/base'
+import { fetchInstalledAppList } from '@/service/explore'
 
 type MarketplaceApp = {
   id: string
@@ -32,6 +33,7 @@ export default function CreatorInstalledApp({
   const [loading, setLoading] = useState(!initialMarketplaceApps)
   const [isSavingWork, setIsSavingWork] = useState(false)
   const [savedResultIds, setSavedResultIds] = useState<Record<string, true>>({})
+  const [initialDraft, setInitialDraft] = useState(() => getCreatorHomeDraft())
 
   useEffect(() => {
     setLoading(true)
@@ -53,6 +55,10 @@ export default function CreatorInstalledApp({
       })
       .finally(() => setLoading(false))
   }, [initialMarketplaceApps, installedAppId])
+
+  useEffect(() => {
+    setInitialDraft(getCreatorHomeDraft())
+  }, [installedAppId])
 
   const creatorAppIds = useMemo(() => new Set(marketplaceApps.map(app => app.app_id)), [marketplaceApps])
   const isValidCreatorInstalledApp = !!installedApp && creatorAppIds.has(installedApp.app.id)
@@ -101,17 +107,17 @@ export default function CreatorInstalledApp({
                 </div>
               )
             : !isValidCreatorInstalledApp
-              ? (
-                  <div className="py-2 text-sm text-text-tertiary">
-                    当前应用不属于创作者专区。
-                  </div>
-                )
-              : (
-                  <div>
-                    <h1 className="text-base font-semibold text-text-primary">创作者对话工作台</h1>
-                    <p className="mt-1 text-sm text-text-tertiary">复用应用原生对话能力，在创作者专区内直接完成创作。</p>
-                  </div>
-                )}
+                ? (
+                    <div className="py-2 text-sm text-text-tertiary">
+                      当前应用不属于创作者专区。
+                    </div>
+                  )
+                : (
+                    <div>
+                      <h1 className="text-base font-semibold text-text-primary">创作者对话工作台</h1>
+                      <p className="mt-1 text-sm text-text-tertiary">复用应用原生对话能力，在创作者专区内直接完成创作。</p>
+                    </div>
+                  )}
         </div>
       )}
 
@@ -135,6 +141,11 @@ export default function CreatorInstalledApp({
             )}
             <InstalledApp
               id={installedAppId}
+              initialDraft={initialDraft}
+              onInitialDraftConsumed={() => {
+                clearCreatorHomeDraft()
+                setInitialDraft(null)
+              }}
               onResultCompleted={handleResultCompleted}
             />
           </div>

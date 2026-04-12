@@ -57,6 +57,12 @@ export const fetchInstalledAppParams = (appId: string) => {
   }) as Promise<ChatConfig>
 }
 
+export const fetchTrialAppParams = (appId: string) => {
+  return consoleClient.trialApps.parameters({
+    params: { appId },
+  }) as Promise<ChatConfig>
+}
+
 export const fetchInstalledAppMeta = (appId: string) => {
   return consoleClient.explore.installedAppMeta({
     params: { appId },

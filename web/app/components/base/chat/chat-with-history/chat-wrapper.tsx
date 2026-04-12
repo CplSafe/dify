@@ -6,8 +6,9 @@ import type {
   OnSend,
 } from '../types'
 import type { FileUpload } from '@/app/components/base/features/types'
+import type { CreatorChatDraft } from '@/app/components/creator/chat-draft'
 import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import AnswerIcon from '@/app/components/base/answer-icon'
 import AppIcon from '@/app/components/base/app-icon'
@@ -37,8 +38,12 @@ import { getLastAnswer, isValidGeneratedAnswer } from '../utils'
 import { useChatWithHistoryContext } from './context'
 
 const ChatWrapper = ({
+  initialDraft,
+  onInitialDraftConsumed,
   onMessageCompleted,
 }: {
+  initialDraft?: CreatorChatDraft | null
+  onInitialDraftConsumed?: () => void
   onMessageCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
 }) => {
   const { t } = useTranslation()
@@ -260,6 +265,30 @@ const ChatWrapper = ({
       isPublicAPI: appSourceType === AppSourceType.webApp,
     })
   }, [handleSwitchSibling, currentConversationId, handleNewConversationCompleted, appSourceType, appId, onMessageCompleted])
+
+  const consumedInitialDraftIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!initialDraft)
+      return
+
+    if (consumedInitialDraftIdRef.current === initialDraft.id)
+      return
+
+    if (currentConversationId || respondingState)
+      return
+
+    const hasStartedConversation = chatList.some(item => !item.isOpeningStatement)
+    if (hasStartedConversation)
+      return
+
+    if (inputDisabled)
+      return
+
+    consumedInitialDraftIdRef.current = initialDraft.id
+    doSend(initialDraft.message, initialDraft.files as FileEntity[])
+    onInitialDraftConsumed?.()
+  }, [chatList, currentConversationId, doSend, initialDraft, inputDisabled, onInitialDraftConsumed, respondingState])
 
   const messageList = useMemo(() => {
     if (currentConversationId || chatList.length > 1)

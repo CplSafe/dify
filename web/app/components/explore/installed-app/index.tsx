@@ -1,4 +1,5 @@
 'use client'
+import type { CreatorChatDraft } from '@/app/components/creator/chat-draft'
 import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import type { AccessMode } from '@/models/access-control'
 import type { AppData } from '@/models/share'
@@ -15,9 +16,13 @@ import AppUnavailable from '../../base/app-unavailable'
 
 const InstalledApp = ({
   id,
+  initialDraft,
+  onInitialDraftConsumed,
   onResultCompleted,
 }: {
   id: string
+  initialDraft?: CreatorChatDraft | null
+  onInitialDraftConsumed?: () => void
   onResultCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
 }) => {
   const { data, isPending: isPendingInstalledApps, isFetching: isFetchingInstalledApps } = useGetInstalledApps()
@@ -124,6 +129,8 @@ const InstalledApp = ({
         <ChatWithHistory
           installedAppInfo={installedApp}
           className="overflow-hidden rounded-2xl shadow-md"
+          initialDraft={initialDraft}
+          onInitialDraftConsumed={onInitialDraftConsumed}
           onMessageCompleted={onResultCompleted}
         />
       )}

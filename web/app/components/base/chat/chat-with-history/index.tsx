@@ -1,5 +1,6 @@
 'use client'
 import type { FC } from 'react'
+import type { CreatorChatDraft } from '@/app/components/creator/chat-draft'
 import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import type { InstalledApp } from '@/models/explore'
 import {
@@ -23,10 +24,14 @@ import Sidebar from './sidebar'
 
 type ChatWithHistoryProps = {
   className?: string
+  initialDraft?: CreatorChatDraft | null
+  onInitialDraftConsumed?: () => void
   onMessageCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
 }
 const ChatWithHistory: FC<ChatWithHistoryProps> = ({
   className,
+  initialDraft,
+  onInitialDraftConsumed,
   onMessageCompleted,
 }) => {
   const {
@@ -104,7 +109,12 @@ const ChatWithHistory: FC<ChatWithHistoryProps> = ({
             <Loading type="app" />
           )}
           {!appChatListDataLoading && (
-            <ChatWrapper key={chatShouldReloadKey} onMessageCompleted={onMessageCompleted} />
+            <ChatWrapper
+              key={chatShouldReloadKey}
+              initialDraft={initialDraft}
+              onInitialDraftConsumed={onInitialDraftConsumed}
+              onMessageCompleted={onMessageCompleted}
+            />
           )}
         </div>
       </div>
@@ -115,11 +125,15 @@ const ChatWithHistory: FC<ChatWithHistoryProps> = ({
 type ChatWithHistoryWrapProps = {
   installedAppInfo?: InstalledApp
   className?: string
+  initialDraft?: CreatorChatDraft | null
+  onInitialDraftConsumed?: () => void
   onMessageCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
 }
 const ChatWithHistoryWrap: FC<ChatWithHistoryWrapProps> = ({
   installedAppInfo,
   className,
+  initialDraft,
+  onInitialDraftConsumed,
   onMessageCompleted,
 }) => {
   const media = useBreakpoints()
@@ -209,7 +223,12 @@ const ChatWithHistoryWrap: FC<ChatWithHistoryWrapProps> = ({
       initUserVariables,
     }}
     >
-      <ChatWithHistory className={className} onMessageCompleted={onMessageCompleted} />
+      <ChatWithHistory
+        className={className}
+        initialDraft={initialDraft}
+        onInitialDraftConsumed={onInitialDraftConsumed}
+        onMessageCompleted={onMessageCompleted}
+      />
     </ChatWithHistoryContext.Provider>
   )
 }
@@ -217,12 +236,16 @@ const ChatWithHistoryWrap: FC<ChatWithHistoryWrapProps> = ({
 const ChatWithHistoryWrapWithCheckToken: FC<ChatWithHistoryWrapProps> = ({
   installedAppInfo,
   className,
+  initialDraft,
+  onInitialDraftConsumed,
   onMessageCompleted,
 }) => {
   return (
     <ChatWithHistoryWrap
       installedAppInfo={installedAppInfo}
       className={className}
+      initialDraft={initialDraft}
+      onInitialDraftConsumed={onInitialDraftConsumed}
       onMessageCompleted={onMessageCompleted}
     />
   )

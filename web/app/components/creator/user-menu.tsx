@@ -1,15 +1,15 @@
 'use client'
 
+import type { CreatorSettingsTab } from './settings/creator-settings-modal'
+import { RiDashboardLine, RiLoader4Line, RiLogoutBoxRLine, RiTeamLine, RiUserLine, RiWalletLine } from '@remixicon/react'
 import { useCallback, useEffect, useState } from 'react'
-import { RiLoader4Line, RiLogoutBoxRLine, RiTeamLine, RiUserLine, RiWalletLine, RiDashboardLine } from '@remixicon/react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/app/components/base/ui/dropdown-menu'
 import { useAppContext } from '@/context/app-context'
+import { useRouter } from '@/next/navigation'
 import { get } from '@/service/base'
 import { useLogout } from '@/service/use-common'
-import { useRouter } from '@/next/navigation'
 import { cn } from '@/utils/classnames'
 import CreatorSettingsModal from './settings/creator-settings-modal'
-import type { CreatorSettingsTab } from './settings/creator-settings-modal'
 
 type Balance = {
   balance: string
@@ -45,17 +45,17 @@ export default function CreatorUserMenu() {
       loadBalance()
     }
 
-    const intervalId = globalThis.setInterval(() => {
-      loadBalance()
-    }, 15000)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible')
+        loadBalance()
+    }
 
     globalThis.addEventListener('focus', handleFocus)
-    document.addEventListener('visibilitychange', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
-      globalThis.clearInterval(intervalId)
       globalThis.removeEventListener('focus', handleFocus)
-      document.removeEventListener('visibilitychange', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [loadBalance])
 
@@ -78,26 +78,29 @@ export default function CreatorUserMenu() {
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-state-base-hover"
+            className="flex w-full items-center gap-3.5 rounded-xl pl-4 pr-3 py-3 transition-all hover:bg-[#F5F5F7] active:bg-[#EDEDF0] group"
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-700 shadow-sm ring-2 ring-white transition-transform group-hover:scale-[1.02]">
               {avatarLetter}
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-text-primary">{userProfile?.name || '用户'}</div>
-              <div className="flex items-center gap-1">
+            <div className="min-w-0 flex-1 text-left">
+              <div className="truncate text-sm font-semibold text-text-primary">{userProfile?.name || '用户'}</div>
+              <div className="flex items-center gap-1.5 mt-0.5">
                 {balanceLoading
                   ? <RiLoader4Line className="h-3 w-3 animate-spin text-text-quaternary" />
                   : balance
                     ? (
                         <span className={cn(
-                          'text-xs font-medium',
-                          balance.is_sufficient ? 'text-state-success-text' : 'text-state-destructive-text',
-                        )}>
-                          {Number(balance.balance).toFixed(2)} {balance.currency}
+                          'text-xs font-medium px-1.5 py-0.5 rounded-md bg-opacity-10',
+                          balance.is_sufficient ? 'text-state-success-text bg-state-success' : 'text-state-destructive-text bg-state-destructive',
+                        )}
+                        >
+                          {Number(balance.balance).toFixed(2)}
+                          {' '}
+                          {balance.currency}
                         </span>
                       )
-                    : <span className="text-xs text-text-quaternary">{userProfile?.email || ''}</span>}
+                    : <span className="text-xs text-text-quaternary truncate opacity-80">{userProfile?.email || ''}</span>}
               </div>
             </div>
           </button>
@@ -114,9 +117,12 @@ export default function CreatorUserMenu() {
                 balance.is_sufficient
                   ? 'bg-state-success-hover text-state-success-text'
                   : 'bg-state-destructive-hover text-state-destructive-text',
-              )}>
+              )}
+              >
                 <RiWalletLine className="h-3 w-3" />
-                {Number(balance.balance).toFixed(2)} {balance.currency}
+                {Number(balance.balance).toFixed(2)}
+                {' '}
+                {balance.currency}
               </div>
             )}
           </div>

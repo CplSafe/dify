@@ -10,6 +10,7 @@ import type { CreatorChatDraft } from '@/app/components/creator/chat-draft'
 import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePathname } from 'next/navigation'
 import AnswerIcon from '@/app/components/base/answer-icon'
 import AppIcon from '@/app/components/base/app-icon'
 import InputsForm from '@/app/components/base/chat/chat-with-history/inputs-form'
@@ -18,7 +19,7 @@ import ChatInputArea from '@/app/components/base/chat/chat/chat-input-area'
 import { FeaturesProvider } from '@/app/components/base/features/context'
 import { Markdown } from '@/app/components/base/markdown'
 import { FILE_EXTS } from '@/app/components/base/prompt-editor/constants'
-import { InputVarType, SupportUploadFileTypes } from '@/app/components/workflow/types'
+import { InputVarType, SupportUploadFileTypes, WorkflowRunningStatus } from '@/app/components/workflow/types'
 import {
   AppSourceType,
   fetchChatList,
@@ -36,6 +37,8 @@ import Chat from '../chat'
 import { useChat } from '../chat/hooks'
 import { getLastAnswer, isValidGeneratedAnswer } from '../utils'
 import { useChatWithHistoryContext } from './context'
+import CreatorTaskLayout from '@/app/components/creator/task-layout'
+import CreatorHomeInput from '@/app/components/creator/home-input'
 
 const ChatWrapper = ({
   initialDraft,
@@ -47,6 +50,8 @@ const ChatWrapper = ({
   onMessageCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
 }) => {
   const { t } = useTranslation()
+  const pathname = usePathname()
+  const isCreatorMode = pathname?.startsWith('/creator')
   const {
     appParams,
     appPrevChatTree,
@@ -71,6 +76,7 @@ const ChatWrapper = ({
     setIsResponding,
     allInputsHidden,
     initUserVariables,
+    getHumanInputNodeData,
   } = useChatWithHistoryContext()
   const appSourceType = isInstalledApp ? AppSourceType.installedApp : AppSourceType.webApp
 
@@ -359,6 +365,14 @@ const ChatWrapper = ({
   const welcome = useMemo(() => {
     const welcomeMessage = chatList.find(item => item.isOpeningStatement)
     if (showHomepage) {
+      if (isCreatorMode) {
+        return (
+          <div className="flex h-full w-full flex-col items-center justify-center pt-[10vh]">
+            <CreatorHomeInput onSubmit={(text, files) => doSend(text, files)} appParams={appParams} />
+          </div>
+        )
+      }
+
       const homepageDescription = appData?.site.description || ''
       const homepageTitle = appData?.site.title || '构界Agent'
       const quickActions = [
@@ -537,6 +551,45 @@ const ChatWrapper = ({
     : null
   const footerNote = <span>{t('chat.aiGeneratedDisclaimer', { ns: 'share' })}</span>
 
+  const activeHumanInputAnswer = useMemo(() => {
+    return chatList.find(item => item.isAnswer && item.humanInputFormDataList && item.humanInputFormDataList.length > 0)
+  }, [chatList])
+
+  // In creator mode, keep CreatorTaskLayout visible until the workflow finishes.
+  // This covers: pending forms, submitted-but-still-running, and resuming after refresh.
+  const creatorTaskAnswer = useMemo(() => {
+    if (!isCreatorMode)
+      return null
+    // Priority 1: answer with pending (unsubmitted) human input forms
+    const pending = chatList.find(item => item.isAnswer && item.humanInputFormDataList && item.humanInputFormDataList.length > 0)
+    if (pending)
+      return pending
+    // Priority 2: answer with submitted human input forms whose workflow is still running
+    const submitted = [...chatList].reverse().find((item) => {
+      if (!item.isAnswer)
+        return false
+      if (!item.humanInputFilledFormDataList || item.humanInputFilledFormDataList.length === 0)
+        return false
+      const status = item.workflowProcess?.status
+      // Keep the layout while workflow hasn't finished
+      return !status || status === WorkflowRunningStatus.Running || status === WorkflowRunningStatus.Waiting || status === WorkflowRunningStatus.Paused
+    })
+    return submitted ?? null
+  }, [chatList, isCreatorMode])
+
+  if (creatorTaskAnswer && isInstalledApp) {
+    return (
+      <CreatorTaskLayout
+        chatList={chatList}
+        activeHumanInputAnswer={creatorTaskAnswer}
+        onSubmitHumanInput={handleSubmitHumanInputForm}
+        appData={appData}
+        getHumanInputNodeData={getHumanInputNodeData as any}
+        isResponding={respondingState}
+      />
+    )
+  }
+
   return (
     <div
       className={cn(
@@ -570,7 +623,7 @@ const ChatWrapper = ({
         suggestedQuestions={suggestedQuestions}
         answerIcon={answerIcon}
         hideProcessDetail
-        noChatInput={showHomepage}
+        noChatInput={showHomepage || (isCreatorMode && !!activeHumanInputAnswer)} // In creator mode, hide input only when human input form is pending
         footerNote={footerNote}
         themeBuilder={themeBuilder}
         switchSibling={doSwitchSibling}

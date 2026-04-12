@@ -62,6 +62,7 @@ const ChatWrapper = ({
     newConversationInputs,
     newConversationInputsRef,
     handleNewConversationCompleted,
+    handleNewConversation,
     isMobile,
     isInstalledApp,
     appId,
@@ -79,6 +80,33 @@ const ChatWrapper = ({
     getHumanInputNodeData,
   } = useChatWithHistoryContext()
   const appSourceType = isInstalledApp ? AppSourceType.installedApp : AppSourceType.webApp
+
+  // In creator mode, start fresh when loading a finished conversation
+  // so the homepage input is shown instead of stale chat history.
+  // We skip the reset if the conversation has a paused/running workflow (human input pending).
+  const creatorResetRef = useRef(false)
+  useEffect(() => {
+    if (!isCreatorMode || !currentConversationId || creatorResetRef.current)
+      return
+    // Check if the restored conversation has an active (paused/running) workflow
+    const hasActiveWorkflow = appPrevChatTree?.some((node) => {
+      const check = (n: ChatItemInTree): boolean => {
+        if (n.isAnswer && n.humanInputFormDataList && n.humanInputFormDataList.length > 0)
+          return true
+        if (n.isAnswer && n.workflowProcess) {
+          const s = n.workflowProcess.status
+          if (s === WorkflowRunningStatus.Running || s === WorkflowRunningStatus.Waiting || s === WorkflowRunningStatus.Paused)
+            return true
+        }
+        return n.children?.some(check) ?? false
+      }
+      return check(node)
+    })
+    if (!hasActiveWorkflow) {
+      creatorResetRef.current = true
+      handleNewConversation()
+    }
+  }, [isCreatorMode, currentConversationId, appPrevChatTree, handleNewConversation])
 
   // Semantic variable for better code readability
   const isHistoryConversation = !!currentConversationId
@@ -577,6 +605,7 @@ const ChatWrapper = ({
     return submitted ?? null
   }, [chatList, isCreatorMode])
 
+  // Creator mode: show CreatorTaskLayout when there are human input forms (pending or submitted-but-still-running)
   if (creatorTaskAnswer && isInstalledApp) {
     return (
       <CreatorTaskLayout
@@ -590,48 +619,70 @@ const ChatWrapper = ({
     )
   }
 
+  // Creator mode: workflow finished — show result with "back to home" button
+  const creatorWorkflowFinished = isCreatorMode && !showHomepage && !respondingState && chatList.length > 1 && !creatorTaskAnswer
+  const handleBackToCreatorHome = useCallback(() => {
+    handleNewConversation()
+    creatorResetRef.current = false
+  }, [handleNewConversation])
+
   return (
     <div
       className={cn(
-        'h-full overflow-hidden',
+        'h-full overflow-hidden flex flex-col',
         !appData?.site.chat_page_background_color && 'bg-chatbot-bg',
       )}
       style={appData?.site.chat_page_background_color ? { backgroundColor: appData.site.chat_page_background_color } : undefined}
     >
-      <Chat
-        appData={appData ?? undefined}
-        config={appConfig}
-        chatList={messageList}
-        isResponding={respondingState}
-        chatContainerInnerClassName={`mx-auto pt-6 w-full max-w-[768px] ${isMobile && 'px-4'}`}
-        chatFooterClassName="pb-4"
-        chatFooterInnerClassName={`mx-auto w-full max-w-[768px] ${isMobile ? 'px-2' : 'px-4'}`}
-        onSend={doSend}
-        inputs={currentConversationId ? currentConversationInputs as any : newConversationInputs}
-        inputsForm={inputsForms}
-        onRegenerate={doRegenerate}
-        onStopResponding={handleStop}
-        onHumanInputFormSubmit={handleSubmitHumanInputForm}
-        chatNode={(
-          <>
-            {chatNode}
-            {welcome}
-          </>
-        )}
-        allToolIcons={appMeta?.tool_icons || {}}
-        onFeedback={handleFeedback}
-        suggestedQuestions={suggestedQuestions}
-        answerIcon={answerIcon}
-        hideProcessDetail
-        noChatInput={showHomepage || (isCreatorMode && !!activeHumanInputAnswer)} // In creator mode, hide input only when human input form is pending
-        footerNote={footerNote}
-        themeBuilder={themeBuilder}
-        switchSibling={doSwitchSibling}
-        inputDisabled={inputDisabled}
-        sidebarCollapseState={sidebarCollapseState}
-        questionIcon={questionIcon}
-        hideAvatar
-      />
+      {/* Creator mode: show "back to home" header when workflow is done */}
+      {creatorWorkflowFinished && (
+        <div className="relative z-10 flex shrink-0 items-center px-4 py-3 border-b border-divider-subtle">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-state-base-hover active:scale-95"
+            onClick={handleBackToCreatorHome}
+          >
+            <span className="i-ri-arrow-left-line h-4 w-4" />
+            <span>返回首页</span>
+          </button>
+        </div>
+      )}
+      <div className="min-h-0 flex-1">
+        <Chat
+          appData={appData ?? undefined}
+          config={appConfig}
+          chatList={messageList}
+          isResponding={respondingState}
+          chatContainerInnerClassName={`mx-auto pt-6 w-full max-w-[768px] ${isMobile && 'px-4'}`}
+          chatFooterClassName="pb-4"
+          chatFooterInnerClassName={`mx-auto w-full max-w-[768px] ${isMobile ? 'px-2' : 'px-4'}`}
+          onSend={doSend}
+          inputs={currentConversationId ? currentConversationInputs as any : newConversationInputs}
+          inputsForm={inputsForms}
+          onRegenerate={doRegenerate}
+          onStopResponding={handleStop}
+          onHumanInputFormSubmit={handleSubmitHumanInputForm}
+          chatNode={(
+            <>
+              {chatNode}
+              {welcome}
+            </>
+          )}
+          allToolIcons={appMeta?.tool_icons || {}}
+          onFeedback={handleFeedback}
+          suggestedQuestions={suggestedQuestions}
+          answerIcon={answerIcon}
+          hideProcessDetail
+          noChatInput={showHomepage || (isCreatorMode && !!activeHumanInputAnswer)} // In creator mode, hide input only when human input form is pending
+          footerNote={footerNote}
+          themeBuilder={themeBuilder}
+          switchSibling={doSwitchSibling}
+          inputDisabled={inputDisabled}
+          sidebarCollapseState={sidebarCollapseState}
+          questionIcon={questionIcon}
+          hideAvatar
+        />
+      </div>
     </div>
   )
 }

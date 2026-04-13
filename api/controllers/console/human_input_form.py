@@ -22,10 +22,9 @@ from core.app.apps.workflow.app_generator import WorkflowAppGenerator
 from extensions.ext_database import db
 from libs.login import current_account_with_tenant, login_required
 from models import App
-from models.model import InstalledApp
 from models.enums import CreatorUserRole
 from models.human_input import RecipientType
-from models.model import AppMode
+from models.model import AppMode, InstalledApp
 from models.workflow import WorkflowRun
 from repositories.factory import DifyAPIRepositoryFactory
 from services.human_input_service import Form, HumanInputService
@@ -146,11 +145,15 @@ class ConsoleWorkflowEventsApi(Resource):
 
         user, tenant_id = current_account_with_tenant()
         session_maker = sessionmaker(db.engine)
-        repo = DifyAPIRepositoryFactory.create_api_workflow_run_repository(session_maker)
-        workflow_run = repo.get_workflow_run_by_id_and_tenant_id(
-            tenant_id=tenant_id,
-            run_id=workflow_run_id,
-        )
+
+        # Look up the workflow run by id only — the run may belong to a
+        # different workspace when the user accesses an app via Explore
+        # (cross-workspace installed app).  Security is enforced below by
+        # checking that the run was created by the current user.
+        with Session(bind=db.engine) as _s:
+            workflow_run = _s.scalar(
+                select(WorkflowRun).where(WorkflowRun.id == workflow_run_id)
+            )
         if workflow_run is None:
             raise NotFoundError(f"WorkflowRun not found, id={workflow_run_id}")
 
@@ -219,10 +222,10 @@ class ConsoleWorkflowEventsApi(Resource):
 
 
 def _retrieve_app_for_workflow_run(session: Session, workflow_run: WorkflowRun) -> App:
-    query = select(App).where(
-        App.id == workflow_run.app_id,
-        App.tenant_id == workflow_run.tenant_id,
-    )
+    # Do not filter by tenant_id here: in cross-workspace Explore scenarios the
+    # app's tenant differs from the current user's tenant.  Access is already
+    # secured by the created_by check in the caller.
+    query = select(App).where(App.id == workflow_run.app_id)
     app = session.scalars(query).first()
     if app is None:
         raise AssertionError(

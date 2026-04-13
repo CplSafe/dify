@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import Select
 
@@ -42,6 +42,24 @@ class DatabaseFileAccessController(FileAccessControllerProtocol):
         resolved_scope = scope or self.current_scope()
         if resolved_scope is None:
             return stmt
+
+        # When an Account user accesses an app from a different workspace (e.g.
+        # via Explore), their uploaded files carry their own tenant_id which
+        # differs from the app's tenant_id.  Accept files from either tenant as
+        # long as the file was created by the requesting user.
+        user_tenant_id = resolved_scope.user_tenant_id
+        if (
+            user_tenant_id is not None
+            and user_tenant_id != resolved_scope.tenant_id
+            and not resolved_scope.requires_user_ownership
+        ):
+            return stmt.where(
+                or_(
+                    UploadFile.tenant_id == resolved_scope.tenant_id,
+                    UploadFile.tenant_id == user_tenant_id,
+                ),
+                UploadFile.created_by == resolved_scope.user_id,
+            )
 
         scoped_stmt = stmt.where(UploadFile.tenant_id == resolved_scope.tenant_id)
         if not resolved_scope.requires_user_ownership:

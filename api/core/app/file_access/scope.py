@@ -21,6 +21,9 @@ class FileAccessScope:
     user_id: str
     user_from: UserFrom
     invoke_from: InvokeFrom
+    # The tenant the user actually belongs to (may differ from tenant_id when
+    # an Account uses an app installed from another workspace via Explore).
+    user_tenant_id: str | None = None
 
     @property
     def requires_user_ownership(self) -> bool:

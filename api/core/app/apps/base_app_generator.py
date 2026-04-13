@@ -75,12 +75,20 @@ class BaseAppGenerator:
             return nullcontext()
 
         user_from = UserFrom.ACCOUNT if isinstance(user, Account) else UserFrom.END_USER
+        # When an Account accesses an app from a different workspace (e.g. via
+        # Explore), the user's own tenant may differ from the app's tenant_id.
+        # Store the user's actual tenant so the access controller can accept
+        # files uploaded under either tenant.
+        user_tenant_id: str | None = None
+        if isinstance(user, Account):
+            user_tenant_id = user.current_tenant_id
         return bind_file_access_scope(
             FileAccessScope(
                 tenant_id=tenant_id,
                 user_id=user_id,
                 user_from=user_from,
                 invoke_from=invoke_from,
+                user_tenant_id=user_tenant_id,
             )
         )
 

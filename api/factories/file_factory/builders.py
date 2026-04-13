@@ -131,10 +131,10 @@ def _build_from_local_file(
     except ValueError as exc:
         raise ValueError("Invalid upload file id format") from exc
 
-    stmt = select(UploadFile).where(
-        UploadFile.id == upload_file_id,
-        UploadFile.tenant_id == tenant_id,
-    )
+    # The tenant_id filter is applied by access_controller, which also handles
+    # cross-workspace scenarios (e.g. Account using an Explore app from another
+    # workspace whose files live under a different tenant_id).
+    stmt = select(UploadFile).where(UploadFile.id == upload_file_id)
     row = db.session.scalar(access_controller.apply_upload_file_filters(stmt))
     if row is None:
         raise ValueError("Invalid upload file")

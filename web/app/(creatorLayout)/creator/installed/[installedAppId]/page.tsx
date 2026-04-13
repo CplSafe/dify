@@ -1,16 +1,23 @@
-import * as React from 'react'
 import CreatorInstalledApp from '@/app/components/creator/installed-app-page'
 
-type CreatorInstalledAppPageProps = {
-  params?: Promise<{
-    installedAppId: string
-  }>
+type Props = {
+  params: Promise<{ installedAppId: string }>
+  searchParams?: Promise<{ conversationId?: string }>
 }
 
-async function CreatorInstalledAppPage({ params }: CreatorInstalledAppPageProps) {
-  const { installedAppId } = await (params ?? Promise.reject(new Error('Missing params')))
+export default async function CreatorInstalledAppPage({
+  params,
+  searchParams,
+}: Props) {
+  const { installedAppId } = await params
+  const resolved = await (searchParams
+    ?? Promise.resolve({ conversationId: undefined }))
+  const conversationId = resolved?.conversationId
 
-  return <CreatorInstalledApp installedAppId={installedAppId} />
+  return (
+    <CreatorInstalledApp
+      installedAppId={installedAppId}
+      resumeConversationId={conversationId}
+    />
+  )
 }
-
-export default CreatorInstalledAppPage

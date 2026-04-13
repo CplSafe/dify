@@ -1,16 +1,10 @@
 import type { FileEntity } from '../../file-uploader/types'
-import type {
-  ChatConfig,
-  ChatItem,
-  ChatItemInTree,
-  OnSend,
-} from '../types'
+import type { ChatConfig, ChatItem, ChatItemInTree, OnSend } from '../types'
 import type { FileUpload } from '@/app/components/base/features/types'
 import type { CreatorChatDraft } from '@/app/components/creator/chat-draft'
 import type { GeneratedResultPayload } from '@/app/components/share/generated-result'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { usePathname } from 'next/navigation'
 import AnswerIcon from '@/app/components/base/answer-icon'
 import AppIcon from '@/app/components/base/app-icon'
 import InputsForm from '@/app/components/base/chat/chat-with-history/inputs-form'
@@ -19,7 +13,11 @@ import ChatInputArea from '@/app/components/base/chat/chat/chat-input-area'
 import { FeaturesProvider } from '@/app/components/base/features/context'
 import { Markdown } from '@/app/components/base/markdown'
 import { FILE_EXTS } from '@/app/components/base/prompt-editor/constants'
-import { InputVarType, SupportUploadFileTypes, WorkflowRunningStatus } from '@/app/components/workflow/types'
+import {
+  InputVarType,
+  SupportUploadFileTypes,
+} from '@/app/components/workflow/types'
+import { usePathname } from '@/next/navigation'
 import {
   AppSourceType,
   fetchChatList,
@@ -42,10 +40,17 @@ const ChatWrapper = ({
   initialDraft,
   onInitialDraftConsumed,
   onMessageCompleted,
+  onMessageStart,
 }: {
   initialDraft?: CreatorChatDraft | null
   onInitialDraftConsumed?: () => void
-  onMessageCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
+  onMessageCompleted?: (
+    payload: GeneratedResultPayload,
+  ) => void | Promise<void>
+  onMessageStart?: (params: {
+    installedAppId: string
+    conversationId: string | null
+  }) => void
 }) => {
   const { t } = useTranslation()
   const pathname = usePathname()
@@ -75,9 +80,10 @@ const ChatWrapper = ({
     setIsResponding,
     allInputsHidden,
     initUserVariables,
-    getHumanInputNodeData,
   } = useChatWithHistoryContext()
-  const appSourceType = isInstalledApp ? AppSourceType.installedApp : AppSourceType.webApp
+  const appSourceType = isInstalledApp
+    ? AppSourceType.installedApp
+    : AppSourceType.webApp
 
   // Semantic variable for better code readability
   const isHistoryConversation = !!currentConversationId
@@ -92,14 +98,22 @@ const ChatWrapper = ({
         fileUploadConfig: (config as any).system_parameters,
       },
       supportFeedback: true,
-      opening_statement: currentConversationItem?.introduction || (config as any).opening_statement,
+      opening_statement:
+        currentConversationItem?.introduction
+        || (config as any).opening_statement,
     } as ChatConfig
   }, [appParams, currentConversationItem?.introduction])
   const homepageFeaturesData = useMemo(() => {
     const fileUpload = appConfig.file_upload
-    const fileUploadConfig = (fileUpload as FileUpload | undefined)?.fileUploadConfig
-    const imageTransferMethods = (fileUpload?.allowed_file_upload_methods || [TransferMethod.local_file, TransferMethod.remote_url]) as TransferMethod[]
-    const imageEnabled = !!fileUpload?.allowed_file_types?.includes(SupportUploadFileTypes.image)
+    const fileUploadConfig = (fileUpload as FileUpload | undefined)
+      ?.fileUploadConfig
+    const imageTransferMethods = (fileUpload?.allowed_file_upload_methods || [
+      TransferMethod.local_file,
+      TransferMethod.remote_url,
+    ]) as TransferMethod[]
+    const imageEnabled = !!fileUpload?.allowed_file_types?.includes(
+      SupportUploadFileTypes.image,
+    )
     const fileEnabled = !!fileUpload?.allowed_file_types?.length
 
     return {
@@ -121,12 +135,19 @@ const ChatWrapper = ({
         },
         enabled: fileEnabled,
         allowed_file_types: fileUpload?.allowed_file_types || [],
-        allowed_file_extensions: fileUpload?.allowed_file_extensions || [...FILE_EXTS[SupportUploadFileTypes.image], ...FILE_EXTS[SupportUploadFileTypes.video]].map(ext => `.${ext}`),
+        allowed_file_extensions:
+          fileUpload?.allowed_file_extensions
+          || [
+            ...FILE_EXTS[SupportUploadFileTypes.image],
+            ...FILE_EXTS[SupportUploadFileTypes.video],
+          ].map(ext => `.${ext}`),
         allowed_file_upload_methods: imageTransferMethods,
         number_limits: fileUpload?.number_limits || 3,
         fileUploadConfig,
       } as FileUpload,
-      suggested: appConfig.suggested_questions_after_answer || { enabled: false },
+      suggested: appConfig.suggested_questions_after_answer || {
+        enabled: false,
+      },
       citation: appConfig.retriever_resource || { enabled: false },
       annotationReply: appConfig.annotation_reply || { enabled: false },
     }
@@ -141,7 +162,9 @@ const ChatWrapper = ({
   } = useChat(
     appConfig,
     {
-      inputs: (currentConversationId ? currentConversationInputs : newConversationInputs) as any,
+      inputs: (currentConversationId
+        ? currentConversationInputs
+        : newConversationInputs) as any,
       inputsForm: inputsForms,
     },
     appPrevChatTree,
@@ -149,14 +172,18 @@ const ChatWrapper = ({
     clearChatList,
     setClearChatList,
   )
-  const inputsFormValue = currentConversationId ? currentConversationInputs : newConversationInputsRef?.current
+  const inputsFormValue = currentConversationId
+    ? currentConversationInputs
+    : newConversationInputsRef?.current
   const inputDisabled = useMemo(() => {
     if (allInputsHidden)
       return false
 
     let hasEmptyInput = ''
     let fileIsUploading = false
-    const requiredVars = inputsForms.filter(({ required, type }) => required && type !== InputVarType.checkbox)
+    const requiredVars = inputsForms.filter(
+      ({ required, type }) => required && type !== InputVarType.checkbox,
+    )
     if (requiredVars.length) {
       requiredVars.forEach(({ variable, label, type }) => {
         if (hasEmptyInput)
@@ -168,12 +195,24 @@ const ChatWrapper = ({
         if (!inputsFormValue?.[variable])
           hasEmptyInput = label as string
 
-        if ((type === InputVarType.singleFile || type === InputVarType.multiFiles) && inputsFormValue?.[variable]) {
+        if (
+          (type === InputVarType.singleFile
+            || type === InputVarType.multiFiles)
+          && inputsFormValue?.[variable]
+        ) {
           const files = inputsFormValue[variable]
-          if (Array.isArray(files))
-            fileIsUploading = files.find(item => item.transferMethod === TransferMethod.local_file && !item.uploadedId)
-          else
-            fileIsUploading = files.transferMethod === TransferMethod.local_file && !files.uploadedId
+          if (Array.isArray(files)) {
+            fileIsUploading = files.find(
+              item =>
+                item.transferMethod === TransferMethod.local_file
+                && !item.uploadedId,
+            )
+          }
+          else {
+            fileIsUploading
+              = files.transferMethod === TransferMethod.local_file
+                && !files.uploadedId
+          }
         }
       })
     }
@@ -183,8 +222,16 @@ const ChatWrapper = ({
     if (fileIsUploading)
       return true
 
-    if (chatList.some(item => item.isAnswer && item.humanInputFormDataList && item.humanInputFormDataList.length > 0))
+    if (
+      chatList.some(
+        item =>
+          item.isAnswer
+          && item.humanInputFormDataList
+          && item.humanInputFormDataList.length > 0,
+      )
+    ) {
       return true
+    }
     return false
   }, [allInputsHidden, inputsForms, chatList, inputsFormValue])
 
@@ -211,8 +258,14 @@ const ChatWrapper = ({
           findLastPausedWorkflow(node.children)
 
         // Track the last node with humanInputFormDataList
-        if (node.isAnswer && node.workflow_run_id && node.humanInputFormDataList && node.humanInputFormDataList.length > 0)
+        if (
+          node.isAnswer
+          && node.workflow_run_id
+          && node.humanInputFormDataList
+          && node.humanInputFormDataList.length > 0
+        ) {
           lastPausedNode = node
+        }
       })
     }
 
@@ -220,57 +273,125 @@ const ChatWrapper = ({
 
     // Only resume the last paused workflow
     if (lastPausedNode) {
-      handleSwitchSibling(
-        lastPausedNode.id,
-        {
-          onGetConversationMessages: conversationId => fetchChatList(conversationId, appSourceType, appId),
-          onGetSuggestedQuestions: responseItemId => fetchSuggestedQuestions(responseItemId, appSourceType, appId),
-          onConversationComplete: currentConversationId ? undefined : handleNewConversationCompleted,
-          onMessageCompleted,
-          isPublicAPI: appSourceType === AppSourceType.webApp,
-        },
-      )
-    }
-  }, [appId, appPrevChatTree, appSourceType, currentConversationId, handleNewConversationCompleted, handleSwitchSibling, onMessageCompleted])
-
-  const doSend: OnSend = useCallback((message, files, isRegenerate = false, parentAnswer: ChatItem | null = null) => {
-    const activeInputs = currentConversationId ? currentConversationInputs : newConversationInputsRef.current
-    const data: any = {
-      query: message,
-      files,
-      inputs: formatBooleanInputs(inputsForms, activeInputs),
-      conversation_id: currentConversationId,
-      parent_message_id: (isRegenerate ? parentAnswer?.id : getLastAnswer(chatList)?.id) || null,
-    }
-
-    handleSend(
-      getUrl('chat-messages', appSourceType, appId || ''),
-      data,
-      {
-        onGetConversationMessages: conversationId => fetchChatList(conversationId, appSourceType, appId),
-        onGetSuggestedQuestions: responseItemId => fetchSuggestedQuestions(responseItemId, appSourceType, appId),
-        onConversationComplete: isHistoryConversation ? undefined : handleNewConversationCompleted,
+      handleSwitchSibling(lastPausedNode.id, {
+        onGetConversationMessages: conversationId =>
+          fetchChatList(conversationId, appSourceType, appId),
+        onGetSuggestedQuestions: responseItemId =>
+          fetchSuggestedQuestions(responseItemId, appSourceType, appId),
+        onConversationComplete: currentConversationId
+          ? undefined
+          : handleNewConversationCompleted,
         onMessageCompleted,
         isPublicAPI: appSourceType === AppSourceType.webApp,
-      },
-    )
-  }, [inputsForms, currentConversationId, currentConversationInputs, newConversationInputsRef, chatList, handleSend, appSourceType, appId, isHistoryConversation, handleNewConversationCompleted, onMessageCompleted])
+      })
+    }
+  }, [
+    appId,
+    appPrevChatTree,
+    appSourceType,
+    currentConversationId,
+    handleNewConversationCompleted,
+    handleSwitchSibling,
+    onMessageCompleted,
+  ])
 
-  const doRegenerate = useCallback((chatItem: ChatItem, editedQuestion?: { message: string, files?: FileEntity[] }) => {
-    const question = editedQuestion ? chatItem : chatList.find(item => item.id === chatItem.parentMessageId)!
-    const parentAnswer = chatList.find(item => item.id === question.parentMessageId)
-    doSend(editedQuestion ? editedQuestion.message : question.content, editedQuestion ? editedQuestion.files : question.message_files, true, isValidGeneratedAnswer(parentAnswer) ? parentAnswer : null)
-  }, [chatList, doSend])
+  const doSend: OnSend = useCallback(
+    (
+      message,
+      files,
+      isRegenerate = false,
+      parentAnswer: ChatItem | null = null,
+    ) => {
+      const activeInputs = currentConversationId
+        ? currentConversationInputs
+        : newConversationInputsRef.current
+      const data: any = {
+        query: message,
+        files,
+        inputs: formatBooleanInputs(inputsForms, activeInputs),
+        conversation_id: currentConversationId,
+        parent_message_id:
+          (isRegenerate ? parentAnswer?.id : getLastAnswer(chatList)?.id)
+          || null,
+      }
 
-  const doSwitchSibling = useCallback((siblingMessageId: string) => {
-    handleSwitchSibling(siblingMessageId, {
-      onGetConversationMessages: conversationId => fetchChatList(conversationId, appSourceType, appId),
-      onGetSuggestedQuestions: responseItemId => fetchSuggestedQuestions(responseItemId, appSourceType, appId),
-      onConversationComplete: currentConversationId ? undefined : handleNewConversationCompleted,
+      onMessageStart?.({
+        installedAppId: appId || '',
+        conversationId: currentConversationId || null,
+      })
+
+      handleSend(getUrl('chat-messages', appSourceType, appId || ''), data, {
+        onGetConversationMessages: conversationId =>
+          fetchChatList(conversationId, appSourceType, appId),
+        onGetSuggestedQuestions: responseItemId =>
+          fetchSuggestedQuestions(responseItemId, appSourceType, appId),
+        onConversationComplete: isHistoryConversation
+          ? undefined
+          : handleNewConversationCompleted,
+        onMessageCompleted,
+        isPublicAPI: appSourceType === AppSourceType.webApp,
+      })
+    },
+    [
+      inputsForms,
+      currentConversationId,
+      currentConversationInputs,
+      newConversationInputsRef,
+      chatList,
+      handleSend,
+      appSourceType,
+      appId,
+      isHistoryConversation,
+      handleNewConversationCompleted,
       onMessageCompleted,
-      isPublicAPI: appSourceType === AppSourceType.webApp,
-    })
-  }, [handleSwitchSibling, currentConversationId, handleNewConversationCompleted, appSourceType, appId, onMessageCompleted])
+      onMessageStart,
+    ],
+  )
+
+  const doRegenerate = useCallback(
+    (
+      chatItem: ChatItem,
+      editedQuestion?: { message: string, files?: FileEntity[] },
+    ) => {
+      const question = editedQuestion
+        ? chatItem
+        : chatList.find(item => item.id === chatItem.parentMessageId)!
+      const parentAnswer = chatList.find(
+        item => item.id === question.parentMessageId,
+      )
+      doSend(
+        editedQuestion ? editedQuestion.message : question.content,
+        editedQuestion ? editedQuestion.files : question.message_files,
+        true,
+        isValidGeneratedAnswer(parentAnswer) ? parentAnswer : null,
+      )
+    },
+    [chatList, doSend],
+  )
+
+  const doSwitchSibling = useCallback(
+    (siblingMessageId: string) => {
+      handleSwitchSibling(siblingMessageId, {
+        onGetConversationMessages: conversationId =>
+          fetchChatList(conversationId, appSourceType, appId),
+        onGetSuggestedQuestions: responseItemId =>
+          fetchSuggestedQuestions(responseItemId, appSourceType, appId),
+        onConversationComplete: currentConversationId
+          ? undefined
+          : handleNewConversationCompleted,
+        onMessageCompleted,
+        isPublicAPI: appSourceType === AppSourceType.webApp,
+      })
+    },
+    [
+      handleSwitchSibling,
+      currentConversationId,
+      handleNewConversationCompleted,
+      appSourceType,
+      appId,
+      onMessageCompleted,
+    ],
+  )
 
   const consumedInitialDraftIdRef = useRef<string | null>(null)
 
@@ -284,7 +405,9 @@ const ChatWrapper = ({
     if (respondingState)
       return
 
-    const hasStartedConversation = chatList.some(item => !item.isOpeningStatement)
+    const hasStartedConversation = chatList.some(
+      item => !item.isOpeningStatement,
+    )
     if (hasStartedConversation)
       return
 
@@ -297,7 +420,16 @@ const ChatWrapper = ({
     consumedInitialDraftIdRef.current = initialDraft.id
     doSend(initialDraft.message, initialDraft.files as FileEntity[])
     onInitialDraftConsumed?.()
-  }, [chatList, currentConversationId, doSend, handleNewConversationInputsChange, initialDraft, inputDisabled, onInitialDraftConsumed, respondingState])
+  }, [
+    chatList,
+    currentConversationId,
+    doSend,
+    handleNewConversationInputsChange,
+    initialDraft,
+    inputDisabled,
+    onInitialDraftConsumed,
+    respondingState,
+  ])
 
   const messageList = useMemo(() => {
     if (currentConversationId || chatList.length > 1)
@@ -312,14 +444,22 @@ const ChatWrapper = ({
     if (!allInputsHidden && inputsForms.length > 0)
       return false
     return messageList.length === 0
-  }, [allInputsHidden, currentConversationId, inputsForms.length, messageList.length, respondingState])
+  }, [
+    allInputsHidden,
+    currentConversationId,
+    inputsForms.length,
+    messageList.length,
+    respondingState,
+  ])
 
-  const handleSubmitHumanInputForm = useCallback(async (formToken: string, formData: any) => {
-    if (isInstalledApp)
-      await submitHumanInputFormService(formToken, formData)
-    else
-      await submitHumanInputForm(formToken, formData)
-  }, [isInstalledApp])
+  const handleSubmitHumanInputForm = useCallback(
+    async (formToken: string, formData: any) => {
+      if (isInstalledApp)
+        await submitHumanInputFormService(formToken, formData)
+      else await submitHumanInputForm(formToken, formData)
+    },
+    [isInstalledApp],
+  )
 
   const [collapsed, setCollapsed] = useState(!!currentConversationId)
   const questionIcon = useMemo(() => {
@@ -344,7 +484,11 @@ const ChatWrapper = ({
     }
 
     return undefined
-  }, [appData?.site.default_user_avatar_url, initUserVariables?.avatar_url, initUserVariables?.name])
+  }, [
+    appData?.site.default_user_avatar_url,
+    initUserVariables?.avatar_url,
+    initUserVariables?.name,
+  ])
 
   const chatNode = useMemo(() => {
     if (isCreatorMode)
@@ -401,7 +545,9 @@ const ChatWrapper = ({
                       imageUrl={appData?.site.icon_url}
                     />
                   </div>
-                  <div className="text-[18px] font-semibold">{homepageTitle}</div>
+                  <div className="text-[18px] font-semibold">
+                    {homepageTitle}
+                  </div>
                 </div>
               </div>
 
@@ -419,7 +565,11 @@ const ChatWrapper = ({
                   </div>
                   {!!homepageDescription && (
                     <div className="mx-auto mt-5 max-w-[620px] text-sm leading-6 text-[#667085]">
-                      <Markdown className="!text-[#667085]" content={homepageDescription} mode="static" />
+                      <Markdown
+                        className="!text-[#667085]"
+                        content={homepageDescription}
+                        mode="static"
+                      />
                     </div>
                   )}
                 </div>
@@ -435,18 +585,30 @@ const ChatWrapper = ({
                             appearance="homepage"
                             showFeatureBar={false}
                             showFileUpload
-                            featureBarDisabled={respondingState || inputDisabled}
+                            featureBarDisabled={
+                              respondingState || inputDisabled
+                            }
                             visionConfig={appConfig.file_upload}
                             speechToTextConfig={appConfig.speech_to_text}
                             onSend={(message, files) => doSend(message, files)}
-                            inputs={(currentConversationId ? currentConversationInputs : newConversationInputs) as Record<string, unknown>}
+                            inputs={
+                              (currentConversationId
+                                ? currentConversationInputs
+                                : newConversationInputs) as Record<
+                                string,
+                                unknown
+                              >
+                            }
                             inputsForm={inputsForms}
                             isResponding={respondingState}
                             disabled={inputDisabled}
                             hideSpeechButton
                             extraActions={(
                               <>
-                                <button type="button" className="inline-flex h-11 items-center gap-2 rounded-[16px] border border-[#d9def1] bg-white px-5 text-[15px] font-medium text-[#475467] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition hover:border-[#c7d2fe] hover:bg-[#f8faff]">
+                                <button
+                                  type="button"
+                                  className="inline-flex h-11 items-center gap-2 rounded-[16px] border border-[#d9def1] bg-white px-5 text-[15px] font-medium text-[#475467] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition hover:border-[#c7d2fe] hover:bg-[#f8faff]"
+                                >
                                   <span className="i-ri-global-line h-[18px] w-[18px] text-[#667085]" />
                                   <span>抖音商品URL/ID</span>
                                 </button>
@@ -458,8 +620,17 @@ const ChatWrapper = ({
                         <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3 px-5 pt-2 pb-6 text-[14px] text-[#667085] md:px-6 md:pb-7 md:text-[15px]">
                           {quickActions.map((item, index) => (
                             <div key={item} className="flex items-center gap-5">
-                              <button type="button" className="transition hover:text-[#4f46e5]">{item}</button>
-                              {index < quickActions.length - 1 && <span className="hidden text-[#c0c6d9] md:inline">|</span>}
+                              <button
+                                type="button"
+                                className="transition hover:text-[#4f46e5]"
+                              >
+                                {item}
+                              </button>
+                              {index < quickActions.length - 1 && (
+                                <span className="hidden text-[#c0c6d9] md:inline">
+                                  |
+                                </span>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -482,7 +653,10 @@ const ChatWrapper = ({
       return null
     if (!collapsed && inputsForms.length > 0 && !allInputsHidden)
       return null
-    if (welcomeMessage.suggestedQuestions && welcomeMessage.suggestedQuestions?.length > 0) {
+    if (
+      welcomeMessage.suggestedQuestions
+      && welcomeMessage.suggestedQuestions?.length > 0
+    ) {
       return (
         <div className="flex min-h-[50vh] items-center justify-center px-4 py-12">
           <div className="flex max-w-[720px] grow gap-4">
@@ -504,7 +678,11 @@ const ChatWrapper = ({
       )
     }
     return (
-      <div className={cn('flex min-h-[50vh] flex-col items-center justify-center gap-3 py-12')}>
+      <div
+        className={cn(
+          'flex min-h-[50vh] flex-col items-center justify-center gap-3 py-12',
+        )}
+      >
         <AppIcon
           size="xl"
           iconType={appData?.site.icon_type}
@@ -513,7 +691,11 @@ const ChatWrapper = ({
           imageUrl={appData?.site.icon_url}
         />
         <div className="max-w-[768px] px-4">
-          <Markdown className="!body-2xl-regular !text-text-tertiary" content={welcomeMessage.content} mode="static" />
+          <Markdown
+            className="!body-2xl-regular !text-text-tertiary"
+            content={welcomeMessage.content}
+            mode="static"
+          />
         </div>
       </div>
     )
@@ -540,20 +722,28 @@ const ChatWrapper = ({
     showHomepage,
   ])
 
-  const answerIcon = (appData?.site && appData.site.use_icon_as_answer_icon)
-    ? (
-        <AnswerIcon
-          iconType={appData.site.icon_type}
-          icon={appData.site.icon}
-          background={appData.site.icon_background}
-          imageUrl={appData.site.icon_url}
-        />
-      )
-    : null
-  const footerNote = <span>{t('chat.aiGeneratedDisclaimer', { ns: 'share' })}</span>
+  const answerIcon
+    = appData?.site && appData.site.use_icon_as_answer_icon
+      ? (
+          <AnswerIcon
+            iconType={appData.site.icon_type}
+            icon={appData.site.icon}
+            background={appData.site.icon_background}
+            imageUrl={appData.site.icon_url}
+          />
+        )
+      : null
+  const footerNote = (
+    <span>{t('chat.aiGeneratedDisclaimer', { ns: 'share' })}</span>
+  )
 
-  const activeHumanInputAnswer = useMemo(() => {
-    return chatList.find(item => item.isAnswer && item.humanInputFormDataList && item.humanInputFormDataList.length > 0)
+  const _activeHumanInputAnswer = useMemo(() => {
+    return chatList.find(
+      item =>
+        item.isAnswer
+        && item.humanInputFormDataList
+        && item.humanInputFormDataList.length > 0,
+    )
   }, [chatList])
 
   return (
@@ -562,7 +752,11 @@ const ChatWrapper = ({
         'h-full overflow-hidden flex flex-col',
         !appData?.site.chat_page_background_color && 'bg-chatbot-bg',
       )}
-      style={appData?.site.chat_page_background_color ? { backgroundColor: appData.site.chat_page_background_color } : undefined}
+      style={
+        appData?.site.chat_page_background_color
+          ? { backgroundColor: appData.site.chat_page_background_color }
+          : undefined
+      }
     >
       <div className="min-h-0 flex-1">
         <Chat
@@ -575,7 +769,11 @@ const ChatWrapper = ({
           chatFooterClassName="pb-4"
           chatFooterInnerClassName={`mx-auto w-full max-w-[768px] ${isMobile ? 'px-2' : 'px-4'}`}
           onSend={doSend}
-          inputs={currentConversationId ? currentConversationInputs as any : newConversationInputs}
+          inputs={
+            currentConversationId
+              ? (currentConversationInputs as any)
+              : newConversationInputs
+          }
           inputsForm={inputsForms}
           onRegenerate={doRegenerate}
           onStopResponding={handleStop}

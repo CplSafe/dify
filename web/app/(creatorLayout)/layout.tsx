@@ -4,6 +4,7 @@ import { AppInitializer } from '@/app/components/app-initializer'
 import AmplitudeProvider from '@/app/components/base/amplitude'
 import GA, { GaType } from '@/app/components/base/ga'
 import CreatorSidebar from '@/app/components/creator/sidebar'
+import TaskCenterButton from '@/app/components/creator/task-center'
 import { AppContextProvider } from '@/context/app-context-provider'
 import { EventEmitterContextProvider } from '@/context/event-emitter-provider'
 import { ModalContextProvider } from '@/context/modal-context-provider'
@@ -21,7 +22,11 @@ const CreatorLayout = ({ children }: { children: ReactNode }) => {
               <ModalContextProvider>
                 <div className="flex h-screen overflow-hidden bg-background-body">
                   <CreatorSidebar />
-                  <main className="flex flex-1 flex-col overflow-hidden">
+                  <main className="relative flex flex-1 flex-col overflow-hidden">
+                    {/* Task center button — top-right corner */}
+                    <div className="absolute top-3 right-4 z-40">
+                      <TaskCenterButton />
+                    </div>
                     {children}
                   </main>
                 </div>

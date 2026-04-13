@@ -242,11 +242,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src, srcs }) => {
               onMouseDown={handleMouseDown}
               data-testid="video-progress-bar"
             >
-              <div className={styles.progress} style={{ width: `${(currentTime / duration) * 100}%` }} />
+              <div
+                className={styles.progress}
+                style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+              />
               {hoverTime !== null && (
                 <div
                   className={styles.hoverTimeIndicator}
-                  style={{ left: `${(hoverTime / duration) * 100}%` }}
+                  style={{ left: `${duration > 0 ? (hoverTime / duration) * 100 : 0}%` }}
                   data-testid="video-hover-time"
                 >
                   {formatTime(hoverTime)}

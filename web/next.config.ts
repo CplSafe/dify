@@ -5,6 +5,7 @@ import { env } from './env'
 
 const isDev = process.env.NODE_ENV === 'development'
 const withMDX = createMDX()
+const enableCodeInspector = false
 
 const nextConfig: NextConfig = {
   basePath: env.NEXT_PUBLIC_BASE_PATH,
@@ -46,11 +47,13 @@ const nextConfig: NextConfig = {
 
     return config
   },
-  turbopack: {
-    rules: codeInspectorPlugin({
-      bundler: 'turbopack',
-    }),
-  },
+  turbopack: enableCodeInspector
+    ? {
+        rules: codeInspectorPlugin({
+          bundler: 'turbopack',
+        }),
+      }
+    : undefined,
   productionBrowserSourceMaps: false, // enable browser source map generation during the production build
   // Configure pageExtensions to include md and mdx
   pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],

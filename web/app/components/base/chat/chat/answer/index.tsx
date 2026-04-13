@@ -9,13 +9,14 @@ import type {
 import type { AppData } from '@/models/share'
 import { memo, startTransition, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePathname } from 'next/navigation'
 import { EditTitle } from '@/app/components/app/annotation/edit-annotation-modal/edit-item'
 import AnswerIcon from '@/app/components/base/answer-icon'
 import Citation from '@/app/components/base/chat/chat/citation'
 import LoadingAnim from '@/app/components/base/chat/chat/loading-anim'
 import DisclaimerText from '@/app/components/base/disclaimer-text'
 import { FileList } from '@/app/components/base/file-uploader'
-import { WorkflowRunningStatus } from '@/app/components/workflow/types'
+import { BlockEnum, WorkflowRunningStatus } from '@/app/components/workflow/types'
 import { cn } from '@/utils/classnames'
 import ContentSwitch from '../content-switch'
 import { useChatContext } from '../context'
@@ -61,6 +62,8 @@ const Answer: FC<AnswerProps> = ({
   onHumanInputFormSubmit,
 }) => {
   const { t } = useTranslation()
+  const pathname = usePathname()
+  const isCreatorMode = pathname?.startsWith('/creator')
   const {
     content,
     citation,
@@ -85,6 +88,12 @@ const Answer: FC<AnswerProps> = ({
   const shouldShowAnswerDisclaimer = !responding && !!answerDisclaimer && isWorkflowFinished
   const [loadingStage, setLoadingStage] = useState<'analyzing' | 'retrieving'>('analyzing')
   const contentIsEmpty = typeof content === 'string' && content.trim() === ''
+  const humanInputActionTexts = humanInputFilledFormDataList?.map(formData => ({
+    nodeId: formData.node_id,
+    actionText: formData.action_text,
+  })).filter(item => item.actionText) || []
+  const hasSubmittedHumanInput = !!humanInputFilledFormDataList?.length
+  const hasRunningLoopNode = !!workflowProcess?.tracing?.some(node => node.node_type === BlockEnum.Loop && node.status === WorkflowRunningStatus.Running)
 
   const [containerWidth, setContainerWidth] = useState(0)
   const [contentWidth, setContentWidth] = useState(0)
@@ -183,9 +192,11 @@ const Answer: FC<AnswerProps> = ({
     }
   }, [switchSibling, item.prevSibling, item.nextSibling])
 
-  const loadingText = loadingStage === 'analyzing'
-    ? `${appTitle} 正在分析问题`
-    : `${appTitle} 正在检索知识`
+  const loadingText = hasRunningLoopNode
+    ? '视频生成中'
+    : hasSubmittedHumanInput
+      ? `${appTitle} 正在继续生成`
+      : `${appTitle} 正在分析需求`
 
   return (
     <div className="mb-2 flex last:mb-0">
@@ -205,7 +216,12 @@ const Answer: FC<AnswerProps> = ({
           <div className={cn('group relative pr-1 md:pr-6', chatAnswerContainerInner)} data-testid="chat-answer-container-humaninput">
             <div
               ref={humanInputFormContainerRef}
-              className={cn('relative inline-block w-full max-w-full rounded-[28px] border border-components-panel-border-subtle bg-background-section px-4 py-4 text-text-primary shadow-lg body-lg-regular md:px-5')}
+              className={cn(
+                'relative inline-block w-full max-w-full text-text-primary body-lg-regular',
+                isCreatorMode
+                  ? 'bg-transparent px-0 py-0 shadow-none'
+                  : 'rounded-[28px] border border-components-panel-border-subtle bg-background-section px-4 py-4 shadow-lg md:px-5',
+              )}
             >
               {
                 !responding && contentIsEmpty && !hasAgentThoughts && (
@@ -268,13 +284,35 @@ const Answer: FC<AnswerProps> = ({
           </div>
         )}
 
+        {humanInputActionTexts.length > 0 && (
+          <div className="mt-2">
+            {humanInputActionTexts.map(item => (
+              <div key={`${item.nodeId}-action`} className="mb-2 flex justify-end last:mb-0">
+                <div className={cn('group relative flex max-w-full items-start overflow-x-hidden', hideAvatar ? 'mr-0' : 'mr-4 pl-14')}>
+                  <div
+                    className="w-full rounded-2xl bg-background-gradient-bg-fill-chat-bubble-bg-3 px-4 py-3 text-sm text-text-primary"
+                    data-testid="human-input-action-question"
+                  >
+                    {item.actionText}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Block 2: Response Content (when human inputs exist) */}
         {hasHumanInputs && (responding || !contentIsEmpty || hasAgentThoughts) && (
           <div className={cn('group relative mt-3 pr-1 md:pr-6', chatAnswerContainerInner)}>
-            <div className="absolute -top-3 left-8 h-4 w-0.5 bg-chat-answer-human-input-form-divider-bg" />
+            {!isCreatorMode && <div className="absolute -top-3 left-8 h-4 w-0.5 bg-chat-answer-human-input-form-divider-bg" />}
             <div
               ref={contentRef}
-              className="relative inline-block w-full max-w-full rounded-[24px] border border-components-panel-border-subtle bg-background-default px-4 py-3 text-text-primary shadow-sm body-lg-regular md:px-5 md:py-4"
+              className={cn(
+                'relative inline-block w-full max-w-full text-text-primary body-lg-regular',
+                isCreatorMode
+                  ? 'bg-transparent px-0 py-2 shadow-none'
+                  : 'rounded-[24px] border border-components-panel-border-subtle bg-background-default px-4 py-3 shadow-sm md:px-5 md:py-4',
+              )}
             >
               {
                 !responding && (
@@ -376,7 +414,13 @@ const Answer: FC<AnswerProps> = ({
           <div className={cn('group relative pr-1 md:pr-10', chatAnswerContainerInner)} data-testid="chat-answer-container-inner">
             <div
               ref={contentRef}
-              className={cn('relative inline-block max-w-full rounded-2xl bg-chat-bubble-bg px-3.5 py-2.5 text-text-primary body-lg-regular md:px-4 md:py-3', workflowProcess && 'w-full')}
+              className={cn(
+                'relative inline-block max-w-full text-text-primary body-lg-regular',
+                isCreatorMode
+                  ? 'w-full bg-transparent px-0 py-2'
+                  : 'rounded-2xl bg-chat-bubble-bg px-3.5 py-2.5 md:px-4 md:py-3',
+                workflowProcess && 'w-full',
+              )}
             >
               {
                 !responding && (
@@ -482,7 +526,7 @@ const Answer: FC<AnswerProps> = ({
             </div>
           </div>
         )}
-        <More more={more} />
+        {!isCreatorMode && <More more={more} />}
       </div>
     </div>
   )

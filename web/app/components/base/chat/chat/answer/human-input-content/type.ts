@@ -26,6 +26,6 @@ export type HumanInputFormProps = {
 export type ContentItemProps = {
   content: string
   formInputFields: FormInputItem[]
-  inputs: Record<string, string>
-  onInputChange: (name: string, value: string) => void
+  inputs: Record<string, any>
+  onInputChange: (name: string, value: any) => void
 }

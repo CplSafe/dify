@@ -65,8 +65,12 @@ export const useChat = (
   clearChatList?: boolean,
   clearChatListCallback?: (state: boolean) => void,
 ) => {
-  const buildChatErrorMessage = useCallback((message?: string, code?: string) => {
-    const normalizedMessage = message?.trim() || '请求失败，请稍后重试'
+  const buildChatErrorMessage = useCallback((message?: unknown, code?: string) => {
+    const normalizedMessage = typeof message === 'string'
+      ? (message.trim() || '请求失败，请稍后重试')
+      : message instanceof Error
+        ? (message.message?.trim() || '请求失败，请稍后重试')
+        : '请求失败，请稍后重试'
     if (code === 'payment_required' || normalizedMessage.includes('余额不足'))
       return '余额不足，请先前往[充值页](/creator/balance)处理后再继续生成。'
     return normalizedMessage
@@ -797,26 +801,33 @@ export const useChat = (
           if (!newResponseItem)
             return
 
+          const responseLog = Array.isArray(newResponseItem.message) ? newResponseItem.message : []
+          const assistantFiles = newResponseItem.message_files?.filter((file: any) => file.belongs_to === 'assistant') || []
+          const lastLogItem = responseLog.at(-1)
+          const answerTokens = Number(newResponseItem.answer_tokens || 0)
+          const messageTokens = Number(newResponseItem.message_tokens || 0)
+          const providerLatency = Number(newResponseItem.provider_response_latency)
+          const hasValidProviderLatency = Number.isFinite(providerLatency) && providerLatency >= 0
           const isUseAgentThought = newResponseItem.agent_thoughts?.length > 0 && newResponseItem.agent_thoughts[newResponseItem.agent_thoughts?.length - 1].thought === newResponseItem.answer
           updateChatTreeNode(responseItem.id, {
             content: isUseAgentThought ? '' : newResponseItem.answer,
             log: [
-              ...newResponseItem.message,
-              ...(newResponseItem.message.at(-1).role !== 'assistant'
+              ...responseLog,
+              ...(lastLogItem?.role !== 'assistant'
                 ? [
                     {
                       role: 'assistant',
                       text: newResponseItem.answer,
-                      files: newResponseItem.message_files?.filter((file: any) => file.belongs_to === 'assistant') || [],
+                      files: assistantFiles,
                     },
                   ]
                 : []),
             ],
             more: {
               time: formatTime(newResponseItem.created_at, 'hh:mm A'),
-              tokens: newResponseItem.answer_tokens + newResponseItem.message_tokens,
-              latency: newResponseItem.provider_response_latency.toFixed(2),
-              tokens_per_second: newResponseItem.provider_response_latency > 0 ? (newResponseItem.answer_tokens / newResponseItem.provider_response_latency).toFixed(2) : undefined,
+              tokens: answerTokens + messageTokens,
+              latency: hasValidProviderLatency ? providerLatency.toFixed(2) : undefined,
+              tokens_per_second: hasValidProviderLatency && providerLatency > 0 ? (answerTokens / providerLatency).toFixed(2) : undefined,
             },
             // for agent log
             conversationId: conversationIdRef.current,

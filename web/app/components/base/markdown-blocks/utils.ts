@@ -16,6 +16,14 @@ export const hasImageChild = (children: MdastNode[] | undefined): boolean => {
   }) ?? false
 }
 
+export const hasBlockMediaChild = (children: MdastNode[] | undefined): boolean => {
+  return children?.some((child) => {
+    if (child.tagName === 'img' || child.tagName === 'video' || child.tagName === 'audio')
+      return true
+    return child.children ? hasBlockMediaChild(child.children) : false
+  }) ?? false
+}
+
 export const isValidUrl = (url: string): boolean => {
   const validPrefixes = ['http:', 'https:', '//', 'mailto:', 'tel:', '/']
   if (ALLOW_UNSAFE_DATA_SCHEME)

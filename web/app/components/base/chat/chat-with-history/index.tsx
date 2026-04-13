@@ -126,6 +126,7 @@ type ChatWithHistoryWrapProps = {
   installedAppInfo?: InstalledApp
   className?: string
   initialDraft?: CreatorChatDraft | null
+  forceFreshConversation?: boolean
   onInitialDraftConsumed?: () => void
   onMessageCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
 }
@@ -133,6 +134,7 @@ const ChatWithHistoryWrap: FC<ChatWithHistoryWrapProps> = ({
   installedAppInfo,
   className,
   initialDraft,
+  forceFreshConversation,
   onInitialDraftConsumed,
   onMessageCompleted,
 }) => {
@@ -178,7 +180,7 @@ const ChatWithHistoryWrap: FC<ChatWithHistoryWrapProps> = ({
     setCurrentConversationInputs,
     allInputsHidden,
     initUserVariables,
-  } = useChatWithHistory(installedAppInfo)
+  } = useChatWithHistory(installedAppInfo, forceFreshConversation)
 
   return (
     <ChatWithHistoryContext.Provider value={{
@@ -237,17 +239,19 @@ const ChatWithHistoryWrapWithCheckToken: FC<ChatWithHistoryWrapProps> = ({
   installedAppInfo,
   className,
   initialDraft,
+  forceFreshConversation,
   onInitialDraftConsumed,
   onMessageCompleted,
 }) => {
   return (
     <ChatWithHistoryWrap
-      installedAppInfo={installedAppInfo}
-      className={className}
-      initialDraft={initialDraft}
-      onInitialDraftConsumed={onInitialDraftConsumed}
-      onMessageCompleted={onMessageCompleted}
-    />
+        installedAppInfo={installedAppInfo}
+        className={className}
+        initialDraft={initialDraft}
+        forceFreshConversation={forceFreshConversation}
+        onInitialDraftConsumed={onInitialDraftConsumed}
+        onMessageCompleted={onMessageCompleted}
+      />
   )
 }
 

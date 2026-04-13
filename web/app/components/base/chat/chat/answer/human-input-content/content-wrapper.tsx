@@ -9,6 +9,7 @@ type ContentWrapperProps = {
   showExpandIcon?: boolean
   className?: string
   expanded?: boolean
+  variant?: 'card' | 'inline'
 }
 
 const ContentWrapper = ({
@@ -17,6 +18,7 @@ const ContentWrapper = ({
   showExpandIcon = false,
   className,
   expanded = false,
+  variant = 'card',
 }: ContentWrapperProps) => {
   const [isExpanded, setIsExpanded] = useState(expanded)
 
@@ -26,10 +28,19 @@ const ContentWrapper = ({
 
   return (
     <div
-      className={cn('rounded-[32px] border border-[#E9E9EB] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)]', className)}
+      className={cn(
+        variant === 'card'
+          ? 'rounded-[32px] border border-[#E9E9EB] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)]'
+          : 'py-2',
+        className,
+      )}
       data-testid="content-wrapper"
     >
-      <div className="flex items-center gap-2 px-1 pt-1 pb-4 border-b border-[#F4F4F5] mb-4">
+      <div className={cn(
+        'flex items-center gap-2',
+        variant === 'card' ? 'mb-4 border-b border-[#F4F4F5] px-1 pt-1 pb-4' : 'px-0 py-1',
+      )}
+      >
         {/* node icon */}
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
           <BlockIcon type={BlockEnum.HumanInput} className="shrink-0 scale-90" />
@@ -60,7 +71,7 @@ const ContentWrapper = ({
         )}
       </div>
       {(!showExpandIcon || isExpanded) && (
-        <div className="px-1">
+        <div className={cn(variant === 'card' ? 'px-1' : 'pt-3')}>
           {/* human input form content */}
           {children}
         </div>

@@ -17,11 +17,13 @@ import AppUnavailable from '../../base/app-unavailable'
 const InstalledApp = ({
   id,
   initialDraft,
+  forceFreshConversation,
   onInitialDraftConsumed,
   onResultCompleted,
 }: {
   id: string
   initialDraft?: CreatorChatDraft | null
+  forceFreshConversation?: boolean
   onInitialDraftConsumed?: () => void
   onResultCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
 }) => {
@@ -43,19 +45,19 @@ const InstalledApp = ({
     }
     else {
       const { id, app } = installedApp
-      updateAppInfo({
-        app_id: id,
-        site: {
-          title: app.name,
-          icon_type: app.icon_type,
+          updateAppInfo({
+            app_id: id,
+            site: {
+              title: app.name,
+              icon_type: app.icon_type,
           icon: app.icon,
           icon_background: app.icon_background,
           icon_url: app.icon_url,
-          prompt_public: false,
-          copyright: '',
-          show_workflow_steps: true,
-          use_icon_as_answer_icon: app.use_icon_as_answer_icon,
-        },
+              prompt_public: false,
+              copyright: '',
+              show_workflow_steps: app.show_workflow_steps,
+              use_icon_as_answer_icon: app.use_icon_as_answer_icon,
+            },
         plan: 'basic',
         custom_config: null,
       } as AppData)
@@ -130,6 +132,7 @@ const InstalledApp = ({
           installedAppInfo={installedApp}
           className="overflow-hidden rounded-2xl shadow-md"
           initialDraft={initialDraft}
+          forceFreshConversation={forceFreshConversation}
           onInitialDraftConsumed={onInitialDraftConsumed}
           onMessageCompleted={onResultCompleted}
         />

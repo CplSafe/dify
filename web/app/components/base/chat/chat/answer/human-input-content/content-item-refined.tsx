@@ -2,9 +2,36 @@
 
 import type { ContentItemProps } from './type'
 import * as React from 'react'
-import { useMemo, useState, useEffect, useRef } from 'react'
-import { cn } from '@/utils/classnames'
+import { useMemo } from 'react'
 import { Markdown } from '@/app/components/base/markdown'
+
+const tagClassName = 'inline-flex min-h-8 items-center rounded-[10px] bg-[#F2ECFF] px-3 py-1 text-[14px] font-medium text-[#6D28D9] shadow-[inset_0_0_0_1px_rgba(167,139,250,0.15)]'
+
+const renderMediaPreview = (value: any) => {
+  const files = Array.isArray(value) ? value : value ? [value] : []
+  if (!files.length)
+    return null
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-3">
+      {files.map((file: any, index: number) => {
+        const src = file?.url || file?.preview_url || file?.download_url
+        if (!src)
+          return null
+
+        return (
+          <div
+            key={`${src}-${index}`}
+            className="flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-2xl border border-[#E7E4F5] bg-[#FAF8FF]"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={src} alt={file?.name || 'media'} className="h-full w-full object-cover" />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 const ContentItemRefined = ({
   content,
@@ -34,16 +61,19 @@ const ContentItemRefined = ({
   }, [formInputFields, fieldName])
 
   if (!isInputField(content)) {
-    // If it starts with "### " or looks like a title, style it
     if (content.startsWith('#')) {
       return (
-        <div className="mb-2 mt-6 flex items-center gap-2 text-base font-bold text-text-primary">
-          <div className="h-4 w-1 rounded-full bg-primary-600" />
-          {content.replace(/^#+\s*/, '')}
+        <div className="mt-5 flex items-center gap-2 text-[16px] font-semibold text-[#2D2942] first:mt-0">
+          <span className="i-ri-arrow-down-s-line h-4 w-4 text-[#8B5CF6]" />
+          <span>{content.replace(/^#+\s*/, '')}</span>
         </div>
       )
     }
-    return <Markdown content={content} mode="static" className="text-text-secondary leading-relaxed" />
+    return (
+      <div className="text-[15px] leading-8 text-[#59556B]">
+        <Markdown content={content} mode="static" className="text-[15px] leading-8 text-[#59556B]" />
+      </div>
+    )
   }
 
   if (!formInputField)
@@ -55,24 +85,21 @@ const ContentItemRefined = ({
     switch (formInputField.type) {
       case 'paragraph':
         return (
-          <div className="group relative mt-2 overflow-hidden rounded-2xl border border-[#E9E9EB] bg-[#FBFBFF] transition-all focus-within:border-primary-300 focus-within:ring-4 focus-within:ring-primary-50">
+          <div className="mt-3 overflow-hidden rounded-2xl border border-[#E7E4F5] bg-[#FBFAFF] transition-all focus-within:border-[#C4B5FD] focus-within:ring-4 focus-within:ring-[#F3E8FF]">
             <textarea
-              className="min-h-[120px] w-full resize-none border-none bg-transparent p-4 text-[15px] leading-relaxed text-text-primary outline-none focus:ring-0"
+              className="min-h-[120px] w-full resize-none border-none bg-transparent p-4 text-[15px] leading-7 text-[#2D2942] outline-none focus:ring-0"
               value={value}
               onChange={(e) => onInputChange(fieldName, e.target.value)}
               placeholder="请输入内容..."
             />
-            <button className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-transform hover:scale-105 active:scale-95">
-              <span className="i-ri-arrow-up-line h-4 w-4" />
-            </button>
           </div>
         )
 
       case 'select':
         return (
-          <div className="inline-block px-1">
+          <span className="inline-flex px-1 align-middle">
             <select
-              className="h-8 min-w-[80px] appearance-none rounded-lg border-none bg-[#F3E8FF] px-3 py-0 text-sm font-medium text-primary-700 outline-none transition-colors hover:bg-[#E9D5FF] focus:ring-2 focus:ring-primary-200"
+              className={`${tagClassName} min-w-[88px] appearance-none border-none pr-8 outline-none transition-colors hover:bg-[#E9D5FF] focus:ring-2 focus:ring-[#DDD6FE]`}
               value={value}
               onChange={(e) => onInputChange(fieldName, e.target.value)}
             >
@@ -80,28 +107,36 @@ const ContentItemRefined = ({
                 <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
-          </div>
+          </span>
         )
 
       case 'text-input':
-      default:
+      case 'text_input':
+      case 'url':
+      case 'number':
         return (
-          <span className="inline-block px-1">
+          <span className="inline-flex px-1 align-middle">
             <input
-              className="h-8 min-w-[100px] rounded-lg border-none bg-[#F3E8FF] px-3 py-0 text-sm font-medium text-primary-700 outline-none transition-colors hover:bg-[#E9D5FF] focus:ring-2 focus:ring-primary-200"
+              className={`${tagClassName} min-w-[96px] border-none outline-none transition-colors hover:bg-[#E9D5FF] focus:ring-2 focus:ring-[#DDD6FE]`}
               value={value}
               onChange={(e) => onInputChange(fieldName, e.target.value)}
-              style={{ width: `${Math.max(value.length * 12 + 24, 100)}px` }}
+              style={{ width: `${Math.max(String(value).length * 12 + 32, 112)}px` }}
             />
           </span>
         )
+
+      case 'file':
+      case 'file-list':
+      case 'files':
+        return renderMediaPreview(value)
+
+      default:
+        return <span className={tagClassName}>{String(value || '')}</span>
     }
   }
 
-  // If it's an inline field (text-input or select), we might want to render it differently 
-  // depending on surrounding content. For now, just wrap it.
   if (formInputField.type === 'paragraph') {
-    return <div className="py-2">{renderInput()}</div>
+    return <div className="py-1">{renderInput()}</div>
   }
 
   return renderInput()

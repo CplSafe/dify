@@ -1,4 +1,5 @@
 'use client'
+import { usePathname } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { useLocale } from '@/context/i18n'
 import { cn } from '@/utils/classnames'
@@ -11,6 +12,8 @@ type ExpirationTimeProps = {
 const ExpirationTime = ({
   expirationTime,
 }: ExpirationTimeProps) => {
+  const pathname = usePathname()
+  const isCreatorMode = pathname?.startsWith('/creator')
   const { t } = useTranslation()
   const locale = useLocale()
   const relativeTime = getRelativeTime(expirationTime, locale)
@@ -20,7 +23,9 @@ const ExpirationTime = ({
     <div
       data-testid="expiration-time"
       className={cn(
-        'mt-1 flex items-center gap-x-1 text-text-tertiary system-xs-regular',
+        isCreatorMode
+          ? 'mt-2 flex items-center gap-x-1 text-[13px] text-[#8B87A1]'
+          : 'mt-1 flex items-center gap-x-1 text-text-tertiary system-xs-regular',
         !isSameOrAfter && 'text-text-warning',
       )}
     >

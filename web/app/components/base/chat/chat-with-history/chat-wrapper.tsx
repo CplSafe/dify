@@ -37,8 +37,6 @@ import Chat from '../chat'
 import { useChat } from '../chat/hooks'
 import { getLastAnswer, isValidGeneratedAnswer } from '../utils'
 import { useChatWithHistoryContext } from './context'
-import CreatorTaskLayout from '@/app/components/creator/task-layout'
-import CreatorHomeInput from '@/app/components/creator/home-input'
 
 const ChatWrapper = ({
   initialDraft,
@@ -61,8 +59,8 @@ const ChatWrapper = ({
     inputsForms,
     newConversationInputs,
     newConversationInputsRef,
+    handleNewConversationInputsChange,
     handleNewConversationCompleted,
-    handleNewConversation,
     isMobile,
     isInstalledApp,
     appId,
@@ -80,33 +78,6 @@ const ChatWrapper = ({
     getHumanInputNodeData,
   } = useChatWithHistoryContext()
   const appSourceType = isInstalledApp ? AppSourceType.installedApp : AppSourceType.webApp
-
-  // In creator mode, start fresh when loading a finished conversation
-  // so the homepage input is shown instead of stale chat history.
-  // We skip the reset if the conversation has a paused/running workflow (human input pending).
-  const creatorResetRef = useRef(false)
-  useEffect(() => {
-    if (!isCreatorMode || !currentConversationId || creatorResetRef.current)
-      return
-    // Check if the restored conversation has an active (paused/running) workflow
-    const hasActiveWorkflow = appPrevChatTree?.some((node) => {
-      const check = (n: ChatItemInTree): boolean => {
-        if (n.isAnswer && n.humanInputFormDataList && n.humanInputFormDataList.length > 0)
-          return true
-        if (n.isAnswer && n.workflowProcess) {
-          const s = n.workflowProcess.status
-          if (s === WorkflowRunningStatus.Running || s === WorkflowRunningStatus.Waiting || s === WorkflowRunningStatus.Paused)
-            return true
-        }
-        return n.children?.some(check) ?? false
-      }
-      return check(node)
-    })
-    if (!hasActiveWorkflow) {
-      creatorResetRef.current = true
-      handleNewConversation()
-    }
-  }, [isCreatorMode, currentConversationId, appPrevChatTree, handleNewConversation])
 
   // Semantic variable for better code readability
   const isHistoryConversation = !!currentConversationId
@@ -263,10 +234,11 @@ const ChatWrapper = ({
   }, [appId, appPrevChatTree, appSourceType, currentConversationId, handleNewConversationCompleted, handleSwitchSibling, onMessageCompleted])
 
   const doSend: OnSend = useCallback((message, files, isRegenerate = false, parentAnswer: ChatItem | null = null) => {
+    const activeInputs = currentConversationId ? currentConversationInputs : newConversationInputsRef.current
     const data: any = {
       query: message,
       files,
-      inputs: formatBooleanInputs(inputsForms, currentConversationId ? currentConversationInputs : newConversationInputs),
+      inputs: formatBooleanInputs(inputsForms, activeInputs),
       conversation_id: currentConversationId,
       parent_message_id: (isRegenerate ? parentAnswer?.id : getLastAnswer(chatList)?.id) || null,
     }
@@ -282,7 +254,7 @@ const ChatWrapper = ({
         isPublicAPI: appSourceType === AppSourceType.webApp,
       },
     )
-  }, [inputsForms, currentConversationId, currentConversationInputs, newConversationInputs, chatList, handleSend, appSourceType, appId, isHistoryConversation, handleNewConversationCompleted, onMessageCompleted])
+  }, [inputsForms, currentConversationId, currentConversationInputs, newConversationInputsRef, chatList, handleSend, appSourceType, appId, isHistoryConversation, handleNewConversationCompleted, onMessageCompleted])
 
   const doRegenerate = useCallback((chatItem: ChatItem, editedQuestion?: { message: string, files?: FileEntity[] }) => {
     const question = editedQuestion ? chatItem : chatList.find(item => item.id === chatItem.parentMessageId)!
@@ -309,7 +281,7 @@ const ChatWrapper = ({
     if (consumedInitialDraftIdRef.current === initialDraft.id)
       return
 
-    if (currentConversationId || respondingState)
+    if (respondingState)
       return
 
     const hasStartedConversation = chatList.some(item => !item.isOpeningStatement)
@@ -319,10 +291,13 @@ const ChatWrapper = ({
     if (inputDisabled)
       return
 
+    if (initialDraft.inputs)
+      handleNewConversationInputsChange(initialDraft.inputs)
+
     consumedInitialDraftIdRef.current = initialDraft.id
     doSend(initialDraft.message, initialDraft.files as FileEntity[])
     onInitialDraftConsumed?.()
-  }, [chatList, currentConversationId, doSend, initialDraft, inputDisabled, onInitialDraftConsumed, respondingState])
+  }, [chatList, currentConversationId, doSend, handleNewConversationInputsChange, initialDraft, inputDisabled, onInitialDraftConsumed, respondingState])
 
   const messageList = useMemo(() => {
     if (currentConversationId || chatList.length > 1)
@@ -372,6 +347,8 @@ const ChatWrapper = ({
   }, [appData?.site.default_user_avatar_url, initUserVariables?.avatar_url, initUserVariables?.name])
 
   const chatNode = useMemo(() => {
+    if (isCreatorMode)
+      return null
     if (allInputsHidden || !inputsForms.length)
       return null
     if (isMobile) {
@@ -383,6 +360,7 @@ const ChatWrapper = ({
       return <InputsForm collapsed={collapsed} setCollapsed={setCollapsed} />
     }
   }, [
+    isCreatorMode,
     inputsForms.length,
     isMobile,
     currentConversationId,
@@ -393,13 +371,8 @@ const ChatWrapper = ({
   const welcome = useMemo(() => {
     const welcomeMessage = chatList.find(item => item.isOpeningStatement)
     if (showHomepage) {
-      if (isCreatorMode) {
-        return (
-          <div className="flex h-full w-full flex-col items-center justify-center pt-[10vh]">
-            <CreatorHomeInput onSubmit={(text, files) => doSend(text, files)} appParams={appParams} />
-          </div>
-        )
-      }
+      if (isCreatorMode)
+        return null
 
       const homepageDescription = appData?.site.description || ''
       const homepageTitle = appData?.site.title || '构界Agent'
@@ -583,49 +556,6 @@ const ChatWrapper = ({
     return chatList.find(item => item.isAnswer && item.humanInputFormDataList && item.humanInputFormDataList.length > 0)
   }, [chatList])
 
-  // In creator mode, keep CreatorTaskLayout visible until the workflow finishes.
-  // This covers: pending forms, submitted-but-still-running, and resuming after refresh.
-  const creatorTaskAnswer = useMemo(() => {
-    if (!isCreatorMode)
-      return null
-    // Priority 1: answer with pending (unsubmitted) human input forms
-    const pending = chatList.find(item => item.isAnswer && item.humanInputFormDataList && item.humanInputFormDataList.length > 0)
-    if (pending)
-      return pending
-    // Priority 2: answer with submitted human input forms whose workflow is still running
-    const submitted = [...chatList].reverse().find((item) => {
-      if (!item.isAnswer)
-        return false
-      if (!item.humanInputFilledFormDataList || item.humanInputFilledFormDataList.length === 0)
-        return false
-      const status = item.workflowProcess?.status
-      // Keep the layout while workflow hasn't finished
-      return !status || status === WorkflowRunningStatus.Running || status === WorkflowRunningStatus.Waiting || status === WorkflowRunningStatus.Paused
-    })
-    return submitted ?? null
-  }, [chatList, isCreatorMode])
-
-  // Creator mode: show CreatorTaskLayout when there are human input forms (pending or submitted-but-still-running)
-  if (creatorTaskAnswer && isInstalledApp) {
-    return (
-      <CreatorTaskLayout
-        chatList={chatList}
-        activeHumanInputAnswer={creatorTaskAnswer}
-        onSubmitHumanInput={handleSubmitHumanInputForm}
-        appData={appData}
-        getHumanInputNodeData={getHumanInputNodeData as any}
-        isResponding={respondingState}
-      />
-    )
-  }
-
-  // Creator mode: workflow finished — show result with "back to home" button
-  const creatorWorkflowFinished = isCreatorMode && !showHomepage && !respondingState && chatList.length > 1 && !creatorTaskAnswer
-  const handleBackToCreatorHome = useCallback(() => {
-    handleNewConversation()
-    creatorResetRef.current = false
-  }, [handleNewConversation])
-
   return (
     <div
       className={cn(
@@ -634,25 +564,13 @@ const ChatWrapper = ({
       )}
       style={appData?.site.chat_page_background_color ? { backgroundColor: appData.site.chat_page_background_color } : undefined}
     >
-      {/* Creator mode: show "back to home" header when workflow is done */}
-      {creatorWorkflowFinished && (
-        <div className="relative z-10 flex shrink-0 items-center px-4 py-3 border-b border-divider-subtle">
-          <button
-            type="button"
-            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-state-base-hover active:scale-95"
-            onClick={handleBackToCreatorHome}
-          >
-            <span className="i-ri-arrow-left-line h-4 w-4" />
-            <span>返回首页</span>
-          </button>
-        </div>
-      )}
       <div className="min-h-0 flex-1">
         <Chat
           appData={appData ?? undefined}
           config={appConfig}
           chatList={messageList}
           isResponding={respondingState}
+          noStopResponding={isCreatorMode}
           chatContainerInnerClassName={`mx-auto pt-6 w-full max-w-[768px] ${isMobile && 'px-4'}`}
           chatFooterClassName="pb-4"
           chatFooterInnerClassName={`mx-auto w-full max-w-[768px] ${isMobile ? 'px-2' : 'px-4'}`}
@@ -673,7 +591,7 @@ const ChatWrapper = ({
           suggestedQuestions={suggestedQuestions}
           answerIcon={answerIcon}
           hideProcessDetail
-          noChatInput={showHomepage || (isCreatorMode && !!activeHumanInputAnswer)} // In creator mode, hide input only when human input form is pending
+          noChatInput={isCreatorMode || showHomepage}
           footerNote={footerNote}
           themeBuilder={themeBuilder}
           switchSibling={doSwitchSibling}

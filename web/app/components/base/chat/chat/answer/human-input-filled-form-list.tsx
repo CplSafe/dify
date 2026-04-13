@@ -1,4 +1,5 @@
 import type { HumanInputFilledFormData } from '@/types/workflow'
+import { usePathname } from 'next/navigation'
 import ContentWrapper from './human-input-content/content-wrapper'
 import { SubmittedHumanInputContent } from './human-input-content/submitted'
 
@@ -9,6 +10,9 @@ type HumanInputFilledFormListProps = {
 const HumanInputFilledFormList = ({
   humanInputFilledFormDataList,
 }: HumanInputFilledFormListProps) => {
+  const pathname = usePathname()
+  const isCreatorMode = pathname?.startsWith('/creator')
+
   return (
     <div className="mt-2 flex flex-col gap-y-2">
       {
@@ -17,6 +21,7 @@ const HumanInputFilledFormList = ({
             key={formData.node_id}
             nodeTitle={formData.node_title}
             showExpandIcon
+            variant={isCreatorMode ? 'inline' : 'card'}
           >
             <SubmittedHumanInputContent
               key={formData.node_id}

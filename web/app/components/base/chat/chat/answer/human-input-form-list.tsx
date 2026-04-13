@@ -1,6 +1,7 @@
 import type { DeliveryMethod, HumanInputNodeType } from '@/app/components/workflow/nodes/human-input/types'
 import type { Node } from '@/app/components/workflow/types'
 import type { HumanInputFormData } from '@/types/workflow'
+import { usePathname } from 'next/navigation'
 import { useMemo } from 'react'
 import { DeliveryMethodType } from '@/app/components/workflow/nodes/human-input/types'
 import ContentWrapper from './human-input-content/content-wrapper'
@@ -17,6 +18,8 @@ const HumanInputFormList = ({
   onHumanInputFormSubmit,
   getHumanInputNodeData,
 }: HumanInputFormListProps) => {
+  const pathname = usePathname()
+  const isCreatorMode = pathname?.startsWith('/creator')
   const deliveryMethodsConfig = useMemo((): Record<string, { showEmailTip: boolean, isEmailDebugMode: boolean, showDebugModeTip: boolean }> => {
     if (!humanInputFormDataList.length)
       return {}
@@ -57,6 +60,7 @@ const HumanInputFormList = ({
           >
             <ContentWrapper
               nodeTitle={formData.node_title}
+              variant={isCreatorMode ? 'inline' : 'card'}
             >
               <UnsubmittedHumanInputContent
                 formData={formData}

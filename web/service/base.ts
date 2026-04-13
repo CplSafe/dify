@@ -156,6 +156,16 @@ function isInsufficientBalanceMessage(message?: string, code?: string | number) 
     || normalizedMessage.includes('余额不足')
 }
 
+function isIgnorableStreamError(message?: string) {
+  if (!message)
+    return false
+
+  return message === 'AbortError: The user aborted a request.'
+    || message === 'AbortError: signal is aborted without reason'
+    || message === 'signal is aborted without reason'
+    || message.includes('TypeError: Cannot assign to read only property')
+}
+
 const WBB_APP_LOGIN_PATH = '/webapp-signin'
 function requiredWebSSOLogin(message?: string, code?: number) {
   const params = new URLSearchParams()
@@ -559,9 +569,10 @@ export const ssePost = async (
         res,
         (str: string, isFirstMessage: boolean, moreInfo: IOnDataMoreInfo) => {
           if (moreInfo.errorMessage) {
+            if (isIgnorableStreamError(moreInfo.errorMessage))
+              return
             onError?.(moreInfo.errorMessage, moreInfo.errorCode)
-            // TypeError: Cannot assign to read only property ... will happen in page leave, so it should be ignored.
-            if (moreInfo.errorMessage !== 'AbortError: The user aborted a request.' && !moreInfo.errorMessage.includes('TypeError: Cannot assign to read only property'))
+            if (!isIgnorableStreamError(moreInfo.errorMessage))
               toast.error(moreInfo.errorMessage)
             return
           }
@@ -600,8 +611,10 @@ export const ssePost = async (
       )
     })
     .catch((e) => {
-      if (e.toString() !== 'AbortError: The user aborted a request.' && !e.toString().errorMessage.includes('TypeError: Cannot assign to read only property'))
-        toast.error(String(e))
+      const errorText = e instanceof Error ? e.message : String(e)
+      if (isIgnorableStreamError(errorText))
+        return
+      toast.error(errorText)
       onError?.(e)
     })
 }
@@ -706,9 +719,10 @@ export const sseGet = async (
         res,
         (str: string, isFirstMessage: boolean, moreInfo: IOnDataMoreInfo) => {
           if (moreInfo.errorMessage) {
+            if (isIgnorableStreamError(moreInfo.errorMessage))
+              return
             onError?.(moreInfo.errorMessage, moreInfo.errorCode)
-            // TypeError: Cannot assign to read only property ... will happen in page leave, so it should be ignored.
-            if (moreInfo.errorMessage !== 'AbortError: The user aborted a request.' && !moreInfo.errorMessage.includes('TypeError: Cannot assign to read only property'))
+            if (!isIgnorableStreamError(moreInfo.errorMessage))
               toast.error(moreInfo.errorMessage)
             return
           }
@@ -747,8 +761,10 @@ export const sseGet = async (
       )
     })
     .catch((e) => {
-      if (e.toString() !== 'AbortError: The user aborted a request.' && !e.toString().includes('TypeError: Cannot assign to read only property'))
-        toast.error(String(e))
+      const errorText = e instanceof Error ? e.message : String(e)
+      if (isIgnorableStreamError(errorText))
+        return
+      toast.error(errorText)
       onError?.(e)
     })
 }

@@ -9,6 +9,7 @@ export type CreatorChatDraft = {
   id: string
   message: string
   files: CreatorDraftFile[]
+  inputs?: Record<string, any>
 }
 
 const isBrowser = () => typeof window !== 'undefined'
@@ -27,6 +28,7 @@ export const saveCreatorHomeDraft = (draft: Omit<CreatorChatDraft, 'id'>) => {
     id: crypto.randomUUID(),
     message: draft.message,
     files: draft.files,
+    inputs: draft.inputs,
   }
 
   window.sessionStorage.setItem(CREATOR_HOME_DRAFT_STORAGE_KEY, JSON.stringify(payload))

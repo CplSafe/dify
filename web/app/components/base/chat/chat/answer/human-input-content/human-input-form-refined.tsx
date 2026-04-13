@@ -34,13 +34,9 @@ const HumanInputFormRefined = ({
     }
   }
 
-  // Group content items into sections based on screenshots
-  // This is a bit tricky as the backend sends a single form_content string.
-  // We'll rely on our splitByOutputVar but maybe wrap them in styled containers.
-
   return (
-    <div className="flex flex-col gap-6">
-      <div className="space-y-4">
+    <div className="flex flex-col gap-7">
+      <div className="space-y-3">
         {contentList.map((content, idx) => (
           <ContentItemRefined
             key={`${formData.node_id}-${idx}`}
@@ -51,18 +47,23 @@ const HumanInputFormRefined = ({
           />
         ))}
       </div>
-      
-      <div className="flex items-center gap-3 pt-4">
+
+      <div className="flex items-center gap-3 pt-2">
         {formData.actions.map((action: UserAction) => (
           <button
             key={action.id}
+            type="button"
             disabled={isSubmitting}
-            onClick={() => submit(formToken, action.id, inputs)}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void submit(formToken, action.id, inputs)
+            }}
             className={cn(
-              "h-10 px-6 rounded-xl font-medium transition-all active:scale-95 disabled:opacity-50",
-              action.button_style === 'primary' 
-                ? "bg-gradient-to-r from-[#80A7FF] to-[#B98DFF] text-white shadow-md hover:opacity-90"
-                : "bg-white border border-[#E9E9EB] text-text-secondary hover:bg-[#F4F4F5]"
+              'inline-flex h-10 items-center rounded-xl px-5 text-[15px] font-medium transition-all active:scale-95 disabled:opacity-50',
+              action.button_style === 'primary'
+                ? 'bg-[#7C3AED] text-white shadow-[0_10px_24px_rgba(124,58,237,0.18)] hover:bg-[#6D28D9]'
+                : 'border border-[#E7E4F5] bg-white text-[#4C4568] hover:bg-[#F7F4FF]'
             )}
           >
             {action.title}

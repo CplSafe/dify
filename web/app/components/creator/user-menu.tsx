@@ -75,35 +75,32 @@ export default function CreatorUserMenu() {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className="flex w-full items-center gap-3.5 rounded-xl pl-4 pr-3 py-3 transition-all hover:bg-[#F5F5F7] active:bg-[#EDEDF0] group"
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-700 shadow-sm ring-2 ring-white transition-transform group-hover:scale-[1.02]">
-              {avatarLetter}
+        <DropdownMenuTrigger
+          className="flex w-full items-center gap-3.5 rounded-xl pl-4 pr-3 py-3 text-left transition-all hover:bg-[#F5F5F7] active:bg-[#EDEDF0] group"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-700 shadow-sm ring-2 ring-white transition-transform group-hover:scale-[1.02]">
+            {avatarLetter}
+          </div>
+          <div className="min-w-0 flex-1 text-left">
+            <div className="truncate text-sm font-semibold text-text-primary">{userProfile?.name || '用户'}</div>
+            <div className="mt-0.5 flex items-center gap-1.5">
+              {balanceLoading
+                ? <RiLoader4Line className="h-3 w-3 animate-spin text-text-quaternary" />
+                : balance
+                  ? (
+                      <span className={cn(
+                        'rounded-md bg-opacity-10 px-1.5 py-0.5 text-xs font-medium',
+                        balance.is_sufficient ? 'bg-state-success text-state-success-text' : 'bg-state-destructive text-state-destructive-text',
+                      )}
+                      >
+                        {Number(balance.balance).toFixed(2)}
+                        {' '}
+                        {balance.currency}
+                      </span>
+                    )
+                  : <span className="truncate text-xs text-text-quaternary opacity-80">{userProfile?.email || ''}</span>}
             </div>
-            <div className="min-w-0 flex-1 text-left">
-              <div className="truncate text-sm font-semibold text-text-primary">{userProfile?.name || '用户'}</div>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                {balanceLoading
-                  ? <RiLoader4Line className="h-3 w-3 animate-spin text-text-quaternary" />
-                  : balance
-                    ? (
-                        <span className={cn(
-                          'text-xs font-medium px-1.5 py-0.5 rounded-md bg-opacity-10',
-                          balance.is_sufficient ? 'text-state-success-text bg-state-success' : 'text-state-destructive-text bg-state-destructive',
-                        )}
-                        >
-                          {Number(balance.balance).toFixed(2)}
-                          {' '}
-                          {balance.currency}
-                        </span>
-                      )
-                    : <span className="text-xs text-text-quaternary truncate opacity-80">{userProfile?.email || ''}</span>}
-              </div>
-            </div>
-          </button>
+          </div>
         </DropdownMenuTrigger>
 
         <DropdownMenuContent side="top" align="start" sideOffset={8} popupClassName="w-52 py-0!">

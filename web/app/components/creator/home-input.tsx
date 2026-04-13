@@ -1,14 +1,13 @@
 'use client'
 
 import type { FileEntity } from '@/app/components/base/file-uploader/types'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FileFromLinkOrLocal, FileListInChatInput } from '@/app/components/base/file-uploader'
 import { FileContextProvider, useStore } from '@/app/components/base/file-uploader/store'
 import { SupportUploadFileTypes } from '@/app/components/workflow/types'
 import { TransferMethod } from '@/types/app'
 import { cn } from '@/utils/classnames'
 
-// Icons (reconstructed from SVG)
 const TiktokIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
     <g clipPath="url(#tiktok-icon-clip)">
@@ -41,9 +40,32 @@ const StarIcon = () => (
   </svg>
 )
 
+type IndustryFieldConfig = {
+  variable: string
+  label: string
+  defaultValue: string
+  options: string[]
+}
+
 export type HomeInputProps = {
-  onSubmit: (text: string, files: FileEntity[]) => void
+  onSubmit: (text: string, files: FileEntity[], inputs: Record<string, any>) => void
   appParams?: any
+}
+
+const resolveIndustryField = (appParams: any): IndustryFieldConfig | null => {
+  const userInputForm = appParams?.user_input_form || []
+  const exact = userInputForm.find((item: any) => item?.select?.variable === 'industry')?.select
+  const field = exact || userInputForm.find((item: any) => item?.select)?.select
+
+  if (!field)
+    return null
+
+  return {
+    variable: field.variable || 'industry',
+    label: field.label || '行业选择',
+    defaultValue: field.default || '爱玛',
+    options: Array.isArray(field.options) && field.options.length ? field.options : ['爱玛'],
+  }
 }
 
 function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
@@ -51,6 +73,13 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
   const [tiktokUrl, setTiktokUrl] = useState('')
   const [showTiktokInput, setShowTiktokInput] = useState(false)
   const files = useStore(state => state.files)
+  const industryField = useMemo(() => resolveIndustryField(appParams), [appParams])
+  const [industryValue, setIndustryValue] = useState(industryField?.defaultValue || '爱玛')
+
+  useEffect(() => {
+    if (industryField?.defaultValue)
+      setIndustryValue(industryField.defaultValue)
+  }, [industryField?.defaultValue])
 
   const buildSubmitText = useCallback(() => {
     const content = value.trim()
@@ -65,18 +94,27 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
   const hasUploadingFiles = files.some(file => file.transferMethod === TransferMethod.local_file && !file.uploadedId)
   const canSubmit = !!buildSubmitText() || files.length > 0
 
+  const getSubmitInputs = useCallback(() => {
+    if (!industryField)
+      return {}
+
+    return {
+      [industryField.variable]: industryValue,
+    }
+  }, [industryField, industryValue])
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       if (canSubmit && !hasUploadingFiles)
-        onSubmit(buildSubmitText(), files)
+        onSubmit(buildSubmitText(), files, getSubmitInputs())
     }
   }
 
   const handleSubmit = useCallback(() => {
     if (canSubmit && !hasUploadingFiles)
-      onSubmit(buildSubmitText(), files)
-  }, [buildSubmitText, canSubmit, files, hasUploadingFiles, onSubmit])
+      onSubmit(buildSubmitText(), files, getSubmitInputs())
+  }, [buildSubmitText, canSubmit, files, getSubmitInputs, hasUploadingFiles, onSubmit])
 
   const visionConfig = appParams?.file_upload || {
     enabled: true,
@@ -90,10 +128,10 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
 
   const renderUploadTrigger = useCallback((open: boolean) => {
     return (
-      <button 
+      <button
         className={cn(
-          "flex items-center gap-2 rounded-xl border border-[#E9E9EB] px-4 py-2 text-sm font-medium text-[#4D4D54] transition-all hover:bg-[#F4F4F5] hover:border-[#D1D1D6] active:scale-[0.98]",
-          open && "bg-[#F4F4F5] border-[#D1D1D6]"
+          'flex items-center gap-2 rounded-xl border border-[#E9E9EB] px-4 py-2 text-sm font-medium text-[#4D4D54] transition-all hover:border-[#D1D1D6] hover:bg-[#F4F4F5] active:scale-[0.98]',
+          open && 'border-[#D1D1D6] bg-[#F4F4F5]',
         )}
       >
         <UploadIcon />
@@ -104,33 +142,31 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-8 py-8">
-      {/* Header Section */}
       <div className="mb-10 text-center">
         <h1 className="flex items-center justify-center gap-2 text-[44px] font-bold tracking-tight text-[#1D1C23]">
           <span>Hi, 欢迎使用</span>
           <span className="bg-gradient-to-r from-[#4D80FF] to-[#B98DFF] bg-clip-text text-transparent">创作Agent</span>
         </h1>
-        <p className="mt-4 text-[16px] tracking-[0.4em] text-[#919099] font-medium">
-          让 好 内 内容 快 人 一 步
+        <p className="mt-4 text-[16px] font-medium tracking-[0.4em] text-[#919099]">
+          让 好 内 容 快 人 一 步
         </p>
       </div>
 
-      {/* Input Box with Gradient Border */}
-      <div className="relative rounded-[28px] p-[3px] bg-gradient-to-r from-[#80A7FF] via-[#B98DFF] to-[#FF8DC7] shadow-[0_8px_40px_rgba(185,141,255,0.12)]">
+      <div className="relative rounded-[28px] bg-gradient-to-r from-[#80A7FF] via-[#B98DFF] to-[#FF8DC7] p-[3px] shadow-[0_8px_40px_rgba(185,141,255,0.12)]">
         <div className="flex flex-col rounded-[25px] bg-white p-6">
-          <div className="flex flex-col gap-2 min-h-[96px]">
+          <div className="flex min-h-[96px] flex-col gap-2">
             <FileListInChatInput fileConfig={visionConfig as any} />
             {showTiktokInput && (
               <div className="flex items-center gap-2 rounded-xl bg-[#F5F5F7] px-3 py-2">
                 <TiktokIcon />
-                <input 
+                <input
                   autoFocus
                   className="flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-quaternary"
                   placeholder="请输入抖音商品 URL 或 ID"
                   value={tiktokUrl}
                   onChange={e => setTiktokUrl(e.target.value)}
                 />
-                <button 
+                <button
                   className="text-text-quaternary hover:text-text-secondary"
                   onClick={() => {
                     setShowTiktokInput(false)
@@ -142,21 +178,38 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
               </div>
             )}
             <textarea
-              className="w-full flex-1 resize-none border-none p-0 text-lg text-text-primary placeholder:text-text-quaternary focus:ring-0 focus:outline-none focus-visible:ring-0"
+              className="w-full flex-1 resize-none border-none p-0 text-lg text-text-primary placeholder:text-text-quaternary focus:outline-none focus:ring-0 focus-visible:ring-0"
               placeholder="请输入您想要创作的内容"
               value={value}
-              onChange={(e) => setValue(e.target.value)}
+              onChange={e => setValue(e.target.value)}
               onKeyDown={handleKeyDown}
             />
           </div>
+
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <button 
+              {industryField && (
+                <div className="flex items-center gap-2 rounded-xl border border-[#E9E9EB] px-3 py-2">
+                  <span className="shrink-0 text-sm font-medium text-[#4D4D54]">{industryField.label}</span>
+                  <select
+                    value={industryValue}
+                    onChange={e => setIndustryValue(e.target.value)}
+                    className="h-6 min-w-[120px] bg-transparent text-sm text-text-primary outline-none"
+                  >
+                    {industryField.options.map(option => (
+                      <option key={option} value={option}>
+                        {option === '爱玛' ? option : `${option}（敬请期待）`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <button
                 className={cn(
-                  "flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all active:scale-[0.98]",
-                  showTiktokInput 
-                    ? "border-primary-600 bg-primary-50 text-primary-600" 
-                    : "border-[#E9E9EB] text-[#4D4D54] hover:bg-[#F4F4F5] hover:border-[#D1D1D6]"
+                  'flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all active:scale-[0.98]',
+                  showTiktokInput
+                    ? 'border-primary-600 bg-primary-50 text-primary-600'
+                    : 'border-[#E9E9EB] text-[#4D4D54] hover:border-[#D1D1D6] hover:bg-[#F4F4F5]',
                 )}
                 onClick={() => setShowTiktokInput(!showTiktokInput)}
               >
@@ -166,14 +219,15 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
               <FileFromLinkOrLocal
                 trigger={renderUploadTrigger}
                 fileConfig={visionConfig as any}
-                showFromLocal={true}
-                showFromLink={true}
+                showFromLocal
+                showFromLink
               />
             </div>
-            <button 
+
+            <button
               className={cn(
-                "flex h-12 w-12 items-center justify-center rounded-full bg-[#D4C3FF] text-white shadow-sm transition-all hover:shadow-md active:scale-95",
-                canSubmit && !hasUploadingFiles ? "hover:bg-[#C2ACFF] cursor-pointer" : "opacity-50 grayscale cursor-not-allowed"
+                'flex h-12 w-12 items-center justify-center rounded-full bg-[#D4C3FF] text-white shadow-sm transition-all hover:shadow-md active:scale-95',
+                canSubmit && !hasUploadingFiles ? 'cursor-pointer hover:bg-[#C2ACFF]' : 'cursor-not-allowed opacity-50 grayscale',
               )}
               disabled={!canSubmit || hasUploadingFiles}
               onClick={handleSubmit}

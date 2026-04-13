@@ -67,7 +67,7 @@ function getFormattedChatList(messages: any[]) {
   })
   return newChatList
 }
-export const useChatWithHistory = (installedAppInfo?: InstalledApp) => {
+export const useChatWithHistory = (installedAppInfo?: InstalledApp, forceFreshConversation?: boolean) => {
   const isInstalledApp = useMemo(() => !!installedAppInfo, [installedAppInfo])
   const appSourceType = isInstalledApp ? AppSourceType.installedApp : AppSourceType.webApp
   const appInfo = useWebAppStore(s => s.appInfo)
@@ -93,7 +93,7 @@ export const useChatWithHistory = (installedAppInfo?: InstalledApp) => {
           icon_url: app.icon_url,
           prompt_public: false,
           copyright: '',
-          show_workflow_steps: true,
+          show_workflow_steps: app.show_workflow_steps,
           use_icon_as_answer_icon: app.use_icon_as_answer_icon,
         },
         plan: 'basic',
@@ -144,7 +144,12 @@ export const useChatWithHistory = (installedAppInfo?: InstalledApp) => {
   const [conversationIdInfo, setConversationIdInfo] = useLocalStorageState<Record<string, Record<string, string>>>(CONVERSATION_ID_INFO, {
     defaultValue: {},
   })
-  const currentConversationId = useMemo(() => conversationIdInfo?.[appId || '']?.[userId || 'DEFAULT'] || '', [appId, conversationIdInfo, userId])
+  const storedConversationId = useMemo(() => conversationIdInfo?.[appId || '']?.[userId || 'DEFAULT'] || '', [appId, conversationIdInfo, userId])
+  const currentConversationId = useMemo(() => {
+    if (forceFreshConversation)
+      return ''
+    return storedConversationId
+  }, [forceFreshConversation, storedConversationId])
   const handleConversationIdInfoChange = useCallback((changeConversationId: string) => {
     if (appId) {
       let prevValue = conversationIdInfo?.[appId || '']

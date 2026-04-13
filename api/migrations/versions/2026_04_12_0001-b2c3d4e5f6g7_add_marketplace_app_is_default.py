@@ -16,10 +16,18 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column(
-        'marketplace_apps',
-        sa.Column('is_default', sa.Boolean(), server_default=sa.text('false'), nullable=False),
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name='marketplace_apps' AND column_name='is_default'"
+        )
     )
+    if result.fetchone() is None:
+        op.add_column(
+            'marketplace_apps',
+            sa.Column('is_default', sa.Boolean(), server_default=sa.text('false'), nullable=False),
+        )
 
 
 def downgrade():

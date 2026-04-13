@@ -94,6 +94,11 @@ const Answer: FC<AnswerProps> = ({
   })).filter(item => item.actionText) || []
   const hasSubmittedHumanInput = !!humanInputFilledFormDataList?.length
   const hasRunningLoopNode = !!workflowProcess?.tracing?.some(node => node.node_type === BlockEnum.Loop && node.status === WorkflowRunningStatus.Running)
+  const shouldShowPostHumanInputLoading = hasSubmittedHumanInput
+    && contentIsEmpty
+    && !hasAgentThoughts
+    && !allFiles?.length
+    && !message_files?.length
 
   const [containerWidth, setContainerWidth] = useState(0)
   const [contentWidth, setContentWidth] = useState(0)
@@ -195,7 +200,7 @@ const Answer: FC<AnswerProps> = ({
   const loadingText = hasRunningLoopNode
     ? '视频生成中'
     : hasSubmittedHumanInput
-      ? `${appTitle} 正在继续生成`
+      ? `${appTitle} 正在继续生成视频`
       : `${appTitle} 正在分析需求`
 
   return (
@@ -302,7 +307,7 @@ const Answer: FC<AnswerProps> = ({
         )}
 
         {/* Block 2: Response Content (when human inputs exist) */}
-        {hasHumanInputs && (responding || !contentIsEmpty || hasAgentThoughts) && (
+        {hasHumanInputs && (responding || !contentIsEmpty || hasAgentThoughts || shouldShowPostHumanInputLoading) && (
           <div className={cn('group relative mt-3 pr-1 md:pr-6', chatAnswerContainerInner)}>
             {!isCreatorMode && <div className="absolute -top-3 left-8 h-4 w-0.5 bg-chat-answer-human-input-form-divider-bg" />}
             <div
@@ -328,14 +333,12 @@ const Answer: FC<AnswerProps> = ({
                   />
                 )
               }
-              {
-                responding && contentIsEmpty && !hasAgentThoughts && (
-                  <div className="flex min-h-6 items-center gap-1.5 text-xs text-text-primary">
-                    <span aria-hidden className="i-ri-loader-2-line h-3 w-3 shrink-0 animate-spin text-text-tertiary" />
-                    <span>{loadingText}</span>
-                  </div>
-                )
-              }
+              {((responding && contentIsEmpty && !hasAgentThoughts) || shouldShowPostHumanInputLoading) && (
+                <div className="flex min-h-6 items-center gap-1.5 text-xs text-text-primary">
+                  <span aria-hidden className="i-ri-loader-2-line h-3 w-3 shrink-0 animate-spin text-text-tertiary" />
+                  <span>{loadingText}</span>
+                </div>
+              )}
               {
                 !contentIsEmpty && !hasAgentThoughts && (
                   <BasicContent item={item} responding={responding} />

@@ -501,7 +501,10 @@ class ConsoleWorkflowPauseDetailsApi(Resource):
         if not workflow_run:
             raise NotFoundError("Workflow run not found")
 
-        if workflow_run.tenant_id != current_user.current_tenant_id:
+        # Allow cross-workspace access for installed (Explore) apps: the workflow
+        # run's tenant_id belongs to the app owner's workspace, which may differ
+        # from the current user's workspace.  Verify ownership via created_by instead.
+        if workflow_run.created_by != current_user.id:
             raise NotFoundError("Workflow run not found")
 
         # Check if workflow is suspended

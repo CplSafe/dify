@@ -22,6 +22,7 @@ from core.app.apps.workflow.app_generator import WorkflowAppGenerator
 from extensions.ext_database import db
 from libs.login import current_account_with_tenant, login_required
 from models import App
+from models.model import InstalledApp
 from models.enums import CreatorUserRole
 from models.human_input import RecipientType
 from models.model import AppMode
@@ -47,7 +48,20 @@ class ConsoleHumanInputFormApi(Resource):
     def _ensure_console_access(form: Form):
         _, current_tenant_id = current_account_with_tenant()
 
-        if form.tenant_id != current_tenant_id:
+        if form.tenant_id == current_tenant_id:
+            return
+
+        # Allow cross-workspace access when the user has the app installed via
+        # Explore (InstalledApp).  In that case the form's tenant is the app
+        # owner's workspace, while the current user belongs to a different one.
+        installed = db.session.scalar(
+            select(InstalledApp).where(
+                InstalledApp.tenant_id == current_tenant_id,
+                InstalledApp.app_id == form.app_id,
+                InstalledApp.app_owner_tenant_id == form.tenant_id,
+            )
+        )
+        if installed is None:
             raise NotFoundError("App not found")
 
     @setup_required

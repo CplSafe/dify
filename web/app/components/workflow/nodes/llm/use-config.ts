@@ -1,30 +1,69 @@
-import type { Memory, PromptItem, ValueSelector, Var, Variable } from '../../types'
+import type {
+  Memory,
+  PromptItem,
+  ValueSelector,
+  Var,
+  Variable,
+} from '../../types'
 import type { LLMNodeType, StructuredOutput } from './types'
 import { produce } from 'immer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { checkHasContextBlock, checkHasHistoryBlock, checkHasQueryBlock } from '@/app/components/base/prompt-editor/constants'
+import {
+  checkHasContextBlock,
+  checkHasHistoryBlock,
+  checkHasQueryBlock,
+} from '@/app/components/base/prompt-editor/constants'
 import {
   ModelFeatureEnum,
   ModelTypeEnum,
 } from '@/app/components/header/account-setting/model-provider-page/declarations'
-import { useModelList, useModelListAndDefaultModelAndCurrentProviderAndModel } from '@/app/components/header/account-setting/model-provider-page/hooks'
+import {
+  useModelList,
+  useModelListAndDefaultModelAndCurrentProviderAndModel,
+} from '@/app/components/header/account-setting/model-provider-page/hooks'
 import useInspectVarsCrud from '@/app/components/workflow/hooks/use-inspect-vars-crud'
 import useNodeCrud from '@/app/components/workflow/nodes/_base/hooks/use-node-crud'
 import { AppModeEnum } from '@/types/app'
-import {
-  useIsChatMode,
-  useNodesReadOnly,
-} from '../../hooks'
+import { useIsChatMode, useNodesReadOnly } from '../../hooks'
 import useConfigVision from '../../hooks/use-config-vision'
 import { useStore } from '../../store'
 import { EditionType, VarType } from '../../types'
 import useAvailableVarList from '../_base/hooks/use-available-var-list'
 
-const INPUT_VAR_TYPES: VarType[] = [VarType.number, VarType.string, VarType.secret, VarType.arrayString, VarType.arrayNumber, VarType.file, VarType.arrayFile]
+const INPUT_VAR_TYPES: VarType[] = [
+  VarType.number,
+  VarType.string,
+  VarType.secret,
+  VarType.arrayString,
+  VarType.arrayNumber,
+  VarType.file,
+  VarType.arrayFile,
+]
 
-const JINJA2_VAR_TYPES: VarType[] = [VarType.number, VarType.string, VarType.secret, VarType.arrayString, VarType.arrayNumber, VarType.arrayBoolean, VarType.arrayObject, VarType.object, VarType.array, VarType.boolean]
+const JINJA2_VAR_TYPES: VarType[] = [
+  VarType.number,
+  VarType.string,
+  VarType.secret,
+  VarType.arrayString,
+  VarType.arrayNumber,
+  VarType.arrayBoolean,
+  VarType.arrayObject,
+  VarType.object,
+  VarType.array,
+  VarType.boolean,
+]
 
-const MEMORY_PROMPT_VAR_TYPES: VarType[] = [VarType.arrayObject, VarType.array, VarType.number, VarType.string, VarType.secret, VarType.arrayString, VarType.arrayNumber, VarType.file, VarType.arrayFile]
+const MEMORY_PROMPT_VAR_TYPES: VarType[] = [
+  VarType.arrayObject,
+  VarType.array,
+  VarType.number,
+  VarType.string,
+  VarType.secret,
+  VarType.arrayString,
+  VarType.arrayNumber,
+  VarType.file,
+  VarType.arrayFile,
+]
 
 function ensureJinja2Variables(draft: LLMNodeType) {
   if (!draft.prompt_config)
@@ -38,8 +77,14 @@ const useConfig = (id: string, payload: LLMNodeType) => {
   const isChatMode = useIsChatMode()
 
   const defaultConfig = useStore(s => s.nodesDefaultConfigs)?.[payload.type]
-  const [defaultRolePrefix, setDefaultRolePrefix] = useState<{ user: string, assistant: string }>({ user: '', assistant: '' })
-  const { inputs, setInputs: doSetInputs } = useNodeCrud<LLMNodeType>(id, payload)
+  const [defaultRolePrefix, setDefaultRolePrefix] = useState<{
+    user: string
+    assistant: string
+  }>({ user: '', assistant: '' })
+  const { inputs, setInputs: doSetInputs } = useNodeCrud<LLMNodeType>(
+    id,
+    payload,
+  )
   const inputRef = useRef(inputs)
   useEffect(() => {
     inputRef.current = inputs
@@ -47,34 +92,44 @@ const useConfig = (id: string, payload: LLMNodeType) => {
 
   const { deleteNodeInspectorVars } = useInspectVarsCrud()
 
-  const setInputs = useCallback((newInputs: LLMNodeType) => {
-    if (newInputs.memory && !newInputs.memory.role_prefix) {
-      const patched = produce(newInputs, (draft) => {
-        draft.memory!.role_prefix = defaultRolePrefix
-      })
-      doSetInputs(patched)
-      inputRef.current = patched
-      return
-    }
-    doSetInputs(newInputs)
-    inputRef.current = newInputs
-  }, [doSetInputs, defaultRolePrefix])
+  const hasDefaultConfig = useCallback(
+    (cfg: typeof defaultConfig) => !!cfg && Object.keys(cfg).length > 0,
+    [],
+  )
 
-  // Helper: produce new inputs from a recipe, then set them
-  const updateInputs = useCallback((recipe: (draft: LLMNodeType) => void) => {
-    const newInputs = produce(inputRef.current, recipe)
-    setInputs(newInputs)
-  }, [setInputs])
+  const setInputs = useCallback(
+    (newInputs: LLMNodeType) => {
+      if (newInputs.memory && !newInputs.memory.role_prefix) {
+        const patched = produce(newInputs, (draft) => {
+          draft.memory!.role_prefix = defaultRolePrefix
+        })
+        doSetInputs(patched)
+        inputRef.current = patched
+        return
+      }
+      doSetInputs(newInputs)
+      inputRef.current = newInputs
+    },
+    [doSetInputs, defaultRolePrefix],
+  )
 
-  // model
+  const updateInputs = useCallback(
+    (recipe: (draft: LLMNodeType) => void) => {
+      const newInputs = produce(inputRef.current, recipe)
+      setInputs(newInputs)
+    },
+    [setInputs],
+  )
+
   const model = inputs.model
   const isChatModel = model?.mode === AppModeEnum.CHAT
-  const isCompletionModel = !isChatModel
 
   const hasSetBlockStatus = useMemo(() => {
     const promptTemplate = inputs.prompt_template
     const context = isChatModel
-      ? (promptTemplate as PromptItem[]).some(item => checkHasContextBlock(item.text))
+      ? (promptTemplate as PromptItem[]).some(item =>
+          checkHasContextBlock(item.text),
+        )
       : checkHasContextBlock((promptTemplate as PromptItem).text)
 
     if (!isChatMode)
@@ -83,7 +138,9 @@ const useConfig = (id: string, payload: LLMNodeType) => {
     if (isChatModel) {
       return {
         history: false,
-        query: (promptTemplate as PromptItem[]).some(item => checkHasQueryBlock(item.text)),
+        query: (promptTemplate as PromptItem[]).some(item =>
+          checkHasQueryBlock(item.text),
+        ),
         context,
       }
     }
@@ -96,24 +153,31 @@ const useConfig = (id: string, payload: LLMNodeType) => {
     }
   }, [inputs.prompt_template, isChatModel, isChatMode])
 
-  const shouldShowContextTip = !hasSetBlockStatus.context && inputs.context.enabled
+  const shouldShowContextTip
+    = !hasSetBlockStatus.context && inputs.context.enabled
 
-  const appendDefaultPromptConfig = useCallback((draft: LLMNodeType, defaultConfig: any, passInIsChatMode?: boolean) => {
-    const promptTemplates = defaultConfig.prompt_templates
-    if (passInIsChatMode === undefined ? isChatModel : passInIsChatMode) {
-      draft.prompt_template = promptTemplates.chat_model.prompts
-    }
-    else {
-      draft.prompt_template = promptTemplates.completion_model.prompt
-      setDefaultRolePrefix({
-        user: promptTemplates.completion_model.conversation_histories_role.user_prefix,
-        assistant: promptTemplates.completion_model.conversation_histories_role.assistant_prefix,
-      })
-    }
-  }, [isChatModel])
+  const appendDefaultPromptConfig = useCallback(
+    (draft: LLMNodeType, defaultConfig: any, passInIsChatMode?: boolean) => {
+      const promptTemplates = defaultConfig.prompt_templates
+      if (passInIsChatMode === undefined ? isChatModel : passInIsChatMode) {
+        draft.prompt_template = promptTemplates.chat_model.prompts
+      }
+      else {
+        draft.prompt_template = promptTemplates.completion_model.prompt
+        setDefaultRolePrefix({
+          user: promptTemplates.completion_model.conversation_histories_role
+            .user_prefix,
+          assistant:
+            promptTemplates.completion_model.conversation_histories_role
+              .assistant_prefix,
+        })
+      }
+    },
+    [isChatModel],
+  )
 
   useEffect(() => {
-    if (defaultConfig && Object.keys(defaultConfig).length > 0 && !inputs.prompt_template) {
+    if (hasDefaultConfig(defaultConfig) && !inputs.prompt_template) {
       const newInputs = produce(inputs, (draft) => {
         appendDefaultPromptConfig(draft, defaultConfig)
       })
@@ -122,10 +186,10 @@ const useConfig = (id: string, payload: LLMNodeType) => {
   }, [defaultConfig, isChatModel])
 
   const [modelChanged, setModelChanged] = useState(false)
-  const {
-    currentProvider,
-    currentModel,
-  } = useModelListAndDefaultModelAndCurrentProviderAndModel(ModelTypeEnum.textGeneration)
+  const { currentProvider, currentModel }
+    = useModelListAndDefaultModelAndCurrentProviderAndModel(
+      ModelTypeEnum.textGeneration,
+    )
 
   const {
     isVisionModel,
@@ -141,17 +205,25 @@ const useConfig = (id: string, payload: LLMNodeType) => {
     },
   })
 
-  const handleModelChanged = useCallback((model: { provider: string, modelId: string, mode?: string }) => {
-    updateInputs((draft) => {
-      draft.model.provider = model.provider
-      draft.model.name = model.modelId
-      draft.model.mode = model.mode!
-      const isModeChange = model.mode !== inputRef.current.model.mode
-      if (isModeChange && defaultConfig && Object.keys(defaultConfig).length > 0)
-        appendDefaultPromptConfig(draft, defaultConfig, model.mode === AppModeEnum.CHAT)
-    })
-    setModelChanged(true)
-  }, [updateInputs, defaultConfig, appendDefaultPromptConfig])
+  const handleModelChanged = useCallback(
+    (model: { provider: string, modelId: string, mode?: string }) => {
+      updateInputs((draft) => {
+        draft.model.provider = model.provider
+        draft.model.name = model.modelId
+        draft.model.mode = model.mode!
+        const isModeChange = model.mode !== inputRef.current.model.mode
+        if (isModeChange && hasDefaultConfig(defaultConfig)) {
+          appendDefaultPromptConfig(
+            draft,
+            defaultConfig,
+            model.mode === AppModeEnum.CHAT,
+          )
+        }
+      })
+      setModelChanged(true)
+    },
+    [updateInputs, defaultConfig, appendDefaultPromptConfig],
+  )
 
   useEffect(() => {
     if (currentProvider?.provider && currentModel?.model && !model.provider) {
@@ -163,11 +235,14 @@ const useConfig = (id: string, payload: LLMNodeType) => {
     }
   }, [model.provider, currentProvider, currentModel, handleModelChanged])
 
-  const handleCompletionParamsChange = useCallback((newParams: Record<string, any>) => {
-    updateInputs((draft) => {
-      draft.model.completion_params = newParams
-    })
-  }, [updateInputs])
+  const handleCompletionParamsChange = useCallback(
+    (newParams: Record<string, any>) => {
+      updateInputs((draft) => {
+        draft.model.completion_params = newParams
+      })
+    },
+    [updateInputs],
+  )
 
   // change to vision model to set vision enabled, else disabled
   useEffect(() => {
@@ -179,77 +254,114 @@ const useConfig = (id: string, payload: LLMNodeType) => {
 
   // variables
   const isShowVars = isChatModel
-    ? (inputs.prompt_template as PromptItem[]).some(item => item.edition_type === EditionType.jinja2)
-    : (inputs.prompt_template as PromptItem).edition_type === EditionType.jinja2
+    ? (inputs.prompt_template as PromptItem[]).some(
+        item => item.edition_type === EditionType.jinja2,
+      )
+    : (inputs.prompt_template as PromptItem).edition_type
+      === EditionType.jinja2
 
-  const handleAddVariable = useCallback((payload?: Variable) => {
-    updateInputs((draft) => {
-      ensureJinja2Variables(draft)
-      draft.prompt_config.jinja2_variables!.push(payload ?? { variable: '', value_selector: [] })
-    })
-  }, [updateInputs])
+  const handleAddVariable = useCallback(
+    (payload?: Variable) => {
+      updateInputs((draft) => {
+        ensureJinja2Variables(draft)
+        draft.prompt_config!.jinja2_variables!.push(
+          payload ?? { variable: '', value_selector: [] },
+        )
+      })
+    },
+    [updateInputs],
+  )
 
-  const handleVarListChange = useCallback((newList: Variable[]) => {
-    updateInputs((draft) => {
-      ensureJinja2Variables(draft)
-      draft.prompt_config.jinja2_variables = newList
-    })
-  }, [updateInputs])
+  const handleVarListChange = useCallback(
+    (newList: Variable[]) => {
+      updateInputs((draft) => {
+        ensureJinja2Variables(draft)
+        draft.prompt_config!.jinja2_variables = newList
+      })
+    },
+    [updateInputs],
+  )
 
-  const handleVarNameChange = useCallback((oldName: string, newName: string) => {
-    updateInputs((draft) => {
-      if (isChatModel) {
-        const promptTemplate = draft.prompt_template as PromptItem[]
-        promptTemplate.filter(item => item.edition_type === EditionType.jinja2).forEach((item) => {
-          item.jinja2_text = (item.jinja2_text || '').replaceAll(`{{ ${oldName} }}`, `{{ ${newName} }}`)
-        })
-      }
-      else {
-        if ((draft.prompt_template as PromptItem).edition_type !== EditionType.jinja2)
-          return
+  const handleVarNameChange = useCallback(
+    (oldName: string, newName: string) => {
+      updateInputs((draft) => {
+        if (isChatModel) {
+          const promptTemplate = draft.prompt_template as PromptItem[]
+          promptTemplate
+            .filter(item => item.edition_type === EditionType.jinja2)
+            .forEach((item) => {
+              item.jinja2_text = (item.jinja2_text || '').replaceAll(
+                `{{ ${oldName} }}`,
+                `{{ ${newName} }}`,
+              )
+            })
+        }
+        else {
+          if (
+            (draft.prompt_template as PromptItem).edition_type
+            !== EditionType.jinja2
+          ) {
+            return
+          }
 
-        const promptTemplate = draft.prompt_template as PromptItem
-        promptTemplate.jinja2_text = (promptTemplate.jinja2_text || '').replaceAll(`{{ ${oldName} }}`, `{{ ${newName} }}`)
-      }
-    })
-  }, [isChatModel, updateInputs])
+          const promptTemplate = draft.prompt_template as PromptItem
+          promptTemplate.jinja2_text = (
+            promptTemplate.jinja2_text || ''
+          ).replaceAll(`{{ ${oldName} }}`, `{{ ${newName} }}`)
+        }
+      })
+    },
+    [isChatModel, updateInputs],
+  )
 
   // context
-  const handleContextVarChange = useCallback((newVar: ValueSelector | string) => {
-    updateInputs((draft) => {
-      draft.context.variable_selector = newVar as ValueSelector || []
-      draft.context.enabled = !!(newVar && newVar.length > 0)
-    })
-  }, [updateInputs])
+  const handleContextVarChange = useCallback(
+    (newVar: ValueSelector | string) => {
+      updateInputs((draft) => {
+        draft.context.variable_selector = (newVar as ValueSelector) || []
+        draft.context.enabled = !!(newVar && newVar.length > 0)
+      })
+    },
+    [updateInputs],
+  )
 
-  const handlePromptChange = useCallback((newPrompt: PromptItem[] | PromptItem) => {
-    updateInputs((draft) => {
-      draft.prompt_template = newPrompt
-    })
-  }, [updateInputs])
+  const handlePromptChange = useCallback(
+    (newPrompt: PromptItem[] | PromptItem) => {
+      updateInputs((draft) => {
+        draft.prompt_template = newPrompt
+      })
+    },
+    [updateInputs],
+  )
 
-  const handleMemoryChange = useCallback((newMemory?: Memory) => {
-    updateInputs((draft) => {
-      draft.memory = newMemory
-    })
-  }, [updateInputs])
+  const handleMemoryChange = useCallback(
+    (newMemory?: Memory) => {
+      updateInputs((draft) => {
+        draft.memory = newMemory
+      })
+    },
+    [updateInputs],
+  )
 
-  const handleSyeQueryChange = useCallback((newQuery: string) => {
-    updateInputs((draft) => {
-      if (!draft.memory) {
-        draft.memory = {
-          window: {
-            enabled: false,
-            size: 10,
-          },
-          query_prompt_template: newQuery,
+  const handleSyeQueryChange = useCallback(
+    (newQuery: string) => {
+      updateInputs((draft) => {
+        if (!draft.memory) {
+          draft.memory = {
+            window: {
+              enabled: false,
+              size: 10,
+            },
+            query_prompt_template: newQuery,
+          }
         }
-      }
-      else {
-        draft.memory.query_prompt_template = newQuery
-      }
-    })
-  }, [updateInputs])
+        else {
+          draft.memory.query_prompt_template = newQuery
+        }
+      })
+    },
+    [updateInputs],
+  )
 
   // structure output
   const { data: modelList } = useModelList(ModelTypeEnum.textGeneration)
@@ -260,22 +372,29 @@ const useConfig = (id: string, payload: LLMNodeType) => {
     ?.features
     ?.includes(ModelFeatureEnum.StructuredOutput)
 
-  const [structuredOutputCollapsed, setStructuredOutputCollapsed] = useState(true)
-  const handleStructureOutputEnableChange = useCallback((enabled: boolean) => {
-    updateInputs((draft) => {
-      draft.structured_output_enabled = enabled
-    })
-    if (enabled)
-      setStructuredOutputCollapsed(false)
-    deleteNodeInspectorVars(id)
-  }, [updateInputs, deleteNodeInspectorVars, id])
+  const [structuredOutputCollapsed, setStructuredOutputCollapsed]
+    = useState(true)
+  const handleStructureOutputEnableChange = useCallback(
+    (enabled: boolean) => {
+      updateInputs((draft) => {
+        draft.structured_output_enabled = enabled
+      })
+      if (enabled)
+        setStructuredOutputCollapsed(false)
+      deleteNodeInspectorVars(id)
+    },
+    [updateInputs, deleteNodeInspectorVars, id],
+  )
 
-  const handleStructureOutputChange = useCallback((newOutput: StructuredOutput) => {
-    updateInputs((draft) => {
-      draft.structured_output = newOutput
-    })
-    deleteNodeInspectorVars(id)
-  }, [updateInputs, deleteNodeInspectorVars, id])
+  const handleStructureOutputChange = useCallback(
+    (newOutput: StructuredOutput) => {
+      updateInputs((draft) => {
+        draft.structured_output = newOutput
+      })
+      deleteNodeInspectorVars(id)
+    },
+    [updateInputs, deleteNodeInspectorVars, id],
+  )
 
   const filterInputVar = useCallback((varPayload: Var) => {
     return INPUT_VAR_TYPES.includes(varPayload.type)
@@ -290,23 +409,26 @@ const useConfig = (id: string, payload: LLMNodeType) => {
   }, [])
 
   // reasoning format
-  const handleReasoningFormatChange = useCallback((reasoningFormat: 'tagged' | 'separated') => {
-    updateInputs((draft) => {
-      draft.reasoning_format = reasoningFormat
-    })
-  }, [updateInputs])
+  const handleReasoningFormatChange = useCallback(
+    (reasoningFormat: 'tagged' | 'separated') => {
+      updateInputs((draft) => {
+        draft.reasoning_format = reasoningFormat
+      })
+    },
+    [updateInputs],
+  )
 
   // billing price per 1k tokens
-  const handleBillingPriceChange = useCallback((price: number | undefined) => {
-    updateInputs((draft) => {
-      draft.billing_price_per_k_tokens = price
-    })
-  }, [updateInputs])
+  const handleBillingPriceChange = useCallback(
+    (price: number | undefined) => {
+      updateInputs((draft) => {
+        draft.billing_price_per_k_tokens = price
+      })
+    },
+    [updateInputs],
+  )
 
-  const {
-    availableVars,
-    availableNodesWithParent,
-  } = useAvailableVarList(id, {
+  const { availableVars, availableNodesWithParent } = useAvailableVarList(id, {
     onlyLeafNodeVar: false,
     filterVar: filterMemoryPromptVar,
   })
@@ -316,7 +438,7 @@ const useConfig = (id: string, payload: LLMNodeType) => {
     isChatMode,
     inputs,
     isChatModel,
-    isCompletionModel,
+    isCompletionModel: !isChatModel,
     hasSetBlockStatus,
     shouldShowContextTip,
     isVisionModel,

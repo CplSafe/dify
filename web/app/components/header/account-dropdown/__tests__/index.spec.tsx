@@ -30,7 +30,11 @@ vi.mock('@/app/components/header/github-star', () => ({
 }))
 
 vi.mock('@/app/components/base/theme-switcher', () => ({
-  default: () => <button type="button" data-testid="theme-switcher-button">Theme switcher</button>,
+  default: () => (
+    <button type="button" data-testid="theme-switcher-button">
+      Theme switcher
+    </button>
+  ),
 }))
 
 vi.mock('@/context/app-context', () => ({
@@ -80,11 +84,21 @@ const { mockConfig, mockEnv } = vi.hoisted(() => ({
   },
 }))
 vi.mock('@/config', () => ({
-  get IS_CLOUD_EDITION() { return mockConfig.IS_CLOUD_EDITION },
-  get AMPLITUDE_API_KEY() { return mockConfig.AMPLITUDE_API_KEY },
-  get isAmplitudeEnabled() { return mockConfig.IS_CLOUD_EDITION && !!mockConfig.AMPLITUDE_API_KEY },
-  get ZENDESK_WIDGET_KEY() { return mockConfig.ZENDESK_WIDGET_KEY },
-  get SUPPORT_EMAIL_ADDRESS() { return mockConfig.SUPPORT_EMAIL_ADDRESS },
+  get IS_CLOUD_EDITION() {
+    return mockConfig.IS_CLOUD_EDITION
+  },
+  get AMPLITUDE_API_KEY() {
+    return mockConfig.AMPLITUDE_API_KEY
+  },
+  get isAmplitudeEnabled() {
+    return mockConfig.IS_CLOUD_EDITION && !!mockConfig.AMPLITUDE_API_KEY
+  },
+  get ZENDESK_WIDGET_KEY() {
+    return mockConfig.ZENDESK_WIDGET_KEY
+  },
+  get SUPPORT_EMAIL_ADDRESS() {
+    return mockConfig.SUPPORT_EMAIL_ADDRESS
+  },
   IS_DEV: false,
   IS_CE_EDITION: false,
 }))
@@ -116,6 +130,7 @@ const baseAppContextValue: AppContextValue = {
   isCurrentWorkspaceOwner: true,
   isCurrentWorkspaceEditor: true,
   isCurrentWorkspaceDatasetOperator: false,
+  isSystemAdmin: false,
   mutateCurrentWorkspace: vi.fn(),
   langGeniusVersionInfo: {
     current_env: 'testing',
@@ -146,9 +161,7 @@ describe('AccountDropdown', () => {
     })
 
     return render(
-      <QueryClientProvider client={queryClient}>
-        {ui}
-      </QueryClientProvider>,
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
     )
   }
 
@@ -160,8 +173,13 @@ describe('AccountDropdown', () => {
 
     vi.mocked(useAppContext).mockReturnValue(baseAppContextValue)
     vi.mocked(useGlobalPublicStore).mockImplementation((selector?: unknown) => {
-      const fullState = { systemFeatures: { branding: { enabled: false } }, setSystemFeatures: vi.fn() }
-      return typeof selector === 'function' ? (selector as (state: typeof fullState) => unknown)(fullState) : fullState
+      const fullState = {
+        systemFeatures: { branding: { enabled: false } },
+        setSystemFeatures: vi.fn(),
+      }
+      return typeof selector === 'function'
+        ? (selector as (state: typeof fullState) => unknown)(fullState)
+        : fullState
     })
     vi.mocked(useProviderContext).mockReturnValue({
       isEducationAccount: false,
@@ -203,7 +221,9 @@ describe('AccountDropdown', () => {
       renderWithRouter(<AppSelector />)
 
       // Assert
-      expect(screen.getByRole('button', { name: 'common.account.account' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'common.account.account' }),
+      ).toBeInTheDocument()
     })
 
     it('should show EDU badge for education accounts', () => {
@@ -240,7 +260,11 @@ describe('AccountDropdown', () => {
         ...baseAppContextValue,
         userProfile: { ...baseAppContextValue.userProfile, name: 'User' },
         isCurrentWorkspaceOwner: true,
-        langGeniusVersionInfo: { ...baseAppContextValue.langGeniusVersionInfo, current_version: '0.6.0', latest_version: '0.6.0' },
+        langGeniusVersionInfo: {
+          ...baseAppContextValue.langGeniusVersionInfo,
+          current_version: '0.6.0',
+          latest_version: '0.6.0',
+        },
       })
 
       // Act
@@ -248,7 +272,9 @@ describe('AccountDropdown', () => {
       fireEvent.click(screen.getByRole('button'))
 
       // Assert
-      expect(screen.getByText('common.userProfile.compliance')).toBeInTheDocument()
+      expect(
+        screen.getByText('common.userProfile.compliance'),
+      ).toBeInTheDocument()
     })
 
     // Compound AND middle-false: IS_CLOUD_EDITION=true but isCurrentWorkspaceOwner=false
@@ -265,7 +291,9 @@ describe('AccountDropdown', () => {
       fireEvent.click(screen.getByRole('button'))
 
       // Assert
-      expect(screen.queryByText('common.userProfile.compliance')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('common.userProfile.compliance'),
+      ).not.toBeInTheDocument()
     })
   })
 
@@ -306,7 +334,9 @@ describe('AccountDropdown', () => {
     it('should keep account dropdown open when clicking the theme switcher', () => {
       // Act
       renderWithRouter(<AppSelector />)
-      fireEvent.click(screen.getByRole('button', { name: 'common.account.account' }))
+      fireEvent.click(
+        screen.getByRole('button', { name: 'common.account.account' }),
+      )
       fireEvent.click(screen.getByTestId('theme-switcher-button'))
 
       // Assert
@@ -317,18 +347,29 @@ describe('AccountDropdown', () => {
   describe('Branding and Environment', () => {
     it('should hide sections when branding is enabled', () => {
       // Arrange
-      vi.mocked(useGlobalPublicStore).mockImplementation((selector?: unknown) => {
-        const fullState = { systemFeatures: { branding: { enabled: true } }, setSystemFeatures: vi.fn() }
-        return typeof selector === 'function' ? (selector as (state: typeof fullState) => unknown)(fullState) : fullState
-      })
+      vi.mocked(useGlobalPublicStore).mockImplementation(
+        (selector?: unknown) => {
+          const fullState = {
+            systemFeatures: { branding: { enabled: true } },
+            setSystemFeatures: vi.fn(),
+          }
+          return typeof selector === 'function'
+            ? (selector as (state: typeof fullState) => unknown)(fullState)
+            : fullState
+        },
+      )
 
       // Act
       renderWithRouter(<AppSelector />)
       fireEvent.click(screen.getByRole('button'))
 
       // Assert
-      expect(screen.queryByText('common.userProfile.helpCenter')).not.toBeInTheDocument()
-      expect(screen.queryByText('common.userProfile.roadmap')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('common.userProfile.helpCenter'),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('common.userProfile.roadmap'),
+      ).not.toBeInTheDocument()
     })
 
     it('should hide About section when NEXT_PUBLIC_SITE_ABOUT is hide', () => {
@@ -340,7 +381,9 @@ describe('AccountDropdown', () => {
       fireEvent.click(screen.getByRole('button'))
 
       // Assert
-      expect(screen.queryByText('common.userProfile.about')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('common.userProfile.about'),
+      ).not.toBeInTheDocument()
     })
   })
 
@@ -363,7 +406,9 @@ describe('AccountDropdown', () => {
 
       // Assert
       const indicator = screen.getByTestId('status-indicator')
-      expect(indicator).toHaveClass('bg-components-badge-status-light-warning-bg')
+      expect(indicator).toHaveClass(
+        'bg-components-badge-status-light-warning-bg',
+      )
     })
 
     it('should show green indicator when version is latest', () => {
@@ -384,7 +429,9 @@ describe('AccountDropdown', () => {
 
       // Assert
       const indicator = screen.getByTestId('status-indicator')
-      expect(indicator).toHaveClass('bg-components-badge-status-light-success-bg')
+      expect(indicator).toHaveClass(
+        'bg-components-badge-status-light-success-bg',
+      )
     })
   })
 })

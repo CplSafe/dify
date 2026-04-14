@@ -1,8 +1,20 @@
 'use client'
 
-import type { ICurrentWorkspace, LangGeniusVersionResponse, UserProfileResponse } from '@/models/common'
+import type {
+  ICurrentWorkspace,
+  LangGeniusVersionResponse,
+  UserProfileResponse,
+} from '@/models/common'
 import { noop } from 'es-toolkit/function'
-import { createContext, useContext, useContextSelector } from 'use-context-selector'
+import {
+  createContext,
+  useContext,
+  useContextSelector,
+} from 'use-context-selector'
+
+// useSelector is a forward reference — declare its type first so AppContextValue can reference it.
+// The actual implementation is defined after AppContextValue and AppContext below.
+type SelectorFn = <T>(selector: (value: AppContextValue) => T) => T
 
 export type AppContextValue = {
   userProfile: UserProfileResponse
@@ -12,13 +24,15 @@ export type AppContextValue = {
   isCurrentWorkspaceOwner: boolean
   isCurrentWorkspaceEditor: boolean
   isCurrentWorkspaceDatasetOperator: boolean
+  isSystemAdmin: boolean
   mutateCurrentWorkspace: VoidFunction
   langGeniusVersionInfo: LangGeniusVersionResponse
-  useSelector: typeof useSelector
+  useSelector: SelectorFn
   isLoadingCurrentWorkspace: boolean
+  isValidatingCurrentWorkspace: boolean
 }
 
-export const userProfilePlaceholder = {
+export const userProfilePlaceholder: UserProfileResponse = {
   id: '',
   name: '',
   email: '',
@@ -27,7 +41,7 @@ export const userProfilePlaceholder = {
   is_password_set: false,
 }
 
-export const initialLangGeniusVersionInfo = {
+export const initialLangGeniusVersionInfo: LangGeniusVersionResponse = {
   current_env: '',
   current_version: '',
   latest_version: '',

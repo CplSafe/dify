@@ -21,82 +21,136 @@ import Panel from '../panel'
 import { AuthorizationType, BodyType, Method } from '../types'
 import useConfig from '../use-config'
 
-vi.mock('@/app/components/workflow/nodes/_base/hooks/use-available-var-list', () => ({
-  default: vi.fn((_nodeId: string, options?: any) => ({
-    availableVars: [
-      { variable: ['node-1', 'token'], type: VarType.string },
-      { variable: ['node-1', 'upload'], type: VarType.file },
-    ].filter(varPayload => options?.filterVar ? options.filterVar(varPayload) : true),
-    availableNodes: [],
-    availableNodesWithParent: [],
-  })),
-}))
+vi.mock(
+  '@/app/components/workflow/nodes/_base/hooks/use-available-var-list',
+  () => ({
+    default: vi.fn((_nodeId: string, options?: any) => ({
+      availableVars: [
+        { variable: ['node-1', 'token'], type: VarType.string },
+        { variable: ['node-1', 'upload'], type: VarType.file },
+      ].filter(varPayload =>
+        options?.filterVar ? options.filterVar(varPayload) : true,
+      ),
+      availableNodes: [],
+      availableNodesWithParent: [],
+    })),
+  }),
+)
 
-vi.mock('@/app/components/workflow/nodes/_base/components/input-support-select-var', () => ({
-  default: ({ value, onChange, placeholder, className, readOnly, onFocusChange }: any) => (
-    <input
-      value={value}
-      placeholder={placeholder}
-      className={className}
-      readOnly={readOnly}
-      onFocus={() => onFocusChange?.(true)}
-      onBlur={() => onFocusChange?.(false)}
-      onChange={event => onChange(event.target.value)}
-    />
-  ),
-}))
+vi.mock(
+  '@/app/components/workflow/nodes/_base/components/input-support-select-var',
+  () => ({
+    default: ({
+      value,
+      onChange,
+      placeholder,
+      className,
+      readOnly,
+      onFocusChange,
+    }: any) => (
+      <input
+        value={value}
+        placeholder={placeholder}
+        className={className}
+        readOnly={readOnly}
+        onFocus={() => onFocusChange?.(true)}
+        onBlur={() => onFocusChange?.(false)}
+        onChange={event => onChange(event.target.value)}
+      />
+    ),
+  }),
+)
 
 vi.mock('@/app/components/workflow/nodes/_base/components/field', () => ({
-  default: ({ title, operations, children }: any) => <div><div>{title}</div><div>{operations}</div>{children}</div>,
+  default: ({ title, operations, children }: any) => (
+    <div>
+      <div>{title}</div>
+      <div>{operations}</div>
+      {children}
+    </div>
+  ),
 }))
 
 vi.mock('@/app/components/workflow/nodes/_base/components/output-vars', () => ({
   default: ({ children }: any) => <div>{children}</div>,
-  VarItem: ({ name, type }: any) => <div>{name}:{type}</div>,
+  VarItem: ({ name, type }: any) => (
+    <div>
+      {name}:{type}
+    </div>
+  ),
 }))
 
 vi.mock('@/app/components/workflow/nodes/_base/components/split', () => ({
   default: () => <div>split</div>,
 }))
 
-vi.mock('@/app/components/workflow/nodes/_base/components/variable/var-reference-picker', () => ({
-  default: ({ onChange, filterVar, onRemove }: any) => (
-    <div>
-      <div>{`file-filter:${String(filterVar?.({ type: VarType.file }))}:${String(filterVar?.({ type: VarType.string }))}`}</div>
-      <button type="button" onClick={() => onChange(['node-1', 'file'])}>pick-file</button>
-      {onRemove && <button type="button" onClick={onRemove}>remove-file</button>}
-    </div>
-  ),
-}))
+vi.mock(
+  '@/app/components/workflow/nodes/_base/components/variable/var-reference-picker',
+  () => ({
+    default: ({ onChange, filterVar, onRemove }: any) => (
+      <div>
+        <div>{`file-filter:${String(filterVar?.({ type: VarType.file }))}:${String(filterVar?.({ type: VarType.string }))}`}</div>
+        <button type="button" onClick={() => onChange(['node-1', 'file'])}>
+          pick-file
+        </button>
+        {onRemove && (
+          <button type="button" onClick={onRemove}>
+            remove-file
+          </button>
+        )}
+      </div>
+    ),
+  }),
+)
 
-vi.mock('@/app/components/workflow/nodes/_base/components/prompt/editor', () => ({
-  default: ({ value, onChange, title }: any) => (
-    <div>
-      <div>{typeof title === 'string' ? title : 'editor'}</div>
-      <input value={value} onChange={event => onChange(event.target.value)} />
-    </div>
-  ),
-}))
+vi.mock(
+  '@/app/components/workflow/nodes/_base/components/prompt/editor',
+  () => ({
+    default: ({ value, onChange, title }: any) => (
+      <div>
+        <div>{typeof title === 'string' ? title : 'editor'}</div>
+        <input
+          value={value}
+          onChange={event => onChange(event.target.value)}
+        />
+      </div>
+    ),
+  }),
+)
 
-vi.mock('@/app/components/workflow/nodes/_base/components/editor/text-editor', () => ({
-  default: ({ value, onChange, onBlur, headerRight }: any) => (
-    <div>
-      {headerRight}
-      <textarea value={value} onChange={event => onChange(event.target.value)} onBlur={onBlur} />
-    </div>
-  ),
-}))
+vi.mock(
+  '@/app/components/workflow/nodes/_base/components/editor/text-editor',
+  () => ({
+    default: ({ value, onChange, onBlur, headerRight }: any) => (
+      <div>
+        {headerRight}
+        <textarea
+          value={value}
+          onChange={event => onChange(event.target.value)}
+          onBlur={onBlur}
+        />
+      </div>
+    ),
+  }),
+)
 
-vi.mock('@/app/components/workflow/nodes/_base/components/readonly-input-with-select-var', () => ({
-  default: ({ value }: any) => <div>{value}</div>,
-}))
+vi.mock(
+  '@/app/components/workflow/nodes/_base/components/readonly-input-with-select-var',
+  () => ({
+    default: ({ value }: any) => <div>{value}</div>,
+  }),
+)
 
 vi.mock('@/app/components/workflow/nodes/_base/components/selector', () => ({
   default: ({ options, onChange, trigger }: any) => (
     <div>
       {trigger}
       {options.map((option: any) => (
-        <button key={option.value} type="button" onClick={() => onChange(option.value)}>
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onChange(option.value)}
+        >
           {option.label}
         </button>
       ))}
@@ -142,7 +196,9 @@ const keyValueItem: HttpKeyValue = {
   type: 'text',
 }
 
-const createConfigResult = (overrides: Partial<ReturnType<typeof useConfig>> = {}): ReturnType<typeof useConfig> => ({
+const createConfigResult = (
+  overrides: Partial<ReturnType<typeof useConfig>> = {},
+): ReturnType<typeof useConfig> => ({
   readOnly: false,
   isDataReady: true,
   inputs: createData(),
@@ -172,6 +228,8 @@ const createConfigResult = (overrides: Partial<ReturnType<typeof useConfig>> = {
   showCurlPanel: vi.fn(),
   hideCurlPanel: vi.fn(),
   handleCurlImport: vi.fn(),
+  handleTokenFieldNameChange: vi.fn(),
+  handleHttpBillingPriceChange: vi.fn(),
   ...overrides,
 })
 
@@ -184,9 +242,8 @@ const panelProps: PanelProps = {
   runResult: null,
 }
 
-const renderPanel = (data: HttpNodeType = createData()) => (
+const renderPanel = (data: HttpNodeType = createData()) =>
   render(<Panel id="node-1" data={data} panelProps={panelProps} />)
-)
 
 describe('http path', () => {
   beforeEach(() => {
@@ -230,16 +287,27 @@ describe('http path', () => {
       render(
         <AuthorizationModal
           nodeId="node-1"
-          payload={{ type: 'apiKey', config: { type: 'custom', header: 'X-Key', api_key: 'secret' } } as any}
+          payload={
+            {
+              type: 'apiKey',
+              config: { type: 'custom', header: 'X-Key', api_key: 'secret' },
+            } as any
+          }
           onChange={onChange}
           isShow
           onHide={onHide}
         />,
       )
 
-      await user.click(screen.getByText('workflow.nodes.http.authorization.api-key'))
-      await user.click(screen.getByText('workflow.nodes.http.authorization.custom'))
-      fireEvent.change(screen.getByDisplayValue('secret'), { target: { value: 'updated-secret' } })
+      await user.click(
+        screen.getByText('workflow.nodes.http.authorization.api-key'),
+      )
+      await user.click(
+        screen.getByText('workflow.nodes.http.authorization.custom'),
+      )
+      fireEvent.change(screen.getByDisplayValue('secret'), {
+        target: { value: 'updated-secret' },
+      })
       await user.click(screen.getByText('common.operation.save'))
 
       expect(onChange).toHaveBeenCalled()
@@ -259,16 +327,20 @@ describe('http path', () => {
         />,
       )
 
-      await user.click(screen.getByText('workflow.nodes.http.authorization.api-key'))
+      await user.click(
+        screen.getByText('workflow.nodes.http.authorization.api-key'),
+      )
       await user.click(screen.getByText('common.operation.save'))
 
-      expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'api-key',
-        config: expect.objectContaining({
-          type: 'basic',
-          api_key: '',
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'api-key',
+          config: expect.objectContaining({
+            type: 'basic',
+            api_key: '',
+          }),
         }),
-      }))
+      )
     })
 
     it('should create custom header auth config and apply focus styles to the api key input', async () => {
@@ -284,24 +356,32 @@ describe('http path', () => {
         />,
       )
 
-      await user.click(screen.getByText('workflow.nodes.http.authorization.custom'))
+      await user.click(
+        screen.getByText('workflow.nodes.http.authorization.custom'),
+      )
 
       const inputs = screen.getAllByRole('textbox')
-      fireEvent.change(inputs[0] as HTMLInputElement, { target: { value: 'X-Token' } })
+      fireEvent.change(inputs[0] as HTMLInputElement, {
+        target: { value: 'X-Token' },
+      })
       fireEvent.focus(inputs[1] as HTMLInputElement)
       expect(inputs[1]).toHaveClass('border-components-input-border-active')
-      fireEvent.change(inputs[1] as HTMLInputElement, { target: { value: 'secret-token' } })
+      fireEvent.change(inputs[1] as HTMLInputElement, {
+        target: { value: 'secret-token' },
+      })
       fireEvent.blur(inputs[1] as HTMLInputElement)
       await user.click(screen.getByText('common.operation.save'))
 
-      expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'api-key',
-        config: expect.objectContaining({
-          type: 'custom',
-          header: 'X-Token',
-          api_key: 'secret-token',
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'api-key',
+          config: expect.objectContaining({
+            type: 'custom',
+            header: 'X-Token',
+            api_key: 'secret-token',
+          }),
         }),
-      }))
+      )
     })
 
     it('should update method and url from the api input', async () => {
@@ -320,7 +400,9 @@ describe('http path', () => {
       )
 
       await user.click(screen.getByText('POST'))
-      fireEvent.change(screen.getByDisplayValue('https://api.example.com'), { target: { value: 'https://api.changed.com' } })
+      fireEvent.change(screen.getByDisplayValue('https://api.example.com'), {
+        target: { value: 'https://api.changed.com' },
+      })
 
       expect(onMethodChange).toHaveBeenCalled()
       expect(onUrlChange).toHaveBeenCalledWith('https://api.changed.com')
@@ -339,7 +421,9 @@ describe('http path', () => {
       )
 
       expect(container.querySelector('svg')).toBeNull()
-      expect(screen.getByDisplayValue('https://api.example.com')).toHaveAttribute('placeholder', '')
+      expect(
+        screen.getByDisplayValue('https://api.example.com'),
+      ).toHaveAttribute('placeholder', '')
     })
 
     it('should update focus styling for editable inputs and show the remove action again on blur-sm', () => {
@@ -389,7 +473,9 @@ describe('http path', () => {
       )
 
       await user.click(screen.getByText('workflow.nodes.http.timeout.title'))
-      fireEvent.change(screen.getByDisplayValue('5'), { target: { value: '999' } })
+      fireEvent.change(screen.getByDisplayValue('5'), {
+        target: { value: '999' },
+      })
 
       expect(onChange).toHaveBeenCalled()
     })
@@ -407,11 +493,21 @@ describe('http path', () => {
       )
 
       await user.click(screen.getByText('workflow.nodes.http.timeout.title'))
-      fireEvent.change(screen.getByDisplayValue('10'), { target: { value: '' } })
-      fireEvent.change(screen.getByDisplayValue('15'), { target: { value: '0' } })
+      fireEvent.change(screen.getByDisplayValue('10'), {
+        target: { value: '' },
+      })
+      fireEvent.change(screen.getByDisplayValue('15'), {
+        target: { value: '0' },
+      })
 
-      expect(onChange).toHaveBeenNthCalledWith(1, expect.objectContaining({ read: undefined }))
-      expect(onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({ write: 1 }))
+      expect(onChange).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ read: undefined }),
+      )
+      expect(onChange).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ write: 1 }),
+      )
     })
 
     it('should delegate key-value list editing and bulk editing actions', async () => {
@@ -436,7 +532,9 @@ describe('http path', () => {
         </div>,
       )
 
-      fireEvent.change(screen.getAllByDisplayValue('name:alice')[0], { target: { value: 'name:bob' } })
+      fireEvent.change(screen.getAllByDisplayValue('name:alice')[0], {
+        target: { value: 'name:bob' },
+      })
       fireEvent.blur(screen.getAllByDisplayValue('name:bob')[0])
       await user.click(screen.getByText('workflow.nodes.http.keyValueEdit'))
 
@@ -494,7 +592,9 @@ describe('http path', () => {
         </div>,
       )
 
-      fireEvent.change(screen.getAllByDisplayValue('alice')[0], { target: { value: 'bob' } })
+      fireEvent.change(screen.getAllByDisplayValue('alice')[0], {
+        target: { value: 'bob' },
+      })
       await user.click(screen.getByText('text'))
       await user.click(screen.getByText('file'))
 
@@ -511,7 +611,15 @@ describe('http path', () => {
           nodeId="node-1"
           readonly={false}
           canRemove
-          payload={{ id: 'kv-2', key: 'attachment', value: '', type: 'file', file: [] } as any}
+          payload={
+            {
+              id: 'kv-2',
+              key: 'attachment',
+              value: '',
+              type: 'file',
+              file: [],
+            } as any
+          }
           onChange={onChange}
           onRemove={onRemove}
           isLastItem={false}
@@ -521,7 +629,9 @@ describe('http path', () => {
         />,
       )
 
-      fireEvent.change(screen.getByDisplayValue('attachment'), { target: { value: 'upload' } })
+      fireEvent.change(screen.getByDisplayValue('attachment'), {
+        target: { value: 'upload' },
+      })
       expect(screen.getByText('file-filter:true:false')).toBeInTheDocument()
       await user.click(screen.getByText('pick-file'))
       await user.click(screen.getByText('remove-file'))
@@ -536,12 +646,19 @@ describe('http path', () => {
         <EditBody
           readonly={false}
           nodeId="node-1"
-          payload={{ type: 'raw-text', data: [{ id: 'body-1', type: 'text', value: 'hello' }] } as any}
+          payload={
+            {
+              type: 'raw-text',
+              data: [{ id: 'body-1', type: 'text', value: 'hello' }],
+            } as any
+          }
           onChange={onChange}
         />,
       )
 
-      fireEvent.change(screen.getByDisplayValue('hello'), { target: { value: 'updated-body' } })
+      fireEvent.change(screen.getByDisplayValue('hello'), {
+        target: { value: 'updated-body' },
+      })
 
       expect(onChange).toHaveBeenCalled()
     })
@@ -557,12 +674,16 @@ describe('http path', () => {
         />,
       )
 
-      fireEvent.change(screen.getByRole('textbox'), { target: { value: '{"a":1}' } })
+      fireEvent.change(screen.getByRole('textbox'), {
+        target: { value: '{"a":1}' },
+      })
 
-      expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'json',
-        data: [expect.objectContaining({ value: '{"a":1}' })],
-      }))
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'json',
+          data: [expect.objectContaining({ value: '{"a":1}' })],
+        }),
+      )
 
       rerender(
         <EditBody
@@ -589,10 +710,12 @@ describe('http path', () => {
 
       fireEvent.click(screen.getByRole('radio', { name: 'form-data' }))
 
-      expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'form-data',
-        data: [expect.objectContaining({ key: '', value: '' })],
-      }))
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'form-data',
+          data: [expect.objectContaining({ key: '', value: '' })],
+        }),
+      )
 
       onChange.mockClear()
 
@@ -600,16 +723,35 @@ describe('http path', () => {
         <EditBody
           readonly={false}
           nodeId="node-1"
-          payload={{ type: 'form-data', data: [{ id: 'body-1', type: 'text', key: 'name', value: 'alice' }] } as any}
+          payload={
+            {
+              type: 'form-data',
+              data: [
+                { id: 'body-1', type: 'text', key: 'name', value: 'alice' },
+              ],
+            } as any
+          }
           onChange={onChange}
         />,
       )
 
       fireEvent.click(screen.getAllByDisplayValue('alice')[0]!)
-      fireEvent.change(screen.getAllByDisplayValue('alice')[0]!, { target: { value: 'bob' } })
+      fireEvent.change(screen.getAllByDisplayValue('alice')[0]!, {
+        target: { value: 'bob' },
+      })
 
-      expect(onChange.mock.calls.some(([payload]) => Array.isArray(payload.data) && payload.data.length === 2)).toBe(true)
-      expect(onChange.mock.calls.some(([payload]) => Array.isArray(payload.data) && payload.data[0]?.value === 'bob')).toBe(true)
+      expect(
+        onChange.mock.calls.some(
+          ([payload]) =>
+            Array.isArray(payload.data) && payload.data.length === 2,
+        ),
+      ).toBe(true)
+      expect(
+        onChange.mock.calls.some(
+          ([payload]) =>
+            Array.isArray(payload.data) && payload.data[0]?.value === 'bob',
+        ),
+      ).toBe(true)
     })
 
     it('should render the binary body picker and forward file selections', async () => {
@@ -619,7 +761,12 @@ describe('http path', () => {
         <EditBody
           readonly={false}
           nodeId="node-1"
-          payload={{ type: 'binary', data: [{ id: 'body-1', type: 'file', file: [] }] } as any}
+          payload={
+            {
+              type: 'binary',
+              data: [{ id: 'body-1', type: 'file', file: [] }],
+            } as any
+          }
           onChange={onChange}
         />,
       )
@@ -644,23 +791,24 @@ describe('http path', () => {
       expect(screen.getByText('file-filter:true:false')).toBeInTheDocument()
       await user.click(screen.getByText('pick-file'))
 
-      expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'binary',
-        data: [expect.objectContaining({
-          type: 'file',
-          file: ['node-1', 'file'],
-        })],
-      }))
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'binary',
+          data: [
+            expect.objectContaining({
+              type: 'file',
+              file: ['node-1', 'file'],
+            }),
+          ],
+        }),
+      )
     })
 
     it('should render the request node preview when a url exists', () => {
-      renderWorkflowFlowComponent(
-        <Node
-          id="node-1"
-          data={createData()}
-        />,
-        { nodes: [], edges: [] },
-      )
+      renderWorkflowFlowComponent(<Node id="node-1" data={createData()} />, {
+        nodes: [],
+        edges: [],
+      })
 
       expect(screen.getByText(Method.get)).toBeInTheDocument()
       expect(screen.getByText('https://api.example.com')).toBeInTheDocument()
@@ -668,15 +816,14 @@ describe('http path', () => {
 
     it('should render nothing when the request url is empty', () => {
       renderWorkflowFlowComponent(
-        <Node
-          id="node-1"
-          data={createData({ url: '' })}
-        />,
+        <Node id="node-1" data={createData({ url: '' })} />,
         { nodes: [], edges: [] },
       )
 
       expect(screen.queryByText(Method.get)).not.toBeInTheDocument()
-      expect(screen.queryByText('https://api.example.com')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('https://api.example.com'),
+      ).not.toBeInTheDocument()
     })
 
     it('should render the panel sections and output vars', async () => {
@@ -686,20 +833,29 @@ describe('http path', () => {
       expect(screen.getByText('status_code:number')).toBeInTheDocument()
       expect(screen.getByText('headers:object')).toBeInTheDocument()
       expect(screen.getByText('files:Array[File]')).toBeInTheDocument()
-      expect(screen.getAllByText('workflow.nodes.http.authorization.authorization').length).toBeGreaterThan(0)
-      expect(screen.getByText('workflow.nodes.http.curl.title')).toBeInTheDocument()
+      expect(
+        screen.getAllByText('workflow.nodes.http.authorization.authorization')
+          .length,
+      ).toBeGreaterThan(0)
+      expect(
+        screen.getByText('workflow.nodes.http.curl.title'),
+      ).toBeInTheDocument()
       expect(screen.getByText('curl-panel')).toBeInTheDocument()
     })
 
     it('should hide modal overlays when the panel is readonly', () => {
-      mockUseConfig.mockReturnValueOnce(createConfigResult({
-        readOnly: true,
-      }))
+      mockUseConfig.mockReturnValueOnce(
+        createConfigResult({
+          readOnly: true,
+        }),
+      )
 
       renderPanel()
 
       expect(screen.queryByText('curl-panel')).not.toBeInTheDocument()
-      expect(screen.queryByText('workflow.nodes.http.authorization.api-key-title')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('workflow.nodes.http.authorization.api-key-title'),
+      ).not.toBeInTheDocument()
     })
   })
 })

@@ -10,9 +10,18 @@ export type AppBasicInfo = {
   name: string
   description: string
   use_icon_as_answer_icon: boolean
+  show_workflow_steps?: boolean
 }
 
-export type AppCategory = 'Writing' | 'Translate' | 'HR' | 'Programming' | 'Assistant' | 'Agent' | 'Recommended' | 'Workflow'
+export type AppCategory
+  = | 'Writing'
+    | 'Translate'
+    | 'HR'
+    | 'Programming'
+    | 'Assistant'
+    | 'Agent'
+    | 'Recommended'
+    | 'Workflow'
 
 export type App = {
   app: AppBasicInfo

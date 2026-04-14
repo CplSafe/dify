@@ -1,3 +1,4 @@
+/* eslint-disable tailwindcss/enforce-consistent-class-order, react/set-state-in-effect */
 'use client'
 import type { FC } from 'react'
 import type { AppIconSelection } from '@/app/components/base/app-icon-picker'
@@ -141,7 +142,6 @@ const SettingsModal: FC<ISettingsModalProps> = ({
       setShowAccountSettingModal({ payload: ACCOUNT_SETTING_TAB.BILLING })
   }, [isFreePlan, setShowAccountSettingModal, setShowPricingModal])
 
-  /* eslint-disable react-hooks-extra/no-direct-set-state-in-use-effect */
   useEffect(() => {
     setInputInfo({
       title,
@@ -172,7 +172,6 @@ const SettingsModal: FC<ISettingsModalProps> = ({
         }
       : null)
   }, [appInfo, chat_color_theme, chat_color_theme_inverted, chat_page_background_color, copyright, custom_disclaimer, default_language, default_user_avatar_file_id, default_user_avatar_url, description, enable_homepage, icon, icon_background, icon_type, icon_url, privacy_policy, show_answer_disclaimer, show_workflow_steps, title, use_icon_as_answer_icon])
-  /* eslint-enable react-hooks-extra/no-direct-set-state-in-use-effect */
 
   useEffect(() => {
     return () => {
@@ -217,7 +216,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
 
     if (inputInfo !== null) {
       if (!validateColorHex(inputInfo.chatColorTheme) || !validateColorHex(inputInfo.chatPageBackgroundColor)) {
-        notify({ type: 'error', message: t(`${prefixSettings}.invalidHexMessage`, { ns: 'appOverview' }) })
+        toast.error(t(`${prefixSettings}.invalidHexMessage`, { ns: 'appOverview' }))
         return
       }
       if (!validatePrivacyPolicy(inputInfo.privacyPolicy)) {

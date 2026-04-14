@@ -19,9 +19,14 @@ console_ns = Namespace("console", description="Console management API operations
 # Paths that non-admin (creator) users are allowed to access.
 # Everything else requires is_system_admin=True.
 _CREATOR_ALLOWED_PREFIXES = (
+    "/console/api/datasets",
+    "/console/api/workspaces",
+    "/console/api/files/upload",
     "/console/api/trial-apps/",
     "/console/api/creator/",
     "/console/api/installed-apps",
+    "/console/api/workflow/",
+    "/console/api/form/human_input/",
     "/console/api/login",
     "/console/api/logout",
     "/console/api/refresh-token",

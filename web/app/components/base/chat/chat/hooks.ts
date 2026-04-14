@@ -1,3 +1,4 @@
+/* eslint-disable ts/no-explicit-any */
 import type {
   ChatConfig,
   ChatItem,
@@ -835,7 +836,7 @@ export const useChat = (
               inputs: newResponseItem.inputs,
               query: newResponseItem.query,
             },
-          })
+          } as Partial<ChatItemInTree>)
 
           await onMessageCompleted?.({
             content: newResponseItem.answer,

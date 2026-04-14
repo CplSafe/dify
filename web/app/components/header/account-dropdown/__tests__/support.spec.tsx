@@ -1,10 +1,17 @@
 import type { AppContextValue } from '@/context/app-context'
 import { fireEvent, render, screen } from '@testing-library/react'
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/app/components/base/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/app/components/base/ui/dropdown-menu'
 import { Plan } from '@/app/components/billing/type'
 import { useAppContext } from '@/context/app-context'
-import { baseProviderContextValue, useProviderContext } from '@/context/provider-context'
+import {
+  baseProviderContextValue,
+  useProviderContext,
+} from '@/context/provider-context'
 import Support from '../support'
 
 const { mockZendeskKey } = vi.hoisted(() => ({
@@ -24,7 +31,8 @@ vi.mock('@/context/app-context', async (importOriginal) => {
 })
 
 vi.mock('@/context/provider-context', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/context/provider-context')>()
+  const actual
+    = await importOriginal<typeof import('@/context/provider-context')>()
   return {
     ...actual,
     useProviderContext: vi.fn(),
@@ -36,8 +44,12 @@ vi.mock('@/config', async (importOriginal) => {
   return {
     ...actual,
     IS_CE_EDITION: false,
-    get ZENDESK_WIDGET_KEY() { return mockZendeskKey.value || '' },
-    get SUPPORT_EMAIL_ADDRESS() { return mockSupportEmailKey.value || '' },
+    get ZENDESK_WIDGET_KEY() {
+      return mockZendeskKey.value || ''
+    },
+    get SUPPORT_EMAIL_ADDRESS() {
+      return mockSupportEmailKey.value || ''
+    },
   }
 })
 
@@ -70,6 +82,7 @@ describe('Support', () => {
     isCurrentWorkspaceOwner: true,
     isCurrentWorkspaceEditor: true,
     isCurrentWorkspaceDatasetOperator: false,
+    isSystemAdmin: false,
     mutateCurrentWorkspace: vi.fn(),
     langGeniusVersionInfo: {
       current_env: 'testing',
@@ -102,7 +115,7 @@ describe('Support', () => {
 
   const renderSupport = () => {
     return render(
-      <DropdownMenu open={true} onOpenChange={() => { }}>
+      <DropdownMenu open={true} onOpenChange={() => {}}>
         <DropdownMenuTrigger>open</DropdownMenuTrigger>
         <DropdownMenuContent>
           <Support closeAccountDropdown={mockCloseAccountDropdown} />
@@ -117,7 +130,9 @@ describe('Support', () => {
       renderSupport()
 
       // Assert
-      expect(screen.getByText('common.userProfile.support')).toBeInTheDocument()
+      expect(
+        screen.getByText('common.userProfile.support'),
+      ).toBeInTheDocument()
     })
 
     it('should show forum and community links when opened', () => {
@@ -127,7 +142,9 @@ describe('Support', () => {
 
       // Assert
       expect(screen.getByText('common.userProfile.forum')).toBeInTheDocument()
-      expect(screen.getByText('common.userProfile.community')).toBeInTheDocument()
+      expect(
+        screen.getByText('common.userProfile.community'),
+      ).toBeInTheDocument()
     })
   })
 
@@ -138,7 +155,9 @@ describe('Support', () => {
       fireEvent.click(screen.getByText('common.userProfile.support'))
 
       // Assert
-      expect(screen.getByText('common.userProfile.contactUs')).toBeInTheDocument()
+      expect(
+        screen.getByText('common.userProfile.contactUs'),
+      ).toBeInTheDocument()
     })
 
     it('should hide dedicated support channels for Sandbox plan', () => {
@@ -156,8 +175,12 @@ describe('Support', () => {
       fireEvent.click(screen.getByText('common.userProfile.support'))
 
       // Assert
-      expect(screen.queryByText('common.userProfile.contactUs')).not.toBeInTheDocument()
-      expect(screen.queryByText('common.userProfile.emailSupport')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('common.userProfile.contactUs'),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('common.userProfile.emailSupport'),
+      ).not.toBeInTheDocument()
     })
 
     it('should show "Email Support" when ZENDESK_WIDGET_KEY is absent', () => {
@@ -169,8 +192,12 @@ describe('Support', () => {
       fireEvent.click(screen.getByText('common.userProfile.support'))
 
       // Assert
-      expect(screen.getByText('common.userProfile.emailSupport')).toBeInTheDocument()
-      expect(screen.queryByText('common.userProfile.contactUs')).not.toBeInTheDocument()
+      expect(
+        screen.getByText('common.userProfile.emailSupport'),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText('common.userProfile.contactUs'),
+      ).not.toBeInTheDocument()
     })
 
     // Optional chain null guard: ZENDESK_WIDGET_KEY is null
@@ -183,8 +210,12 @@ describe('Support', () => {
       fireEvent.click(screen.getByText('common.userProfile.support'))
 
       // Assert
-      expect(screen.getByText('common.userProfile.emailSupport')).toBeInTheDocument()
-      expect(screen.queryByText('common.userProfile.contactUs')).not.toBeInTheDocument()
+      expect(
+        screen.getByText('common.userProfile.emailSupport'),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText('common.userProfile.contactUs'),
+      ).not.toBeInTheDocument()
     })
   })
 
@@ -206,10 +237,17 @@ describe('Support', () => {
       fireEvent.click(screen.getByText('common.userProfile.support'))
 
       // Assert
-      const forumLink = screen.getByText('common.userProfile.forum').closest('a')
-      const communityLink = screen.getByText('common.userProfile.community').closest('a')
+      const forumLink = screen
+        .getByText('common.userProfile.forum')
+        .closest('a')
+      const communityLink = screen
+        .getByText('common.userProfile.community')
+        .closest('a')
       expect(forumLink).toHaveAttribute('href', 'https://forum.dify.ai/')
-      expect(communityLink).toHaveAttribute('href', 'https://discord.gg/5AEfbxcd9k')
+      expect(communityLink).toHaveAttribute(
+        'href',
+        'https://discord.gg/5AEfbxcd9k',
+      )
     })
   })
 })

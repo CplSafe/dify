@@ -18,18 +18,7 @@ import { useProviderContext } from '@/context/provider-context'
 import { defaultSystemFeatures } from '@/types/feature'
 import CustomPage from '../index'
 
-const { mockToast } = vi.hoisted(() => {
-  const mockToast = Object.assign(vi.fn(), {
-    success: vi.fn(),
-    error: vi.fn(),
-    warning: vi.fn(),
-    info: vi.fn(),
-    dismiss: vi.fn(),
-    update: vi.fn(),
-    promise: vi.fn(),
-  })
-  return { mockToast }
-})
+const { mockToast } = vi.hoisted(() => ({ mockToast: vi.fn() }))
 
 vi.mock('@/context/provider-context', () => ({
   useProviderContext: vi.fn(),
@@ -86,6 +75,7 @@ const createAppContextValue = (): AppContextValue => ({
   isCurrentWorkspaceOwner: false,
   isCurrentWorkspaceEditor: false,
   isCurrentWorkspaceDatasetOperator: false,
+  isSystemAdmin: false,
   mutateCurrentWorkspace: vi.fn(),
   langGeniusVersionInfo: initialLangGeniusVersionInfo,
   useSelector: vi.fn() as unknown as AppContextValue['useSelector'],
@@ -113,10 +103,12 @@ describe('CustomPage', () => {
       setShowPricingModal,
     } as unknown as ReturnType<typeof useModalContext>)
     mockUseAppContext.mockReturnValue(createAppContextValue())
-    mockUseGlobalPublicStore.mockImplementation(selector => selector({
-      systemFeatures: createSystemFeatures(),
-      setSystemFeatures: vi.fn(),
-    }))
+    mockUseGlobalPublicStore.mockImplementation(selector =>
+      selector({
+        systemFeatures: createSystemFeatures(),
+        setSystemFeatures: vi.fn(),
+      }),
+    )
   })
 
   // Integration coverage for the page and its child custom brand section.
@@ -126,21 +118,29 @@ describe('CustomPage', () => {
 
       expect(screen.getByText('custom.webapp.removeBrand')).toBeInTheDocument()
       expect(screen.getByText('Chatflow App')).toBeInTheDocument()
-      expect(screen.queryByText('custom.upgradeTip.title')).not.toBeInTheDocument()
-      expect(screen.queryByText('custom.customize.contactUs')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('custom.upgradeTip.title'),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('custom.customize.contactUs'),
+      ).not.toBeInTheDocument()
     })
 
     it('should show the upgrade banner and open pricing modal for sandbox billing', async () => {
       const user = userEvent.setup()
-      mockUseProviderContext.mockReturnValue(createProviderContext({
-        enableBilling: true,
-        planType: Plan.sandbox,
-      }))
+      mockUseProviderContext.mockReturnValue(
+        createProviderContext({
+          enableBilling: true,
+          planType: Plan.sandbox,
+        }),
+      )
 
       render(<CustomPage />)
 
       expect(screen.getByText('custom.upgradeTip.title')).toBeInTheDocument()
-      expect(screen.queryByText('custom.customize.contactUs')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('custom.customize.contactUs'),
+      ).not.toBeInTheDocument()
 
       await user.click(screen.getByText('billing.upgradeBtn.encourageShort'))
 
@@ -148,42 +148,60 @@ describe('CustomPage', () => {
     })
 
     it('should show the contact link for professional workspaces', () => {
-      mockUseProviderContext.mockReturnValue(createProviderContext({
-        enableBilling: true,
-        planType: Plan.professional,
-      }))
+      mockUseProviderContext.mockReturnValue(
+        createProviderContext({
+          enableBilling: true,
+          planType: Plan.professional,
+        }),
+      )
 
       render(<CustomPage />)
 
-      const contactLink = screen.getByText('custom.customize.contactUs').closest('a')
-      expect(screen.queryByText('custom.upgradeTip.title')).not.toBeInTheDocument()
+      const contactLink = screen
+        .getByText('custom.customize.contactUs')
+        .closest('a')
+      expect(
+        screen.queryByText('custom.upgradeTip.title'),
+      ).not.toBeInTheDocument()
       expect(contactLink).toHaveAttribute('href', contactSalesUrl)
       expect(contactLink).toHaveAttribute('target', '_blank')
       expect(contactLink).toHaveAttribute('rel', 'noopener noreferrer')
     })
 
     it('should show the contact link for team workspaces', () => {
-      mockUseProviderContext.mockReturnValue(createProviderContext({
-        enableBilling: true,
-        planType: Plan.team,
-      }))
+      mockUseProviderContext.mockReturnValue(
+        createProviderContext({
+          enableBilling: true,
+          planType: Plan.team,
+        }),
+      )
 
       render(<CustomPage />)
 
-      expect(screen.getByText('custom.customize.contactUs')).toBeInTheDocument()
-      expect(screen.queryByText('custom.upgradeTip.title')).not.toBeInTheDocument()
+      expect(
+        screen.getByText('custom.customize.contactUs'),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText('custom.upgradeTip.title'),
+      ).not.toBeInTheDocument()
     })
 
     it('should hide both billing sections when billing is disabled', () => {
-      mockUseProviderContext.mockReturnValue(createProviderContext({
-        enableBilling: false,
-        planType: Plan.sandbox,
-      }))
+      mockUseProviderContext.mockReturnValue(
+        createProviderContext({
+          enableBilling: false,
+          planType: Plan.sandbox,
+        }),
+      )
 
       render(<CustomPage />)
 
-      expect(screen.queryByText('custom.upgradeTip.title')).not.toBeInTheDocument()
-      expect(screen.queryByText('custom.customize.contactUs')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('custom.upgradeTip.title'),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('custom.customize.contactUs'),
+      ).not.toBeInTheDocument()
     })
   })
 })

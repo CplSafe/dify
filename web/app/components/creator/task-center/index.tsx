@@ -1,6 +1,5 @@
 'use client'
 
-import { RiTaskLine } from '@remixicon/react'
 import { useEffect, useRef, useState } from 'react'
 import { useCreatorTasks } from '@/hooks/use-creator-tasks'
 import TaskCenterDrawer from './drawer'
@@ -35,10 +34,9 @@ export default function TaskCenterButton() {
       <button
         type="button"
         onClick={() => setOpen(prev => !prev)}
-        className="relative rounded-lg p-2 text-text-tertiary hover:bg-state-base-hover hover:text-text-secondary"
-        title="任务中心"
+        className="relative rounded-lg px-3 py-1.5 text-sm text-text-tertiary hover:bg-state-base-hover hover:text-text-secondary"
       >
-        <RiTaskLine className="h-5 w-5" />
+        任务中心
         {inProgressCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#F04438] text-[10px] font-bold text-white">
             {inProgressCount > 9 ? '9+' : inProgressCount}

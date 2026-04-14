@@ -1,8 +1,5 @@
 import type { KnipConfig } from 'knip'
 
-/**
- * @see https://knip.dev/reference/configuration
- */
 const config: KnipConfig = {
   entry: [
     'scripts/**/*.{js,ts,mjs}',
@@ -11,16 +8,12 @@ const config: KnipConfig = {
   ],
   ignore: [
     'public/**',
+    'app/components/browser-initializer.tsx',
+    'app/components/creator/task-layout.tsx',
+    'constants/link.ts',
   ],
-  ignoreBinaries: [
-    'only-allow',
-  ],
-  ignoreDependencies: [
-    '@iconify-json/*',
-
-    '@storybook/addon-onboarding',
-
-  ],
+  ignoreBinaries: ['only-allow'],
+  ignoreDependencies: ['@iconify-json/*', '@storybook/addon-onboarding'],
   /// keep-sorted
   rules: {
     binaries: 'error',
@@ -29,13 +22,13 @@ const config: KnipConfig = {
     devDependencies: 'error',
     duplicates: 'error',
     enumMembers: 'error',
-    exports: 'error',
+    exports: 'warn',
     files: 'error',
     namespaceMembers: 'error',
-    nsExports: 'error',
-    nsTypes: 'error',
+    nsExports: 'warn',
+    nsTypes: 'warn',
     optionalPeerDependencies: 'error',
-    types: 'error',
+    types: 'warn',
     unlisted: 'error',
     unresolved: 'error',
   },

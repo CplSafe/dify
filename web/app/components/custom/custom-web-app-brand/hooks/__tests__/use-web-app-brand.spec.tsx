@@ -4,7 +4,10 @@ import type { SystemFeatures } from '@/types/feature'
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMockProviderContextValue } from '@/__mocks__/provider-context'
-import { getImageUploadErrorMessage, imageUpload } from '@/app/components/base/image-uploader/utils'
+import {
+  getImageUploadErrorMessage,
+  imageUpload,
+} from '@/app/components/base/image-uploader/utils'
 import { defaultPlan } from '@/app/components/billing/config'
 import { Plan } from '@/app/components/billing/type'
 import {
@@ -22,10 +25,18 @@ import useWebAppBrand from '../use-web-app-brand'
 const { mockNotify, mockToast } = vi.hoisted(() => {
   const mockNotify = vi.fn()
   const mockToast = Object.assign(mockNotify, {
-    success: vi.fn((message, options) => mockNotify({ type: 'success', message, ...options })),
-    error: vi.fn((message, options) => mockNotify({ type: 'error', message, ...options })),
-    warning: vi.fn((message, options) => mockNotify({ type: 'warning', message, ...options })),
-    info: vi.fn((message, options) => mockNotify({ type: 'info', message, ...options })),
+    success: vi.fn((message, options) =>
+      mockNotify({ type: 'success', message, ...options }),
+    ),
+    error: vi.fn((message, options) =>
+      mockNotify({ type: 'error', message, ...options }),
+    ),
+    warning: vi.fn((message, options) =>
+      mockNotify({ type: 'warning', message, ...options }),
+    ),
+    info: vi.fn((message, options) =>
+      mockNotify({ type: 'info', message, ...options }),
+    ),
     dismiss: vi.fn(),
     update: vi.fn(),
     promise: vi.fn(),
@@ -80,7 +91,9 @@ const createProviderContext = ({
   })
 }
 
-const createSystemFeatures = (brandingOverrides: Partial<SystemFeatures['branding']> = {}): SystemFeatures => ({
+const createSystemFeatures = (
+  brandingOverrides: Partial<SystemFeatures['branding']> = {},
+): SystemFeatures => ({
   ...defaultSystemFeatures,
   branding: {
     ...defaultSystemFeatures.branding,
@@ -90,9 +103,13 @@ const createSystemFeatures = (brandingOverrides: Partial<SystemFeatures['brandin
   },
 })
 
-const createAppContextValue = (overrides: Partial<AppContextValue> = {}): AppContextValue => {
-  const { currentWorkspace: currentWorkspaceOverride, ...restOverrides } = overrides
-  const workspaceOverrides: Partial<AppContextValue['currentWorkspace']> = currentWorkspaceOverride ?? {}
+const createAppContextValue = (
+  overrides: Partial<AppContextValue> = {},
+): AppContextValue => {
+  const { currentWorkspace: currentWorkspaceOverride, ...restOverrides }
+    = overrides
+  const workspaceOverrides: Partial<AppContextValue['currentWorkspace']>
+    = currentWorkspaceOverride ?? {}
   const currentWorkspace = {
     ...initialWorkspaceInfo,
     ...workspaceOverrides,
@@ -110,6 +127,7 @@ const createAppContextValue = (overrides: Partial<AppContextValue> = {}): AppCon
     isCurrentWorkspaceOwner: false,
     isCurrentWorkspaceEditor: false,
     isCurrentWorkspaceDatasetOperator: false,
+    isSystemAdmin: false,
     mutateCurrentWorkspace: vi.fn(),
     langGeniusVersionInfo: initialLangGeniusVersionInfo,
     useSelector: vi.fn() as unknown as AppContextValue['useSelector'],
@@ -130,13 +148,17 @@ describe('useWebAppBrand', () => {
     appContextValue = createAppContextValue()
     systemFeatures = createSystemFeatures()
 
-    mockUpdateCurrentWorkspace.mockResolvedValue(appContextValue.currentWorkspace)
+    mockUpdateCurrentWorkspace.mockResolvedValue(
+      appContextValue.currentWorkspace,
+    )
     mockUseAppContext.mockImplementation(() => appContextValue)
     mockUseProviderContext.mockReturnValue(createProviderContext())
-    mockUseGlobalPublicStore.mockImplementation(selector => selector({
-      systemFeatures,
-      setSystemFeatures: vi.fn(),
-    }))
+    mockUseGlobalPublicStore.mockImplementation(selector =>
+      selector({
+        systemFeatures,
+        setSystemFeatures: vi.fn(),
+      }),
+    )
     mockGetImageUploadErrorMessage.mockReturnValue('upload error')
   })
 
@@ -146,16 +168,20 @@ describe('useWebAppBrand', () => {
       const { result } = renderHook(() => useWebAppBrand())
 
       expect(result.current.webappLogo).toBe('https://example.com/replace.png')
-      expect(result.current.workspaceLogo).toBe('https://example.com/workspace-logo.png')
+      expect(result.current.workspaceLogo).toBe(
+        'https://example.com/workspace-logo.png',
+      )
       expect(result.current.uploadDisabled).toBe(false)
       expect(result.current.uploading).toBe(false)
     })
 
     it('should disable uploads in sandbox workspaces and when branding is removed', () => {
-      mockUseProviderContext.mockReturnValue(createProviderContext({
-        enableBilling: true,
-        planType: Plan.sandbox,
-      }))
+      mockUseProviderContext.mockReturnValue(
+        createProviderContext({
+          enableBilling: true,
+          planType: Plan.sandbox,
+        }),
+      )
       appContextValue = createAppContextValue({
         currentWorkspace: {
           ...initialWorkspaceInfo,
@@ -214,7 +240,9 @@ describe('useWebAppBrand', () => {
 
     it('should reject oversized files before upload starts', () => {
       const { result } = renderHook(() => useWebAppBrand())
-      const oversizedFile = new File(['logo'], 'logo.png', { type: 'image/png' })
+      const oversizedFile = new File(['logo'], 'logo.png', {
+        type: 'image/png',
+      })
 
       Object.defineProperty(oversizedFile, 'size', {
         configurable: true,
@@ -235,16 +263,20 @@ describe('useWebAppBrand', () => {
     })
 
     it('should update upload state after a successful file upload', () => {
-      mockImageUpload.mockImplementation(({ onProgressCallback, onSuccessCallback }) => {
-        onProgressCallback(100)
-        onSuccessCallback({ id: 'new-logo' })
-      })
+      mockImageUpload.mockImplementation(
+        ({ onProgressCallback, onSuccessCallback }) => {
+          onProgressCallback(100)
+          onSuccessCallback({ id: 'new-logo' })
+        },
+      )
 
       const { result } = renderHook(() => useWebAppBrand())
 
       act(() => {
         result.current.handleChange({
-          target: { files: [new File(['logo'], 'logo.png', { type: 'image/png' })] },
+          target: {
+            files: [new File(['logo'], 'logo.png', { type: 'image/png' })],
+          },
         } as unknown as ChangeEvent<HTMLInputElement>)
       })
 
@@ -262,7 +294,9 @@ describe('useWebAppBrand', () => {
 
       act(() => {
         result.current.handleChange({
-          target: { files: [new File(['logo'], 'logo.png', { type: 'image/png' })] },
+          target: {
+            files: [new File(['logo'], 'logo.png', { type: 'image/png' })],
+          },
         } as unknown as ChangeEvent<HTMLInputElement>)
       })
 
@@ -279,7 +313,9 @@ describe('useWebAppBrand', () => {
 
       act(() => {
         result.current.handleChange({
-          target: { files: [new File(['logo'], 'logo.png', { type: 'image/png' })] },
+          target: {
+            files: [new File(['logo'], 'logo.png', { type: 'image/png' })],
+          },
         } as unknown as ChangeEvent<HTMLInputElement>)
       })
 
@@ -304,12 +340,16 @@ describe('useWebAppBrand', () => {
 
       act(() => {
         result.current.handleChange({
-          target: { files: [new File(['logo'], 'logo.png', { type: 'image/png' })] },
+          target: {
+            files: [new File(['logo'], 'logo.png', { type: 'image/png' })],
+          },
         } as unknown as ChangeEvent<HTMLInputElement>)
       })
 
       const previousImgKey = result.current.imgKey
-      const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(previousImgKey + 1)
+      const dateNowSpy = vi
+        .spyOn(Date, 'now')
+        .mockReturnValue(previousImgKey + 1)
 
       await act(async () => {
         await result.current.handleApply()
@@ -380,7 +420,9 @@ describe('useWebAppBrand', () => {
 
       act(() => {
         result.current.handleChange({
-          target: { files: [new File(['logo'], 'logo.png', { type: 'image/png' })] },
+          target: {
+            files: [new File(['logo'], 'logo.png', { type: 'image/png' })],
+          },
         } as unknown as ChangeEvent<HTMLInputElement>)
       })
 

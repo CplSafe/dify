@@ -4,15 +4,17 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { useAppContext } from '@/context/app-context'
-import { baseProviderContextValue, useProviderContext } from '@/context/provider-context'
+import {
+  baseProviderContextValue,
+  useProviderContext,
+} from '@/context/provider-context'
 import useBreakpoints, { MediaType } from '@/hooks/use-breakpoints'
 import { ACCOUNT_SETTING_TAB } from '../constants'
 import AccountSetting from '../index'
 
-const mockResetModelProviderListExpanded = vi.fn()
-
 vi.mock('@/context/provider-context', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/context/provider-context')>()
+  const actual
+    = await importOriginal<typeof import('@/context/provider-context')>()
   return {
     ...actual,
     useProviderContext: vi.fn(),
@@ -47,18 +49,24 @@ vi.mock('@/hooks/use-breakpoints', () => ({
   default: vi.fn(),
 }))
 
-vi.mock('@/app/components/header/account-setting/model-provider-page/hooks', () => ({
-  useDefaultModel: vi.fn(() => ({ data: null, isLoading: false })),
-  useUpdateDefaultModel: vi.fn(() => ({ trigger: vi.fn() })),
-  useUpdateModelList: vi.fn(() => vi.fn()),
-  useInvalidateDefaultModel: vi.fn(() => vi.fn()),
-  useModelList: vi.fn(() => ({ data: [], isLoading: false })),
-  useSystemDefaultModelAndModelList: vi.fn(() => [null, vi.fn()]),
-}))
+vi.mock(
+  '@/app/components/header/account-setting/model-provider-page/hooks',
+  () => ({
+    useDefaultModel: vi.fn(() => ({ data: null, isLoading: false })),
+    useUpdateDefaultModel: vi.fn(() => ({ trigger: vi.fn() })),
+    useUpdateModelList: vi.fn(() => vi.fn()),
+    useInvalidateDefaultModel: vi.fn(() => vi.fn()),
+    useModelList: vi.fn(() => ({ data: [], isLoading: false })),
+    useSystemDefaultModelAndModelList: vi.fn(() => [null, vi.fn()]),
+  }),
+)
 
-vi.mock('@/app/components/header/account-setting/model-provider-page/atoms', () => ({
-  useResetModelProviderListExpanded: () => mockResetModelProviderListExpanded,
-}))
+vi.mock(
+  '@/app/components/header/account-setting/model-provider-page/atoms',
+  () => ({
+    useResetModelProviderListExpanded: () => vi.fn(),
+  }),
+)
 
 vi.mock('@/service/use-datasource', () => ({
   useGetDataSourceListAuth: vi.fn(() => ({ data: { result: [] } })),
@@ -96,6 +104,7 @@ const baseAppContextValue: AppContextValue = {
   isCurrentWorkspaceOwner: true,
   isCurrentWorkspaceEditor: true,
   isCurrentWorkspaceDatasetOperator: false,
+  isSystemAdmin: false,
   mutateCurrentWorkspace: vi.fn(),
   langGeniusVersionInfo: {
     current_env: 'testing',
@@ -160,173 +169,169 @@ describe('AccountSetting', () => {
 
   describe('Rendering', () => {
     it('should render the sidebar with correct menu items', () => {
-      // Act
       renderAccountSetting()
 
-      // Assert
-      expect(screen.getByText('common.userProfile.settings')).toBeInTheDocument()
+      expect(
+        screen.getByText('common.userProfile.settings'),
+      ).toBeInTheDocument()
       expect(screen.getByText('common.settings.provider')).toBeInTheDocument()
-      expect(screen.getAllByText('common.settings.members').length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('common.settings.members').length,
+      ).toBeGreaterThan(0)
       expect(screen.getByText('common.settings.billing')).toBeInTheDocument()
-      expect(screen.getByText('common.settings.dataSource')).toBeInTheDocument()
-      expect(screen.getByText('common.settings.apiBasedExtension')).toBeInTheDocument()
+      expect(
+        screen.getByText('common.settings.dataSource'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText('common.settings.apiBasedExtension'),
+      ).toBeInTheDocument()
       expect(screen.getByText('custom.custom')).toBeInTheDocument()
-      expect(screen.getAllByText('common.settings.language').length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('common.settings.language').length,
+      ).toBeGreaterThan(0)
     })
 
     it('should respect the initial tab', () => {
-      // Act
       renderAccountSetting({ initialTab: ACCOUNT_SETTING_TAB.DATA_SOURCE })
 
-      // Assert
-      // Check that the active item title is Data Source
-      const titles = screen.getAllByText('common.settings.dataSource')
-      // One in sidebar, one in header.
-      expect(titles.length).toBeGreaterThan(1)
+      // One in sidebar, one in header
+      expect(
+        screen.getAllByText('common.settings.dataSource').length,
+      ).toBeGreaterThan(1)
     })
 
     it('should hide sidebar labels on mobile', () => {
-      // Arrange
       vi.mocked(useBreakpoints).mockReturnValue(MediaType.mobile)
 
-      // Act
       renderAccountSetting()
 
-      // Assert
-      // On mobile, the labels should not be rendered as per the implementation
-      expect(screen.queryByText('common.settings.provider')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('common.settings.provider'),
+      ).not.toBeInTheDocument()
     })
 
     it('should filter items for dataset operator', () => {
-      // Arrange
       vi.mocked(useAppContext).mockReturnValue({
         ...baseAppContextValue,
         isCurrentWorkspaceDatasetOperator: true,
       })
 
-      // Act
       renderAccountSetting()
 
-      // Assert
-      expect(screen.queryByText('common.settings.provider')).not.toBeInTheDocument()
-      expect(screen.queryByText('common.settings.members')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('common.settings.provider'),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('common.settings.members'),
+      ).not.toBeInTheDocument()
       expect(screen.getByText('common.settings.language')).toBeInTheDocument()
     })
 
     it('should hide billing and custom tabs when disabled', () => {
-      // Arrange
       vi.mocked(useProviderContext).mockReturnValue({
         ...baseProviderContextValue,
         enableBilling: false,
         enableReplaceWebAppLogo: false,
       })
 
-      // Act
       renderAccountSetting()
 
-      // Assert
-      expect(screen.queryByText('common.settings.billing')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('common.settings.billing'),
+      ).not.toBeInTheDocument()
       expect(screen.queryByText('custom.custom')).not.toBeInTheDocument()
     })
   })
 
   describe('Tab Navigation', () => {
     it('should change active tab when clicking on menu item', () => {
-      // Arrange
       renderAccountSetting({ onTabChange: mockOnTabChange })
 
-      // Act
       fireEvent.click(screen.getByText('common.settings.provider'))
 
-      // Assert
-      expect(mockOnTabChange).toHaveBeenCalledWith(ACCOUNT_SETTING_TAB.PROVIDER)
-      // Check for content from ModelProviderPage
-      expect(screen.getByText('common.modelProvider.models')).toBeInTheDocument()
+      expect(mockOnTabChange).toHaveBeenCalledWith(
+        ACCOUNT_SETTING_TAB.PROVIDER,
+      )
+      expect(
+        screen.getByText('common.modelProvider.models'),
+      ).toBeInTheDocument()
     })
 
     it('should navigate through various tabs and show correct details', () => {
-      // Act & Assert
       renderAccountSetting()
 
-      // Billing
       fireEvent.click(screen.getByText('common.settings.billing'))
-      // Billing Page renders plansCommon.plan if data is loaded, or generic text.
-      // Checking for title in header which is always there
-      expect(screen.getAllByText('common.settings.billing').length).toBeGreaterThan(1)
+      expect(
+        screen.getAllByText('common.settings.billing').length,
+      ).toBeGreaterThan(1)
 
-      // Data Source
       fireEvent.click(screen.getByText('common.settings.dataSource'))
-      expect(screen.getAllByText('common.settings.dataSource').length).toBeGreaterThan(1)
+      expect(
+        screen.getAllByText('common.settings.dataSource').length,
+      ).toBeGreaterThan(1)
 
-      // API Based Extension
       fireEvent.click(screen.getByText('common.settings.apiBasedExtension'))
-      expect(screen.getAllByText('common.settings.apiBasedExtension').length).toBeGreaterThan(1)
+      expect(
+        screen.getAllByText('common.settings.apiBasedExtension').length,
+      ).toBeGreaterThan(1)
 
-      // Custom
       fireEvent.click(screen.getByText('custom.custom'))
-      // Custom Page uses 'custom.custom' key as well.
       expect(screen.getAllByText('custom.custom').length).toBeGreaterThan(1)
 
-      // Language
       fireEvent.click(screen.getAllByText('common.settings.language')[0])
-      expect(screen.getAllByText('common.settings.language').length).toBeGreaterThan(1)
+      expect(
+        screen.getAllByText('common.settings.language').length,
+      ).toBeGreaterThan(1)
 
-      // Members
       fireEvent.click(screen.getAllByText('common.settings.members')[0])
-      expect(screen.getAllByText('common.settings.members').length).toBeGreaterThan(1)
+      expect(
+        screen.getAllByText('common.settings.members').length,
+      ).toBeGreaterThan(1)
     })
   })
 
   describe('Interactions', () => {
     it('should call onCancel when clicking close button', () => {
-      // Act
       renderAccountSetting()
-      const closeIcon = document.querySelector('.i-ri-close-line')
-      const closeButton = closeIcon?.closest('button')
+      const closeButton = screen
+        .getByRole('dialog')
+        .querySelector('.i-ri-close-line')
+        ?.closest('button')
       expect(closeButton).not.toBeNull()
       fireEvent.click(closeButton!)
 
-      // Assert
       expect(mockOnCancel).toHaveBeenCalled()
     })
 
     it('should call onCancel when pressing Escape key', () => {
-      // Act
       renderAccountSetting()
       fireEvent.keyDown(document, { key: 'Escape' })
 
-      // Assert
       expect(mockOnCancel).toHaveBeenCalled()
     })
 
     it('should update search value in provider tab', () => {
-      // Arrange
       renderAccountSetting({ initialTab: ACCOUNT_SETTING_TAB.PROVIDER })
 
-      // Act
       const input = screen.getByRole('textbox')
       fireEvent.change(input, { target: { value: 'test-search' } })
 
-      // Assert
       expect(input).toHaveValue('test-search')
-      expect(screen.getByText('common.modelProvider.models')).toBeInTheDocument()
+      expect(
+        screen.getByText('common.modelProvider.models'),
+      ).toBeInTheDocument()
     })
 
     it('should handle scroll event in panel', () => {
-      // Act
       renderAccountSetting()
-      const scrollContainer = screen.getByRole('dialog').querySelector('.overscroll-contain')
+      const scrollContainer = screen
+        .getByRole('dialog')
+        .querySelector('.overscroll-contain')
 
-      // Assert
       expect(scrollContainer).toBeInTheDocument()
-      if (scrollContainer) {
-        // Scroll down
-        fireEvent.scroll(scrollContainer, { target: { scrollTop: 100 } })
-        expect(scrollContainer).toHaveClass('overscroll-contain')
-
-        // Scroll back up
-        fireEvent.scroll(scrollContainer, { target: { scrollTop: 0 } })
-      }
+      fireEvent.scroll(scrollContainer!, { target: { scrollTop: 100 } })
+      expect(scrollContainer).toHaveClass('overscroll-contain')
+      fireEvent.scroll(scrollContainer!, { target: { scrollTop: 0 } })
     })
   })
 })

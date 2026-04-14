@@ -206,6 +206,7 @@ from .workspace import (
     models,
     plugin,
     tool_providers,
+    topup,
     trigger_providers,
     workspace,
 )
@@ -280,6 +281,7 @@ __all__ = [
     "statistic",
     "tags",
     "tool_providers",
+    "topup",
     "trial",
     "trigger_providers",
     "version",

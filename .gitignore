@@ -251,3 +251,9 @@ dify_*.sql
 # Personal notes (not project docs)
 docs/*interview*.md
 
+# Payment provider secrets (PEM keys etc.)
+api/secrets/*
+!api/secrets/README.md
+!api/secrets/.gitkeep
+*.pem
+

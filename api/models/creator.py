@@ -28,6 +28,7 @@ class BillingRecordType(enum.StrEnum):
     DEDUCTION = "deduction"
     TOPUP = "topup"
     REBATE = "rebate"  # rebate income credited to inviter's balance
+    ALLOCATION = "allocation"  # tenant -> member fund allocation
 
 
 class CreatorWorkShareStatus(enum.StrEnum):
@@ -395,5 +396,148 @@ class RebateRecord(TypeBase):
             "rebate_rate": str(self.rebate_rate),
             "cost_rate": str(self.cost_rate),
             "currency": self.currency,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Payment / Wallet models
+# ---------------------------------------------------------------------------
+
+
+class PaymentProviderName(enum.StrEnum):
+    ALIPAY = "alipay"
+    WECHAT = "wechat"
+
+
+class PaymentOrderStatus(enum.StrEnum):
+    PENDING = "pending"
+    PAID = "paid"
+    CLOSED = "closed"
+    REFUNDED = "refunded"
+    FAILED = "failed"
+
+
+class TenantBalance(TypeBase):
+    """Workspace-level wallet."""
+
+    __tablename__ = "tenant_balances"
+    __table_args__ = (
+        sa.PrimaryKeyConstraint("id", name="tenant_balance_pkey"),
+        sa.Index("tenant_balance_tenant_id_idx", "tenant_id", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
+    tenant_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    balance: Mapped[Decimal] = mapped_column(
+        sa.Numeric(precision=20, scale=6), server_default="0", default=Decimal(0)
+    )
+    locked: Mapped[Decimal] = mapped_column(
+        sa.Numeric(precision=20, scale=6), server_default="0", default=Decimal(0)
+    )
+    total_topup: Mapped[Decimal] = mapped_column(
+        sa.Numeric(precision=20, scale=6), server_default="0", default=Decimal(0)
+    )
+    currency: Mapped[str] = mapped_column(String(10), server_default="CNY", default="CNY")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp(), nullable=False, init=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp(), nullable=False, init=False, onupdate=func.current_timestamp()
+    )
+
+    @property
+    def total(self) -> Decimal:
+        return self.balance + self.locked
+
+
+class PaymentOrder(TypeBase):
+    """Top-up payment order, provider-agnostic."""
+
+    __tablename__ = "payment_orders"
+    __table_args__ = (
+        sa.PrimaryKeyConstraint("id", name="payment_order_pkey"),
+        sa.Index("payment_order_out_trade_no_idx", "out_trade_no", unique=True),
+        sa.Index("payment_order_tenant_status_idx", "tenant_id", "status"),
+        sa.Index("payment_order_provider_trade_idx", "provider", "provider_trade_no"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    out_trade_no: Mapped[str] = mapped_column(String(64), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    account_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(sa.Numeric(precision=20, scale=6), nullable=False)
+    amount_fen: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    subject: Mapped[str] = mapped_column(String(256), nullable=False)
+    # --- fields with defaults must come after non-default fields ---
+    provider_trade_no: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=PaymentOrderStatus.PENDING.value)
+    qr_code: Mapped[str | None] = mapped_column(String(512), nullable=True, default=None)
+    prepay_raw: Mapped[str | None] = mapped_column(LongText, nullable=True, default=None)
+    notify_raw: Mapped[str | None] = mapped_column(LongText, nullable=True, default=None)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp(), nullable=False, init=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp(), nullable=False, init=False, onupdate=func.current_timestamp()
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "provider": self.provider,
+            "out_trade_no": self.out_trade_no,
+            "provider_trade_no": self.provider_trade_no,
+            "tenant_id": self.tenant_id,
+            "account_id": self.account_id,
+            "amount": str(self.amount),
+            "amount_fen": self.amount_fen,
+            "subject": self.subject,
+            "status": self.status,
+            "qr_code": self.qr_code,
+            "paid_at": self.paid_at.isoformat() if self.paid_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
+class AllocationRecord(TypeBase):
+    """Ledger for tenant -> member fund movements."""
+
+    __tablename__ = "allocation_records"
+    __table_args__ = (
+        sa.PrimaryKeyConstraint("id", name="allocation_record_pkey"),
+        sa.Index("alloc_tenant_created_idx", "tenant_id", "created_at"),
+        sa.Index("alloc_member_idx", "account_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
+    tenant_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    account_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    operator_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(sa.Numeric(precision=20, scale=6), nullable=False)
+    description: Mapped[str | None] = mapped_column(sa.Text(), nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp(), nullable=False, init=False
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "tenant_id": self.tenant_id,
+            "account_id": self.account_id,
+            "operator_id": self.operator_id,
+            "amount": str(self.amount),
+            "description": self.description,
             "created_at": self.created_at.isoformat(),
         }

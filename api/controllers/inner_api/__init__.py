@@ -16,6 +16,7 @@ api = ExternalApi(
 inner_api_ns = Namespace("inner_api", description="Internal API operations", path="/")
 
 from . import mail as _mail
+from . import payment as _payment
 from .app import dsl as _app_dsl
 from .plugin import plugin as _plugin
 from .workspace import workspace as _workspace
@@ -25,6 +26,7 @@ api.add_namespace(inner_api_ns)
 __all__ = [
     "_app_dsl",
     "_mail",
+    "_payment",
     "_plugin",
     "_workspace",
     "api",

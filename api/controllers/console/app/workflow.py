@@ -15,7 +15,13 @@ from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError, NotF
 
 import services
 from controllers.console import console_ns
-from controllers.console.app.error import ConversationCompletedError, DraftWorkflowNotExist, DraftWorkflowNotSync
+from controllers.console.app.error import (
+    ConversationCompletedError,
+    DraftWorkflowNotExist,
+    DraftWorkflowNotSync,
+    InsufficientTenantBudgetError,
+    InsufficientUserBudgetError,
+)
 from controllers.console.app.workflow_run import workflow_run_node_execution_model
 from controllers.console.app.wraps import get_app_model
 from controllers.console.wraps import account_initialization_required, edit_permission_required, setup_required
@@ -49,6 +55,7 @@ from models.workflow import Workflow
 from services.app_generate_service import AppGenerateService
 from services.errors.app import IsDraftWorkflowError, WorkflowHashNotEqualError, WorkflowNotFoundError
 from services.errors.llm import InvokeRateLimitError
+from services.wallet.exceptions import WorkflowBudgetExceeded
 from services.workflow_service import DraftWorkflowDeletionError, WorkflowInUseError, WorkflowService
 
 logger = logging.getLogger(__name__)
@@ -350,6 +357,10 @@ class AdvancedChatDraftWorkflowRunApi(Resource):
             raise NotFound("Conversation Not Exists.")
         except services.errors.conversation.ConversationCompletedError:
             raise ConversationCompletedError()
+        except WorkflowBudgetExceeded as ex:
+            if ex.code == "INSUFFICIENT_USER_BUDGET":
+                raise InsufficientUserBudgetError()
+            raise InsufficientTenantBudgetError()
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except ValueError as e:
@@ -718,6 +729,10 @@ class DraftWorkflowRunApi(Resource):
             )
 
             return helper.compact_generate_response(response)
+        except WorkflowBudgetExceeded as ex:
+            if ex.code == "INSUFFICIENT_USER_BUDGET":
+                raise InsufficientUserBudgetError()
+            raise InsufficientTenantBudgetError()
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
 
@@ -1198,6 +1213,10 @@ class DraftWorkflowTriggerRunApi(Resource):
                     root_node_id=node_id,
                 )
             )
+        except WorkflowBudgetExceeded as ex:
+            if ex.code == "INSUFFICIENT_USER_BUDGET":
+                raise InsufficientUserBudgetError()
+            raise InsufficientTenantBudgetError()
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except PluginInvokeError as e:
@@ -1346,6 +1365,10 @@ class DraftWorkflowTriggerRunAllApi(Resource):
                 root_node_id=trigger_debug_event.node_id,
             )
             return helper.compact_generate_response(response)
+        except WorkflowBudgetExceeded as ex:
+            if ex.code == "INSUFFICIENT_USER_BUDGET":
+                raise InsufficientUserBudgetError()
+            raise InsufficientTenantBudgetError()
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except Exception:

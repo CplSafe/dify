@@ -12,6 +12,8 @@ credits.
 from decimal import Decimal
 from unittest.mock import patch
 
+import pytest
+
 from models.creator import BillingRecord, BillingRecordType, TenantBalance, UserBalance
 from services.user_billing_service import UserBillingService
 
@@ -246,3 +248,48 @@ def test_deduct_returns_user_record(mock_db, mock_tb_svc):
     assert record.account_id == "a1"
     assert record.tenant_id == "t1"
     assert record.workflow_run_id == "w1"
+
+
+# ---------------------------------------------------------------------------
+# assert_can_run: exception-driven wrapper used by the workflow entry gate
+# ---------------------------------------------------------------------------
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+def test_assert_can_run_returns_silently_when_allowed(mock_tb_svc):
+    """Happy path: no exception, no return value."""
+    tb = _make_tenant_balance(locked=Decimal(10))
+    ub = _make_user_balance(balance=Decimal(5))
+    mock_tb_svc.get_or_create.return_value = tb
+
+    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+        # Should not raise.
+        UserBillingService.assert_can_run("a1", "t1")
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+def test_assert_can_run_raises_with_user_budget_code(mock_tb_svc):
+    from services.wallet.exceptions import WorkflowBudgetExceeded
+
+    tb = _make_tenant_balance(locked=Decimal(10))
+    ub = _make_user_balance(balance=Decimal(0))
+    mock_tb_svc.get_or_create.return_value = tb
+
+    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+        with pytest.raises(WorkflowBudgetExceeded) as exc:
+            UserBillingService.assert_can_run("a1", "t1")
+    assert exc.value.code == "INSUFFICIENT_USER_BUDGET"
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+def test_assert_can_run_raises_with_tenant_budget_code(mock_tb_svc):
+    from services.wallet.exceptions import WorkflowBudgetExceeded
+
+    tb = _make_tenant_balance(locked=Decimal(0))
+    ub = _make_user_balance(balance=Decimal(5))
+    mock_tb_svc.get_or_create.return_value = tb
+
+    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+        with pytest.raises(WorkflowBudgetExceeded) as exc:
+            UserBillingService.assert_can_run("a1", "t1")
+    assert exc.value.code == "INSUFFICIENT_TENANT_BUDGET"

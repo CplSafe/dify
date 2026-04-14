@@ -81,6 +81,34 @@ class UserBillingService:
         return True, None
 
     @classmethod
+    def assert_can_run(cls, account_id: str, tenant_id: str) -> None:
+        """Raise ``WorkflowBudgetExceeded`` when the member cannot start a run.
+
+        Thin wrapper over ``check_can_run`` for callers that prefer the
+        exception-driven control flow (e.g. the ``AppGenerateService``
+        entry point, where every other quota / rate-limit check raises).
+
+        The raised exception's ``code`` mirrors the string returned by
+        ``check_can_run`` so HTTP error mapping stays in lockstep.
+        """
+        # Local import: ``WorkflowBudgetExceeded`` lives in services.wallet
+        # and pulling it at module top would create a wallet -> billing ->
+        # wallet import cycle (TenantBalanceService is already imported here).
+        from services.wallet.exceptions import WorkflowBudgetExceeded
+
+        ok, error_code = cls.check_can_run(account_id, tenant_id)
+        if ok:
+            return
+        assert error_code is not None  # narrow for the type checker
+        raise WorkflowBudgetExceeded(
+            error_code=error_code,
+            message=(
+                f"workflow run blocked for account={account_id} tenant={tenant_id}: "
+                f"{error_code}"
+            ),
+        )
+
+    @classmethod
     def deduct_for_workflow_run(
         cls,
         *,

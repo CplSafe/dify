@@ -103,6 +103,19 @@ class AppGenerateService:
         :param streaming: streaming
         :return:
         """
+        # Wallet pre-flight gate: block the run before any expensive setup
+        # when either the member's balance or the workspace pool is empty.
+        # End-users (embedded apps, trial apps) bypass this — they have no
+        # per-account budget; their usage is billed against the publisher's
+        # workspace pool elsewhere. Mirrors the deduct-side guard in
+        # ``core/app/workflow/layers/persistence.py:_bill_workflow_run``.
+        if isinstance(user, Account):
+            from services.user_billing_service import UserBillingService
+
+            UserBillingService.assert_can_run(
+                account_id=user.id, tenant_id=app_model.tenant_id
+            )
+
         quota_charge = unlimited()
         if dify_config.BILLING_ENABLED:
             try:

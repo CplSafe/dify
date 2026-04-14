@@ -26,7 +26,7 @@ class TenantBalanceService:
     """Read/write operations on TenantBalance."""
 
     @classmethod
-    def get_or_create(cls, tenant_id: str) -> TenantBalance:
+    def get_or_create(cls, tenant_id: str, *, for_update: bool = False) -> TenantBalance:
         """Return the workspace's balance row, creating a zeroed one if absent.
 
         Uses ``INSERT ... ON CONFLICT DO NOTHING`` followed by a re-read, so
@@ -37,24 +37,32 @@ class TenantBalanceService:
         the balance stays zero. The ON CONFLICT clause also makes two
         concurrent first-topup requests safe — the loser reads the winner's
         row instead of raising IntegrityError.
+
+        Pass ``for_update=True`` on the money path (allocate / topup credit /
+        workflow deduction) to take a ``SELECT ... FOR UPDATE`` row lock so
+        concurrent writers serialise. Read-only callers (wallet widget,
+        audit views) leave this False so they don't block behind writers.
         """
-        row = db.session.scalar(
-            select(TenantBalance).where(TenantBalance.tenant_id == tenant_id)
-        )
+        stmt = select(TenantBalance).where(TenantBalance.tenant_id == tenant_id)
+        if for_update:
+            stmt = stmt.with_for_update()
+        row = db.session.scalar(stmt)
         if row is not None:
             return row
 
-        stmt = (
+        insert_stmt = (
             pg_insert(TenantBalance)
             .values(tenant_id=tenant_id)
             .on_conflict_do_nothing(index_elements=["tenant_id"])
         )
-        db.session.execute(stmt)
+        db.session.execute(insert_stmt)
         # Re-read: the row now exists (either we inserted it, or a concurrent
-        # transaction did and our insert was a no-op).
-        row = db.session.scalar(
-            select(TenantBalance).where(TenantBalance.tenant_id == tenant_id)
-        )
+        # transaction did and our insert was a no-op). Re-apply FOR UPDATE so
+        # the row is locked for the caller's subsequent mutation.
+        stmt = select(TenantBalance).where(TenantBalance.tenant_id == tenant_id)
+        if for_update:
+            stmt = stmt.with_for_update()
+        row = db.session.scalar(stmt)
         if row is None:
             # Defensive: should be unreachable because of the ON CONFLICT guard.
             raise RuntimeError(f"TenantBalance for tenant_id={tenant_id} not visible after insert")
@@ -89,7 +97,9 @@ class TenantBalanceService:
         """
         if amount <= Decimal(0):
             raise ValueError("Top-up amount must be positive")
-        balance = cls.get_or_create(tenant_id)
+        # Lock the row — the topup notify handler races replays and anyone
+        # else writing to tenant_balance (allocate / workflow deduction).
+        balance = cls.get_or_create(tenant_id, for_update=True)
         balance.balance += amount
         balance.total_topup += amount
         db.session.add(balance)

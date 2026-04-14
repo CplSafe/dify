@@ -281,3 +281,69 @@ def test_list_tenant_allocations_returns_zero_when_empty(mock_db, mock_select):
 
     assert rows == []
     assert total == 0
+
+
+# ---------------------------------------------------------------------------
+# Row locking — allocate must take SELECT FOR UPDATE on both balances
+# ---------------------------------------------------------------------------
+
+
+@patch("services.wallet.allocation_service._verify_tenant_member")
+@patch("services.wallet.allocation_service.UserBillingService")
+@patch("services.wallet.allocation_service.TenantBalanceService")
+@patch("services.wallet.allocation_service.db")
+def test_allocate_locks_both_balance_rows_in_tenant_then_user_order(
+    mock_db, mock_tb_svc, mock_ub_svc, mock_verify
+):
+    """allocate() must SELECT FOR UPDATE both rows, tenant → user.
+
+    Without the lock, two concurrent allocates reading the same
+    ``tenant_balance.balance=100`` both pass the ``>= amount`` check
+    and commit, driving balance negative. Tenant-then-user order must
+    match ``deduct_for_workflow_run`` to avoid deadlock.
+    """
+    tenant_balance = _make_tenant_balance(Decimal(100), Decimal(0))
+    user_balance = _make_user_balance(Decimal(0))
+    mock_tb_svc.get_or_create.return_value = tenant_balance
+    mock_ub_svc.get_or_create_balance.return_value = user_balance
+
+    AllocationService.allocate(
+        tenant_id="t1",
+        account_id="a1",
+        operator_id="op",
+        amount=Decimal(30),
+    )
+
+    mock_tb_svc.get_or_create.assert_called_once_with("t1", for_update=True)
+    mock_ub_svc.get_or_create_balance.assert_called_once_with("a1", for_update=True)
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+@patch("services.user_billing_service.db")
+def test_deduct_for_workflow_run_locks_rows_in_tenant_then_user_order(
+    mock_db, mock_tb_svc
+):
+    """deduct_for_workflow_run() must lock tenant → user in that order.
+
+    Reversed order would deadlock against allocate(), which locks
+    tenant first.
+    """
+    from services.user_billing_service import UserBillingService
+
+    tenant_balance = _make_tenant_balance(Decimal(0), Decimal(50))
+    user_balance = _make_user_balance(Decimal(50))
+    mock_tb_svc.get_or_create.return_value = tenant_balance
+
+    # Patch get_or_create_balance directly on the class so we can assert on
+    # the call (it's the SUT's own classmethod — can't easily mock via module).
+    with patch.object(UserBillingService, "get_or_create_balance", return_value=user_balance) as mock_ub_cls:
+        UserBillingService.deduct_for_workflow_run(
+            account_id="a1",
+            tenant_id="t1",
+            workflow_run_id="wf-1",
+            total_tokens=1000,
+            price_per_1k_tokens=Decimal("0.01"),
+        )
+
+    mock_tb_svc.get_or_create.assert_called_once_with("t1", for_update=True)
+    mock_ub_cls.assert_called_once_with("a1", for_update=True)

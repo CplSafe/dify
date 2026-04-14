@@ -7,7 +7,7 @@ boundary. A nested commit on the topup path could persist
 breaking atomicity if the outer commit later fails.
 """
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from services.user_billing_service import UserBillingService
 
@@ -50,3 +50,46 @@ def test_get_or_create_balance_returns_existing_without_commit(mock_db):
     mock_db.session.add.assert_not_called()
     mock_db.session.execute.assert_not_called()
     mock_db.session.commit.assert_not_called()
+
+
+@patch("services.user_billing_service.select")
+@patch("services.user_billing_service.db")
+def test_get_or_create_balance_for_update_locks_the_row(mock_db, mock_select):
+    """``for_update=True`` must build a SELECT ... FOR UPDATE on UserBalance.
+
+    Required by the money path (allocate + workflow deduct) so concurrent
+    writers serialise on the row rather than racing each other's stale
+    snapshot.
+    """
+    from models.creator import UserBalance
+
+    existing = UserBalance(account_id="a-1")
+    mock_db.session.scalar.return_value = existing
+
+    where_stmt = MagicMock(name="where_stmt")
+    locked_stmt = MagicMock(name="locked_stmt")
+    where_stmt.with_for_update.return_value = locked_stmt
+    mock_select.return_value.where.return_value = where_stmt
+
+    result = UserBillingService.get_or_create_balance("a-1", for_update=True)
+
+    assert result is existing
+    where_stmt.with_for_update.assert_called_once()
+    mock_db.session.scalar.assert_called_once_with(locked_stmt)
+
+
+@patch("services.user_billing_service.select")
+@patch("services.user_billing_service.db")
+def test_get_or_create_balance_default_does_not_lock(mock_db, mock_select):
+    """Default (``for_update=False``) stays unlocked for read-only callers."""
+    from models.creator import UserBalance
+
+    existing = UserBalance(account_id="a-1")
+    mock_db.session.scalar.return_value = existing
+
+    where_stmt = MagicMock(name="where_stmt")
+    mock_select.return_value.where.return_value = where_stmt
+
+    UserBillingService.get_or_create_balance("a-1")
+
+    where_stmt.with_for_update.assert_not_called()

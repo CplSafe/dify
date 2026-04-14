@@ -10,11 +10,12 @@ This preserves the strict budget invariant:
 
     Σ(UserBalance.balance for members of tenant) == TenantBalance.locked
 
-Note on concurrency: this module performs plain in-session mutation and
-commits the unit of work. Row-level locking (``SELECT ... FOR UPDATE``)
-for concurrent workflow-run deductions is handled at the integration
-layer in a follow-up task; callers at the HTTP boundary should serialise
-allocation requests per tenant.
+Concurrency: every row touched (``TenantBalance``, ``UserBalance``) is
+read with ``SELECT ... FOR UPDATE`` so concurrent allocate / reclaim /
+topup-credit / workflow-deduct calls serialise on the physical row.
+**Lock order is fixed tenant → user everywhere** (see the matching
+comment in ``UserBillingService.deduct_for_workflow_run``) to avoid
+circular waits.
 """
 
 import logging
@@ -80,8 +81,11 @@ class AllocationService:
 
         _verify_tenant_member(tenant_id, account_id)
 
-        tenant_balance = TenantBalanceService.get_or_create(tenant_id)
-        user_balance = UserBillingService.get_or_create_balance(account_id)
+        # Lock order: tenant → user (see module docstring). The lock must be
+        # held across the balance check below so a concurrent allocate /
+        # workflow-deduct can't slip in and invalidate the `>= amount` guard.
+        tenant_balance = TenantBalanceService.get_or_create(tenant_id, for_update=True)
+        user_balance = UserBillingService.get_or_create_balance(account_id, for_update=True)
 
         if amount > 0:
             if tenant_balance.balance < amount:

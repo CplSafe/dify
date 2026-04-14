@@ -1,6 +1,6 @@
 """Unit tests for TenantBalanceService."""
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -183,3 +183,53 @@ def test_topup_accumulates_across_calls(mock_db):
     # Assert
     assert existing.balance == Decimal(150)
     assert existing.total_topup == Decimal(150)
+
+
+# ---------------------------------------------------------------------------
+# for_update: row-level locking for money-path callers
+# ---------------------------------------------------------------------------
+
+
+@patch("services.wallet.tenant_balance_service.select")
+@patch("services.wallet.tenant_balance_service.db")
+def test_get_or_create_for_update_locks_the_row(mock_db, mock_select):
+    """``for_update=True`` must build a SELECT ... FOR UPDATE statement.
+
+    Concurrent allocate / deduct / topup calls must serialise on the row
+    or the balance invariants break (read → mutate → commit without a
+    lock leaves the winner's write visible to the loser's stale snapshot).
+    """
+    from models.creator import TenantBalance
+
+    existing = TenantBalance(tenant_id="t-1")
+    mock_db.session.scalar.return_value = existing
+
+    where_stmt = MagicMock(name="where_stmt")
+    locked_stmt = MagicMock(name="locked_stmt")
+    where_stmt.with_for_update.return_value = locked_stmt
+    mock_select.return_value.where.return_value = where_stmt
+
+    result = TenantBalanceService.get_or_create("t-1", for_update=True)
+
+    assert result is existing
+    where_stmt.with_for_update.assert_called_once()
+    mock_db.session.scalar.assert_called_once_with(locked_stmt)
+
+
+@patch("services.wallet.tenant_balance_service.select")
+@patch("services.wallet.tenant_balance_service.db")
+def test_get_or_create_default_does_not_lock(mock_db, mock_select):
+    """Default (``for_update=False``) must not lock — read-only callers
+    (wallet widget, billing history) hit this path and should never block
+    on concurrent writers."""
+    from models.creator import TenantBalance
+
+    existing = TenantBalance(tenant_id="t-1")
+    mock_db.session.scalar.return_value = existing
+
+    where_stmt = MagicMock(name="where_stmt")
+    mock_select.return_value.where.return_value = where_stmt
+
+    TenantBalanceService.get_or_create("t-1")
+
+    where_stmt.with_for_update.assert_not_called()

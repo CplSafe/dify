@@ -30,7 +30,7 @@ class UserBillingService:
     """Service for user-level balance and billing operations."""
 
     @classmethod
-    def get_or_create_balance(cls, account_id: str) -> UserBalance:
+    def get_or_create_balance(cls, account_id: str, *, for_update: bool = False) -> UserBalance:
         """Return the user's balance row, creating a zeroed one if absent.
 
         Uses ``INSERT ... ON CONFLICT DO NOTHING`` followed by a re-read so
@@ -41,18 +41,29 @@ class UserBillingService:
         while the balance stays unchanged. The ON CONFLICT clause also
         makes two concurrent first-creates safe — the loser reads the
         winner's row instead of raising IntegrityError.
+
+        Pass ``for_update=True`` on the money path (allocate / workflow
+        deduction) to take a ``SELECT ... FOR UPDATE`` row lock so
+        concurrent writers serialise. Read-only callers (wallet widget,
+        billing history) leave this False so they never block on writers.
         """
-        balance = db.session.scalar(select(UserBalance).where(UserBalance.account_id == account_id))
+        stmt = select(UserBalance).where(UserBalance.account_id == account_id)
+        if for_update:
+            stmt = stmt.with_for_update()
+        balance = db.session.scalar(stmt)
         if balance is not None:
             return balance
 
-        stmt = (
+        insert_stmt = (
             pg_insert(UserBalance)
             .values(account_id=account_id)
             .on_conflict_do_nothing(index_elements=["account_id"])
         )
-        db.session.execute(stmt)
-        balance = db.session.scalar(select(UserBalance).where(UserBalance.account_id == account_id))
+        db.session.execute(insert_stmt)
+        stmt = select(UserBalance).where(UserBalance.account_id == account_id)
+        if for_update:
+            stmt = stmt.with_for_update()
+        balance = db.session.scalar(stmt)
         if balance is None:
             # Defensive: should be unreachable because of the ON CONFLICT guard.
             raise RuntimeError(f"UserBalance for account_id={account_id} not visible after insert")
@@ -159,8 +170,13 @@ class UserBillingService:
         if amount <= Decimal(0):
             return None
 
-        user_balance = cls.get_or_create_balance(account_id)
-        tenant_balance = TenantBalanceService.get_or_create(tenant_id)
+        # Lock both rows before mutating — concurrent workflow completions
+        # for the same user/tenant would otherwise race each other's
+        # read-modify-write and produce inconsistent locked totals.
+        # Lock order is fixed **tenant → user** everywhere (matches
+        # AllocationService.allocate) to prevent circular waits.
+        tenant_balance = TenantBalanceService.get_or_create(tenant_id, for_update=True)
+        user_balance = cls.get_or_create_balance(account_id, for_update=True)
 
         # Decrement both wallets. Either may go negative; we log and proceed so
         # that in-flight workflows are not killed mid-run.
@@ -220,7 +236,8 @@ class UserBillingService:
         if amount <= Decimal(0):
             raise ValueError("Top-up amount must be positive")
 
-        balance = cls.get_or_create_balance(account_id)
+        # Lock the row so concurrent topups don't race each other's read.
+        balance = cls.get_or_create_balance(account_id, for_update=True)
         balance.balance += amount
         db.session.add(balance)
 

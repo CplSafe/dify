@@ -6,4 +6,6 @@ export type GeneratedResultPayload = {
   messageId?: string
   workflowRunId?: string
   conversationId?: string
+  /** True when the workflow paused for human input at completion time */
+  hasHumanInput?: boolean
 }

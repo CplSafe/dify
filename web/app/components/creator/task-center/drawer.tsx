@@ -15,7 +15,7 @@ type Props = {
 
 export default function TaskCenterDrawer({ onClose }: Props) {
   const router = useRouter()
-  const { data, loading, refresh } = useCreatorTasks()
+  const { data, loading, refresh, renameTask, deleteTask } = useCreatorTasks()
   const [activeTab, setActiveTab] = useState<Tab>('in_progress')
 
   // Initial load
@@ -31,13 +31,13 @@ export default function TaskCenterDrawer({ onClose }: Props) {
   )
 
   const handleTaskClick = (task: CreatorTask) => {
-    if (task.status === 'completed') {
-      router.push('/creator-works')
-    }
-    else if (task.conversation_id) {
+    if (task.conversation_id) {
       router.push(
         `/creator/installed/${task.installed_app_id}?conversationId=${task.conversation_id}`,
       )
+    }
+    else {
+      router.push(`/creator?app_id=${task.app_id}`)
     }
     onClose()
   }
@@ -124,6 +124,8 @@ export default function TaskCenterDrawer({ onClose }: Props) {
                         key={task.id}
                         task={task}
                         onClick={handleTaskClick}
+                        onRename={renameTask}
+                        onDelete={deleteTask}
                       />
                     ))}
                   </div>
@@ -145,6 +147,8 @@ export default function TaskCenterDrawer({ onClose }: Props) {
                         key={task.id}
                         task={task}
                         onClick={handleTaskClick}
+                        onRename={renameTask}
+                        onDelete={deleteTask}
                       />
                     ))}
                   </div>

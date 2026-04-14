@@ -1,6 +1,11 @@
-import { get, patch, post } from '@/service/base'
+import { del, get, patch, post } from '@/service/base'
 
-export type CreatorTaskStatus = 'pending' | 'running' | 'waiting_input' | 'completed' | 'failed'
+export type CreatorTaskStatus
+  = | 'pending'
+    | 'running'
+    | 'waiting_input'
+    | 'completed'
+    | 'failed'
 
 export type CreatorTask = {
   id: string
@@ -31,18 +36,28 @@ export type CreateTaskPayload = {
 }
 
 export type UpdateTaskPayload = {
-  status: CreatorTaskStatus
+  status?: CreatorTaskStatus
+  title?: string
   last_updated_at?: string
 }
 
-export const listCreatorTasks = (): Promise<CreatorTaskListResponse> =>
-  get<CreatorTaskListResponse>('/creator/tasks')
+const BASE = '/creator/tasks'
 
-export const createCreatorTask = (payload: CreateTaskPayload): Promise<CreatorTask> =>
-  post<CreatorTask>('/creator/tasks', { body: payload })
+export const listCreatorTasks = (): Promise<CreatorTaskListResponse> =>
+  get<CreatorTaskListResponse>(BASE)
+
+export const createCreatorTask = (
+  payload: CreateTaskPayload,
+): Promise<CreatorTask> => post<CreatorTask>(BASE, { body: payload })
 
 export const getCreatorTask = (taskId: string): Promise<CreatorTask> =>
-  get<CreatorTask>(`/creator/tasks/${taskId}`)
+  get<CreatorTask>(`${BASE}/${taskId}`)
 
-export const updateCreatorTask = (taskId: string, payload: UpdateTaskPayload): Promise<CreatorTask> =>
-  patch<CreatorTask>(`/creator/tasks/${taskId}`, { body: payload })
+export const updateCreatorTask = (
+  taskId: string,
+  payload: UpdateTaskPayload,
+): Promise<CreatorTask> =>
+  patch<CreatorTask>(`${BASE}/${taskId}`, { body: payload })
+
+export const deleteCreatorTask = (taskId: string): Promise<void> =>
+  del(`${BASE}/${taskId}`)

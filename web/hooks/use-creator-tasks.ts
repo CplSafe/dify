@@ -1,9 +1,13 @@
 'use client'
 
-import type { CreatorTask, CreatorTaskListResponse, UpdateTaskPayload } from '@/service/creator-task'
+import type {
+  CreatorTask,
+  CreatorTaskListResponse,
+  UpdateTaskPayload,
+} from '@/service/creator-task'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-
+  deleteCreatorTask,
   listCreatorTasks,
   updateCreatorTask,
 } from '@/service/creator-task'
@@ -118,5 +122,51 @@ export function useCreatorTasks() {
     [fetchTasks],
   )
 
-  return { data, loading, refresh, updateTask }
+  const renameTask = useCallback(
+    async (taskId: string, title: string): Promise<boolean> => {
+      try {
+        const updated = await updateCreatorTask(taskId, { title })
+        setData(prev => ({
+          ...prev,
+          tasks: prev.tasks.map(t => (t.id === taskId ? updated : t)),
+        }))
+        return true
+      }
+      catch {
+        return false
+      }
+    },
+    [],
+  )
+
+  const deleteTask = useCallback(async (taskId: string): Promise<boolean> => {
+    try {
+      await deleteCreatorTask(taskId)
+      setData((prev) => {
+        const task = prev.tasks.find(t => t.id === taskId)
+        const wasInProgress = isInProgress(task?.status ?? '')
+        if (task?.conversation_id) {
+          window.dispatchEvent(
+            new CustomEvent('creator-task-deleted', {
+              detail: { taskId, conversationId: task.conversation_id },
+            }),
+          )
+        }
+        return {
+          ...prev,
+          tasks: prev.tasks.filter(t => t.id !== taskId),
+          total: prev.total - 1,
+          in_progress_count: wasInProgress
+            ? prev.in_progress_count - 1
+            : prev.in_progress_count,
+        }
+      })
+      return true
+    }
+    catch {
+      return false
+    }
+  }, [])
+
+  return { data, loading, refresh, updateTask, renameTask, deleteTask }
 }

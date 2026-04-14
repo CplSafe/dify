@@ -67,15 +67,16 @@ class CreatorTaskService:
         return task
 
     @staticmethod
-    def update_task_status(
+    def update_task(
         task_id: str,
         account_id: str,
-        new_status: str,
+        new_status: str | None,
+        new_title: str | None,
         last_updated_at: datetime | None,
     ) -> CreatorTask:
-        """Update task status with optimistic locking.
+        """Update task status and/or title with optimistic locking on status changes.
 
-        Raises Conflict if the task was modified between read and write.
+        Raises Conflict if the task was modified between read and write (status change only).
         Raises NotFound if the task does not exist or belongs to another user.
         """
         task = db.session.scalar(
@@ -87,22 +88,41 @@ class CreatorTaskService:
         if not task:
             raise NotFound("Task not found.")
 
-        if last_updated_at is not None:
-            # Compare timestamps at second granularity to avoid float precision issues
+        if new_status is not None and last_updated_at is not None:
             stored_ts = int(task.updated_at.replace(tzinfo=UTC).timestamp())
             provided_ts = int(last_updated_at.timestamp())
             if stored_ts != provided_ts:
                 raise Conflict("Task was modified by another request. Re-fetch and retry.")
 
-        task.status = new_status
+        if new_status is not None:
+            task.status = new_status
+        if new_title is not None:
+            task.title = new_title or None
+
         db.session.add(task)
         db.session.commit()
 
-        # After completing a task, prune old completed tasks if over limit
         if new_status == CreatorTaskStatus.COMPLETED.value:
             CreatorTaskService._prune_completed_tasks(account_id)
 
         return task
+
+    @staticmethod
+    def delete_task(task_id: str, account_id: str) -> None:
+        """Delete a task owned by the given account.
+
+        Raises NotFound if the task does not exist or belongs to another user.
+        """
+        task = db.session.scalar(
+            select(CreatorTask).where(
+                CreatorTask.id == task_id,
+                CreatorTask.account_id == account_id,
+            )
+        )
+        if not task:
+            raise NotFound("Task not found.")
+        db.session.delete(task)
+        db.session.commit()
 
     @staticmethod
     def get_task(task_id: str, account_id: str) -> CreatorTask:

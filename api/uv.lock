@@ -194,6 +194,19 @@ wheels = [
 ]
 
 [[package]]
+name = "alipay-sdk-python"
+version = "3.7.1098"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pycryptodome" },
+    { name = "rsa" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7f/9a/50c461add0e59d671ff58ebbb44a38d8406a93d9f2269dbbc32e53d3fa75/alipay_sdk_python-3.7.1098.tar.gz", hash = "sha256:08590765f7121ee2ecc5fb6ae46cd79064a9f0f794bb1879d02e02354e58af3b", size = 9779976, upload-time = "2026-04-09T04:34:10.139Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1c/7c/b522405de4a8ef8609ee584cd8ac9e6e106af4f0f1b7dc5df1350335c1f3/alipay_sdk_python-3.7.1098-py3-none-any.whl", hash = "sha256:e3dedef01221815ad1e0bd290603373de7a26caaba487ee598dfbb71c271ae83", size = 30568408, upload-time = "2026-04-09T04:34:03.636Z" },
+]
+
+[[package]]
 name = "aliyun-log-python-sdk"
 version = "0.9.37"
 source = { registry = "https://pypi.org/simple" }
@@ -1267,6 +1280,7 @@ name = "dify-api"
 version = "1.13.3"
 source = { virtual = "." }
 dependencies = [
+    { name = "alipay-sdk-python" },
     { name = "aliyun-log-python-sdk" },
     { name = "apscheduler" },
     { name = "arize-phoenix-otel" },
@@ -1467,6 +1481,7 @@ vdb = [
 
 [package.metadata]
 requires-dist = [
+    { name = "alipay-sdk-python", specifier = ">=3.7.1098" },
     { name = "aliyun-log-python-sdk", specifier = "~=0.9.37" },
     { name = "apscheduler", specifier = ">=3.11.0" },
     { name = "arize-phoenix-otel", specifier = "~=0.15.0" },
@@ -5303,6 +5318,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/13/0494cecce4848f68501e0a229432620b4b57022388b071eeff95f3e1e75b/rpds_py-0.29.0-cp312-cp312-win32.whl", hash = "sha256:ba5e1aeaf8dd6d8f6caba1f5539cddda87d511331714b7b5fc908b6cfc3636b7", size = 223853, upload-time = "2025-11-16T14:48:36.419Z" },
     { url = "https://files.pythonhosted.org/packages/1f/6a/51e9aeb444a00cdc520b032a28b07e5f8dc7bc328b57760c53e7f96997b4/rpds_py-0.29.0-cp312-cp312-win_amd64.whl", hash = "sha256:b5f6134faf54b3cb83375db0f113506f8b7770785be1f95a631e7e2892101977", size = 239895, upload-time = "2025-11-16T14:48:37.956Z" },
     { url = "https://files.pythonhosted.org/packages/d1/d4/8bce56cdad1ab873e3f27cb31c6a51d8f384d66b022b820525b879f8bed1/rpds_py-0.29.0-cp312-cp312-win_arm64.whl", hash = "sha256:b016eddf00dca7944721bf0cd85b6af7f6c4efaf83ee0b37c4133bd39757a8c7", size = 230321, upload-time = "2025-11-16T14:48:39.71Z" },
+]
+
+[[package]]
+name = "rsa"
+version = "4.9.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyasn1" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/da/8a/22b7beea3ee0d44b1916c0c1cb0ee3af23b700b6da9f04991899d0c555d4/rsa-4.9.1.tar.gz", hash = "sha256:e7bdbfdb5497da4c07dfd35530e1a902659db6ff241e39d9953cad06ebd0ae75", size = 29034, upload-time = "2025-04-16T09:51:18.218Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/8d/0133e4eb4beed9e425d9a98ed6e081a55d195481b7632472be1af08d2f6b/rsa-4.9.1-py3-none-any.whl", hash = "sha256:68635866661c6836b8d39430f97a996acbd61bfa49406748ea243539fe239762", size = 34696, upload-time = "2025-04-16T09:51:17.142Z" },
 ]
 
 [[package]]

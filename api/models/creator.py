@@ -89,6 +89,7 @@ class BillingRecord(TypeBase):
     workflow_run_id: Mapped[str | None] = mapped_column(StringUUID, nullable=True, default=None)
     currency: Mapped[str] = mapped_column(String(10), server_default="CNY", default="CNY")
     description: Mapped[str | None] = mapped_column(sa.Text(), nullable=True, default=None)
+    scope: Mapped[str] = mapped_column(String(20), server_default="user", default="user")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp(), nullable=False, init=False
     )
@@ -107,6 +108,7 @@ class BillingRecord(TypeBase):
             "currency": self.currency,
             "record_type": self.record_type,
             "description": self.description,
+            "scope": self.scope,
             "created_at": self.created_at.isoformat(),
         }
 

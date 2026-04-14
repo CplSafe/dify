@@ -10,11 +10,16 @@ from .account import (
 )
 from .api_based_extension import APIBasedExtension, APIBasedExtensionPoint
 from .creator import (
+    AllocationRecord,
     BillingRecord,
     BillingRecordType,
     CreatorWork,
     CreatorWorkShareStatus,
     MarketplaceApp,
+    PaymentOrder,
+    PaymentOrderStatus,
+    PaymentProviderName,
+    TenantBalance,
     UserBalance,
     UserGlobalApiKey,
 )
@@ -140,6 +145,7 @@ __all__ = [
     "AppMode",
     "AppModelConfig",
     "AppTrigger",
+    "AllocationRecord",
     "AppTriggerStatus",
     "AppTriggerType",
     "BillingRecord",
@@ -187,6 +193,9 @@ __all__ = [
     "MessageFeedback",
     "MessageFile",
     "OperationLog",
+    "PaymentOrder",
+    "PaymentOrderStatus",
+    "PaymentProviderName",
     "PinnedConversation",
     "Provider",
     "ProviderModel",
@@ -202,6 +211,7 @@ __all__ = [
     "Tenant",
     "TenantAccountJoin",
     "TenantAccountRole",
+    "TenantBalance",
     "TenantCreditPool",
     "TenantDefaultModel",
     "TenantPreferredModelProvider",

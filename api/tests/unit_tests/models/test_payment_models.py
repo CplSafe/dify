@@ -6,8 +6,20 @@ from models.creator import (
     BillingRecord,
     BillingRecordType,
     PaymentOrder,
+    PaymentProviderName,
     TenantBalance,
 )
+
+
+class TestPaymentProviderName:
+    def test_alipay_qr_value(self):
+        assert PaymentProviderName.ALIPAY_QR.value == "alipay_qr"
+
+    def test_alipay_page_value(self):
+        assert PaymentProviderName.ALIPAY_PAGE.value == "alipay_page"
+
+    def test_wechat_value(self):
+        assert PaymentProviderName.WECHAT.value == "wechat"
 
 
 class TestTenantBalance:
@@ -28,7 +40,7 @@ class TestTenantBalance:
 class TestPaymentOrder:
     def test_required_fields(self):
         o = PaymentOrder(
-            provider="alipay",
+            provider="alipay_qr",
             out_trade_no="abc",
             tenant_id="t1",
             account_id="a1",
@@ -38,7 +50,7 @@ class TestPaymentOrder:
             status="pending",
             expires_at=None,  # set in real test below
         )
-        assert o.provider == "alipay"
+        assert o.provider == "alipay_qr"
         assert o.amount_fen == 1000
 
 

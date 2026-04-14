@@ -408,7 +408,20 @@ class RebateRecord(TypeBase):
 
 
 class PaymentProviderName(enum.StrEnum):
-    ALIPAY = "alipay"
+    """Concrete payment channels.
+
+    Alipay offers two products with different per-transaction limits:
+    - ``alipay_qr`` (当面付 / precreate): QR-code scan-pay. Default limit ¥1,000
+      per transaction; ideal for small/in-page topups.
+    - ``alipay_page`` (电脑网站支付 / pagePay): full-page redirect to the
+      Alipay cashier. Default limit ¥100,000 per transaction; required for
+      large topups.
+
+    PaymentService routes between them based on order amount.
+    """
+
+    ALIPAY_QR = "alipay_qr"
+    ALIPAY_PAGE = "alipay_page"
     WECHAT = "wechat"
 
 

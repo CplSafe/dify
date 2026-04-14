@@ -14,6 +14,7 @@ import logging
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from models.creator import TenantBalance
 from models.engine import db
@@ -26,15 +27,38 @@ class TenantBalanceService:
 
     @classmethod
     def get_or_create(cls, tenant_id: str) -> TenantBalance:
-        """Return the workspace's balance row, creating a zeroed one if absent."""
-        balance = db.session.scalar(
+        """Return the workspace's balance row, creating a zeroed one if absent.
+
+        Uses ``INSERT ... ON CONFLICT DO NOTHING`` followed by a re-read, so
+        the insert participates in the caller's transaction without committing
+        it. A nested commit here would be catastrophic on the topup path:
+        ``PaymentOrder.status=paid`` must land in the same transaction as the
+        wallet increment, or a mid-flow failure could mark the order paid while
+        the balance stays zero. The ON CONFLICT clause also makes two
+        concurrent first-topup requests safe — the loser reads the winner's
+        row instead of raising IntegrityError.
+        """
+        row = db.session.scalar(
             select(TenantBalance).where(TenantBalance.tenant_id == tenant_id)
         )
-        if balance is None:
-            balance = TenantBalance(tenant_id=tenant_id)
-            db.session.add(balance)
-            db.session.commit()
-        return balance
+        if row is not None:
+            return row
+
+        stmt = (
+            pg_insert(TenantBalance)
+            .values(tenant_id=tenant_id)
+            .on_conflict_do_nothing(index_elements=["tenant_id"])
+        )
+        db.session.execute(stmt)
+        # Re-read: the row now exists (either we inserted it, or a concurrent
+        # transaction did and our insert was a no-op).
+        row = db.session.scalar(
+            select(TenantBalance).where(TenantBalance.tenant_id == tenant_id)
+        )
+        if row is None:
+            # Defensive: should be unreachable because of the ON CONFLICT guard.
+            raise RuntimeError(f"TenantBalance for tenant_id={tenant_id} not visible after insert")
+        return row
 
     @classmethod
     def get(cls, tenant_id: str) -> TenantBalance | None:

@@ -9,17 +9,26 @@ from services.wallet.tenant_balance_service import TenantBalanceService
 
 @patch("services.wallet.tenant_balance_service.db")
 def test_get_or_create_creates_when_missing(mock_db):
-    """When no row exists, create one with zero balance and commit."""
-    mock_db.session.scalar.return_value = None
+    """When no row exists, INSERT ... ON CONFLICT DO NOTHING, then re-read.
+
+    Must NOT commit — the caller owns the transaction boundary. A nested
+    commit during a topup (notify handler) could persist
+    ``PaymentOrder.status=paid`` before the wallet increment, breaking
+    atomicity if the outer commit later fails.
+    """
+    from models.creator import TenantBalance
+
+    created = TenantBalance(tenant_id="t-1")
+    # First scalar() → None (no row); second scalar() after insert → created row.
+    mock_db.session.scalar.side_effect = [None, created]
 
     result = TenantBalanceService.get_or_create("t-1")
 
-    assert result.tenant_id == "t-1"
-    assert result.balance == Decimal(0)
-    assert result.locked == Decimal(0)
-    assert result.total_topup == Decimal(0)
-    mock_db.session.add.assert_called_once()
-    mock_db.session.commit.assert_called_once()
+    assert result is created
+    # Must have issued an INSERT via db.session.execute (pg insert) — not
+    # via a bare db.session.add + commit.
+    mock_db.session.execute.assert_called_once()
+    mock_db.session.commit.assert_not_called()
 
 
 @patch("services.wallet.tenant_balance_service.db")
@@ -132,6 +141,28 @@ def test_topup_rejects_negative_amount(mock_db):
     """Negative amounts are rejected — use AllocationService for reclaim."""
     with pytest.raises(ValueError, match="must be positive"):
         TenantBalanceService.topup(tenant_id="t-1", amount=Decimal(-5))
+
+
+@patch("services.wallet.tenant_balance_service.db")
+def test_topup_on_first_ever_call_does_not_commit(mock_db):
+    """First-ever topup for a tenant (no TenantBalance row yet) must still
+    leave the transaction open — the outer notify handler bundles the wallet
+    credit with PaymentOrder + BillingRecord writes in a single commit.
+    """
+    from models.creator import TenantBalance
+
+    created = TenantBalance(tenant_id="t-new")
+    created.balance = Decimal(0)
+    created.total_topup = Decimal(0)
+    # First scalar() returns None → get_or_create goes down the insert branch;
+    # second returns the just-inserted row.
+    mock_db.session.scalar.side_effect = [None, created]
+
+    result = TenantBalanceService.topup(tenant_id="t-new", amount=Decimal("12.00"))
+
+    assert result.balance == Decimal("12.00")
+    assert result.total_topup == Decimal("12.00")
+    mock_db.session.commit.assert_not_called()
 
 
 @patch("services.wallet.tenant_balance_service.db")

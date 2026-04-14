@@ -14,6 +14,7 @@ import secrets
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from models.creator import BillingRecord, BillingRecordType, UserBalance
 from models.engine import db
@@ -30,12 +31,31 @@ class UserBillingService:
 
     @classmethod
     def get_or_create_balance(cls, account_id: str) -> UserBalance:
-        """Return existing balance row or create one with zero balance."""
+        """Return the user's balance row, creating a zeroed one if absent.
+
+        Uses ``INSERT ... ON CONFLICT DO NOTHING`` followed by a re-read so
+        the insert participates in the caller's transaction without an
+        implicit commit. A nested commit here would break the topup path:
+        ``PaymentOrder.status=paid`` must land in the same transaction as
+        the wallet write, or a mid-flow failure could mark the order paid
+        while the balance stays unchanged. The ON CONFLICT clause also
+        makes two concurrent first-creates safe — the loser reads the
+        winner's row instead of raising IntegrityError.
+        """
+        balance = db.session.scalar(select(UserBalance).where(UserBalance.account_id == account_id))
+        if balance is not None:
+            return balance
+
+        stmt = (
+            pg_insert(UserBalance)
+            .values(account_id=account_id)
+            .on_conflict_do_nothing(index_elements=["account_id"])
+        )
+        db.session.execute(stmt)
         balance = db.session.scalar(select(UserBalance).where(UserBalance.account_id == account_id))
         if balance is None:
-            balance = UserBalance(account_id=account_id)
-            db.session.add(balance)
-            db.session.commit()
+            # Defensive: should be unreachable because of the ON CONFLICT guard.
+            raise RuntimeError(f"UserBalance for account_id={account_id} not visible after insert")
         return balance
 
     @classmethod

@@ -350,6 +350,30 @@ def is_admin_or_owner_required[**P, R](f: Callable[P, R]) -> Callable[P, R]:
     return decorated_function
 
 
+def tenant_owner_required[**P, R](f: Callable[P, R]) -> Callable[P, R]:
+    """Allow only the workspace OWNER to reach the view.
+
+    Admins and editors are rejected. Use for topup/allocation endpoints
+    where funds-movement authority must stay with the single workspace
+    owner, not any privileged role.
+    """
+
+    @wraps(f)
+    def decorated_function(*args: P.args, **kwargs: P.kwargs):
+        from werkzeug.exceptions import Forbidden
+
+        from libs.login import current_user
+        from models import Account
+        from models.account import TenantAccountRole
+
+        user = current_user._get_current_object()
+        if not isinstance(user, Account) or user.current_role != TenantAccountRole.OWNER:
+            raise Forbidden()
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
 def annotation_import_rate_limit[**P, R](view: Callable[P, R]) -> Callable[P, R]:
     """
     Rate limiting decorator for annotation import operations.

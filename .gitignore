@@ -248,3 +248,6 @@ scripts/stress-test/reports/
 # Local DB dumps
 dify_*.sql
 
+# Personal notes (not project docs)
+docs/*interview*.md
+

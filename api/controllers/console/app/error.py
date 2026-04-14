@@ -1,4 +1,17 @@
+from controllers.common.errors import (
+    InsufficientTenantBudgetError,
+    InsufficientUserBudgetError,
+)
 from libs.exception import BaseHTTPException
+
+# Re-exported from controllers.common.errors so other entry-point modules
+# (web, service_api, explore) can share the same 402 HTTP errors without
+# depending on this console-scoped module. Keep the names exposed here for
+# backward compatibility with existing imports.
+__all__ = [
+    "InsufficientTenantBudgetError",
+    "InsufficientUserBudgetError",
+]
 
 
 class AppNotFoundError(BaseHTTPException):
@@ -121,18 +134,3 @@ class NeedAddIdsError(BaseHTTPException):
     error_code = "need_add_ids"
     description = "Need to add ids."
     code = 400
-
-
-class InsufficientUserBudgetError(BaseHTTPException):
-    error_code = "insufficient_user_budget"
-    description = (
-        "Your wallet balance is not enough to start this run. "
-        "Please ask your workspace owner to allocate funds."
-    )
-    code = 402  # Payment Required
-
-
-class InsufficientTenantBudgetError(BaseHTTPException):
-    error_code = "insufficient_tenant_budget"
-    description = "The workspace allocated pool is exhausted. Please ask the workspace owner to top up and re-allocate."
-    code = 402  # Payment Required

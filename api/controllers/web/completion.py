@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 from werkzeug.exceptions import InternalServerError, NotFound
 
 import services
+from controllers.common.errors import raise_workflow_budget_http_error
 from controllers.common.schema import register_schema_models
 from controllers.web import web_ns
 from controllers.web.error import (
@@ -32,6 +33,7 @@ from models.model import AppMode
 from services.app_generate_service import AppGenerateService
 from services.app_task_service import AppTaskService
 from services.errors.llm import InvokeRateLimitError
+from services.wallet.exceptions import WorkflowBudgetExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +198,8 @@ class ChatApi(WebApiResource):
             raise ProviderQuotaExceededError()
         except ModelCurrentlyNotSupportError:
             raise ProviderModelCurrentlyNotSupportError()
+        except WorkflowBudgetExceeded as ex:
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except InvokeError as e:

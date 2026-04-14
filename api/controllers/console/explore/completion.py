@@ -10,6 +10,7 @@ from sqlalchemy import select
 from werkzeug.exceptions import InternalServerError, NotFound
 
 import services
+from controllers.common.errors import raise_workflow_budget_http_error
 from controllers.common.schema import register_schema_models
 from controllers.console.app.error import (
     AppUnavailableError,
@@ -39,6 +40,7 @@ from services.app_generate_service import AppGenerateService
 from services.app_task_service import AppTaskService
 from services.errors.llm import InvokeRateLimitError
 from services.user_billing_service import UserBillingService
+from services.wallet.exceptions import WorkflowBudgetExceeded
 
 from .. import console_ns
 
@@ -234,6 +236,8 @@ class ChatApi(InstalledAppResource):
             raise ProviderModelCurrentlyNotSupportError()
         except InvokeError as e:
             raise CompletionRequestError(e.description)
+        except WorkflowBudgetExceeded as ex:
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except ValueError as e:

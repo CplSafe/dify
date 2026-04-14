@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 
 import services
+from controllers.common.errors import raise_workflow_budget_http_error
 from controllers.common.schema import register_schema_models
 from controllers.service_api import service_api_ns
 from controllers.service_api.app.error import (
@@ -36,6 +37,7 @@ from services.app_generate_service import AppGenerateService
 from services.app_task_service import AppTaskService
 from services.errors.app import IsDraftWorkflowError, WorkflowIdFormatError, WorkflowNotFoundError
 from services.errors.llm import InvokeRateLimitError
+from services.wallet.exceptions import WorkflowBudgetExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -231,6 +233,8 @@ class ChatApi(Resource):
             raise ProviderQuotaExceededError()
         except ModelCurrentlyNotSupportError:
             raise ProviderModelCurrentlyNotSupportError()
+        except WorkflowBudgetExceeded as ex:
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except InvokeError as e:

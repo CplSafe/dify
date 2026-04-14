@@ -10,6 +10,7 @@ from sqlalchemy import select
 from werkzeug.exceptions import Forbidden, InternalServerError, NotFound
 
 import services
+from controllers.common.errors import raise_workflow_budget_http_error
 from controllers.common.fields import Parameters as ParametersResponse
 from controllers.common.fields import Site as SiteResponse
 from controllers.common.schema import get_or_create_model
@@ -86,6 +87,7 @@ from services.errors.message import (
 )
 from services.message_service import MessageService
 from services.recommended_app_service import RecommendedAppService
+from services.wallet.exceptions import WorkflowBudgetExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +202,8 @@ class TrialAppWorkflowRunApi(TrialAppResource):
             raise ProviderModelCurrentlyNotSupportError()
         except InvokeError as e:
             raise CompletionRequestError(e.description)
+        except WorkflowBudgetExceeded as ex:
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except ValueError as e:
@@ -280,6 +284,8 @@ class TrialChatApi(TrialAppResource):
             raise ProviderModelCurrentlyNotSupportError()
         except InvokeError as e:
             raise CompletionRequestError(e.description)
+        except WorkflowBudgetExceeded as ex:
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except ValueError as e:

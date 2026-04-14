@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError, NotFound
 
 import services
+from controllers.common.errors import raise_workflow_budget_http_error
 from controllers.common.schema import register_schema_models
 from controllers.console import console_ns
 from controllers.console.app.error import (
@@ -53,6 +54,7 @@ from services.rag_pipeline.pipeline_generate_service import PipelineGenerateServ
 from services.rag_pipeline.rag_pipeline import RagPipelineService
 from services.rag_pipeline.rag_pipeline_manage_service import RagPipelineManageService
 from services.rag_pipeline.rag_pipeline_transform_service import RagPipelineTransformService
+from services.wallet.exceptions import WorkflowBudgetExceeded
 from services.workflow_service import DraftWorkflowDeletionError, WorkflowInUseError, WorkflowService
 
 logger = logging.getLogger(__name__)
@@ -324,6 +326,8 @@ class DraftRagPipelineRunApi(Resource):
             )
 
             return helper.compact_generate_response(response)
+        except WorkflowBudgetExceeded as ex:
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
 
@@ -357,6 +361,8 @@ class PublishedRagPipelineRunApi(Resource):
             )
 
             return helper.compact_generate_response(response)
+        except WorkflowBudgetExceeded as ex:
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
 

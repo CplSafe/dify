@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import sessionmaker
 from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 
+from controllers.common.errors import raise_workflow_budget_http_error
 from controllers.common.schema import register_schema_models
 from controllers.service_api import service_api_ns
 from controllers.service_api.app.error import (
@@ -41,6 +42,7 @@ from repositories.factory import DifyAPIRepositoryFactory
 from services.app_generate_service import AppGenerateService
 from services.errors.app import IsDraftWorkflowError, WorkflowIdFormatError, WorkflowNotFoundError
 from services.errors.llm import InvokeRateLimitError
+from services.wallet.exceptions import WorkflowBudgetExceeded
 from services.workflow_app_service import WorkflowAppService
 
 logger = logging.getLogger(__name__)
@@ -182,6 +184,8 @@ class WorkflowRunApi(Resource):
             raise ProviderQuotaExceededError()
         except ModelCurrentlyNotSupportError:
             raise ProviderModelCurrentlyNotSupportError()
+        except WorkflowBudgetExceeded as ex:
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except InvokeError as e:
@@ -248,6 +252,8 @@ class WorkflowRunByIdApi(Resource):
             raise ProviderQuotaExceededError()
         except ModelCurrentlyNotSupportError:
             raise ProviderModelCurrentlyNotSupportError()
+        except WorkflowBudgetExceeded as ex:
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except InvokeError as e:

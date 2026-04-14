@@ -6,6 +6,7 @@ from graphon.model_runtime.errors.invoke import InvokeError
 from pydantic import BaseModel
 from werkzeug.exceptions import InternalServerError
 
+from controllers.common.errors import raise_workflow_budget_http_error
 from controllers.common.schema import register_schema_model
 from controllers.console.app.error import (
     CompletionRequestError,
@@ -29,6 +30,7 @@ from libs.login import current_account_with_tenant
 from models.model import AppMode, InstalledApp
 from services.app_generate_service import AppGenerateService
 from services.errors.llm import InvokeRateLimitError
+from services.wallet.exceptions import WorkflowBudgetExceeded
 
 from .. import console_ns
 
@@ -74,6 +76,8 @@ class InstalledAppWorkflowRunApi(InstalledAppResource):
             raise ProviderModelCurrentlyNotSupportError()
         except InvokeError as e:
             raise CompletionRequestError(e.description)
+        except WorkflowBudgetExceeded as ex:
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except ValueError as e:

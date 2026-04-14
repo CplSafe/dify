@@ -244,6 +244,7 @@ scripts/stress-test/reports/
 .qoder/*
 .claire/
 .claude/package-manager.json
+.claude/skills/
 
 # Local DB dumps
 dify_*.sql

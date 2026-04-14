@@ -26,12 +26,12 @@ def test_get_or_create_returns_existing(mock_db):
     from models.creator import TenantBalance
 
     existing = TenantBalance(tenant_id="t-1")
-    existing.balance = Decimal("100")
+    existing.balance = Decimal(100)
     mock_db.session.scalar.return_value = existing
 
     result = TenantBalanceService.get_or_create("t-1")
 
-    assert result.balance == Decimal("100")
+    assert result.balance == Decimal(100)
     mock_db.session.add.assert_not_called()
     mock_db.session.commit.assert_not_called()
 
@@ -53,7 +53,7 @@ def test_has_funds_true_when_balance_positive(mock_db):
     from models.creator import TenantBalance
 
     tb = TenantBalance(tenant_id="t1")
-    tb.balance = Decimal("5")
+    tb.balance = Decimal(5)
     tb.locked = Decimal(0)
     mock_db.session.scalar.return_value = tb
 
@@ -66,7 +66,7 @@ def test_has_funds_true_when_only_locked_positive(mock_db):
 
     tb = TenantBalance(tenant_id="t1")
     tb.balance = Decimal(0)
-    tb.locked = Decimal("3")
+    tb.locked = Decimal(3)
     mock_db.session.scalar.return_value = tb
 
     assert TenantBalanceService.has_funds("t1") is True

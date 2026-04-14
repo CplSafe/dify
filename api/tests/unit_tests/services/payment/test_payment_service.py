@@ -22,6 +22,7 @@ from models.creator import (
     PaymentOrderStatus,
     PaymentProviderName,
 )
+from services.payment.alerter import NullPaymentAlerter
 from services.payment.exceptions import (
     AmountTooLarge,
     AmountTooSmall,
@@ -750,3 +751,112 @@ def test_create_order_response_is_mapping_compatible(
     # Exhaustive key check so downstream API schemas can rely on the shape.
     for key in ("order_id", "out_trade_no", "provider", "amount_fen", "qr_code", "pay_url", "expires_at"):
         assert key in result
+
+
+# ---------------------------------------------------------------------------
+# create_order — large amount alerter integration
+# ---------------------------------------------------------------------------
+
+
+ALERT_THRESHOLD_FEN = 5_000  # ¥50
+
+
+def _service_with_alerter(
+    qr_provider: mock.MagicMock,
+    page_provider: mock.MagicMock,
+    alerter: mock.MagicMock,
+    *,
+    threshold_fen: int = ALERT_THRESHOLD_FEN,
+) -> PaymentService:
+    return PaymentService(
+        qr_provider=qr_provider,
+        page_provider=page_provider,
+        qr_max_fen=QR_MAX_FEN,
+        min_amount_fen=MIN_AMOUNT_FEN,
+        max_amount_fen=MAX_AMOUNT_FEN,
+        order_timeout_min=ORDER_TIMEOUT_MIN,
+        enabled=True,
+        expected_app_id=APP_ID,
+        alerter=alerter,
+        large_amount_threshold_fen=threshold_fen,
+    )
+
+
+@mock.patch("services.payment.payment_service.db")
+def test_create_order_fires_alert_at_exactly_threshold(
+    mock_db: mock.MagicMock,
+    qr_provider: mock.MagicMock,
+    page_provider: mock.MagicMock,
+) -> None:
+    # Arrange
+    qr_provider.create_order.return_value = _qr_result()
+    alerter = mock.MagicMock(spec=NullPaymentAlerter)
+    service = _service_with_alerter(qr_provider, page_provider, alerter)
+
+    # Act
+    service.create_order(tenant_id="t-1", account_id="a-1", amount_fen=ALERT_THRESHOLD_FEN)
+
+    # Assert
+    alerter.alert_large_amount.assert_called_once()
+    call_args = alerter.alert_large_amount.call_args
+    order_arg = call_args.args[0]
+    assert isinstance(order_arg, PaymentOrder)
+    assert order_arg.amount_fen == ALERT_THRESHOLD_FEN
+    assert call_args.args[1] == ALERT_THRESHOLD_FEN
+
+
+@mock.patch("services.payment.payment_service.db")
+def test_create_order_fires_alert_above_threshold(
+    mock_db: mock.MagicMock,
+    qr_provider: mock.MagicMock,
+    page_provider: mock.MagicMock,
+) -> None:
+    qr_provider.create_order.return_value = _qr_result()
+    alerter = mock.MagicMock(spec=NullPaymentAlerter)
+    service = _service_with_alerter(qr_provider, page_provider, alerter)
+
+    service.create_order(
+        tenant_id="t-1", account_id="a-1", amount_fen=ALERT_THRESHOLD_FEN + 1
+    )
+
+    alerter.alert_large_amount.assert_called_once()
+
+
+@mock.patch("services.payment.payment_service.db")
+def test_create_order_skips_alert_below_threshold(
+    mock_db: mock.MagicMock,
+    qr_provider: mock.MagicMock,
+    page_provider: mock.MagicMock,
+) -> None:
+    qr_provider.create_order.return_value = _qr_result()
+    alerter = mock.MagicMock(spec=NullPaymentAlerter)
+    service = _service_with_alerter(qr_provider, page_provider, alerter)
+
+    service.create_order(
+        tenant_id="t-1", account_id="a-1", amount_fen=ALERT_THRESHOLD_FEN - 1
+    )
+
+    alerter.alert_large_amount.assert_not_called()
+
+
+@mock.patch("services.payment.payment_service.db")
+def test_create_order_succeeds_when_alerter_raises(
+    mock_db: mock.MagicMock,
+    qr_provider: mock.MagicMock,
+    page_provider: mock.MagicMock,
+) -> None:
+    """A flaky alerter channel must not break payment creation."""
+    qr_provider.create_order.return_value = _qr_result()
+    alerter = mock.MagicMock(spec=NullPaymentAlerter)
+    alerter.alert_large_amount.side_effect = RuntimeError("SMTP unavailable")
+    service = _service_with_alerter(qr_provider, page_provider, alerter)
+
+    # Act — should NOT raise
+    result = service.create_order(
+        tenant_id="t-1", account_id="a-1", amount_fen=ALERT_THRESHOLD_FEN * 2
+    )
+
+    # Assert — order was created successfully
+    assert result["amount_fen"] == ALERT_THRESHOLD_FEN * 2
+    assert result["out_trade_no"].startswith("TOPUP")
+    alerter.alert_large_amount.assert_called_once()

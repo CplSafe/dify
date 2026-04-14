@@ -1263,6 +1263,14 @@ class CeleryScheduleTasksConfig(BaseSettings):
         description="Human input timeout check interval in minutes",
         default=1,
     )
+    ENABLE_PAYMENT_ORDER_EXPIRY_TASK: bool = Field(
+        description="Enable scheduled closing of expired pending payment orders",
+        default=True,
+    )
+    PAYMENT_ORDER_EXPIRY_TASK_INTERVAL: PositiveInt = Field(
+        description="Interval in minutes for the payment order expiry scan",
+        default=5,
+    )
     ENABLE_CHECK_UPGRADABLE_PLUGIN_TASK: bool = Field(
         description="Enable check upgradable plugin task",
         default=True,

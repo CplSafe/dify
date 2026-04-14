@@ -35,6 +35,7 @@ from models.creator import (
     PaymentProviderName,
 )
 from models.engine import db
+from services.payment.alerter import LoggingPaymentAlerter, PaymentAlerter
 from services.payment.alipay_client import AlipayClient
 from services.payment.alipay_page_provider import AlipayPageProvider
 from services.payment.alipay_qr_provider import AlipayQrProvider
@@ -91,6 +92,8 @@ class PaymentService:
         order_timeout_min: int,
         enabled: bool,
         expected_app_id: str,
+        alerter: PaymentAlerter | None = None,
+        large_amount_threshold_fen: int = 0,
     ) -> None:
         self._qr = qr_provider
         self._page = page_provider
@@ -100,6 +103,8 @@ class PaymentService:
         self._order_timeout_min = order_timeout_min
         self._enabled = enabled
         self._expected_app_id = expected_app_id
+        self._alerter: PaymentAlerter = alerter if alerter is not None else LoggingPaymentAlerter()
+        self._large_amount_threshold_fen = large_amount_threshold_fen
 
     # ------------------------------------------------------------------
     # Factory
@@ -118,6 +123,8 @@ class PaymentService:
             order_timeout_min=dify_config.ALIPAY_ORDER_TIMEOUT_MIN,
             enabled=dify_config.ALIPAY_ENABLED,
             expected_app_id=str(dify_config.ALIPAY_APP_ID or ""),
+            alerter=LoggingPaymentAlerter(),
+            large_amount_threshold_fen=dify_config.ALIPAY_LARGE_AMOUNT_THRESHOLD,
         )
 
     # ------------------------------------------------------------------
@@ -207,6 +214,17 @@ class PaymentService:
             amount_fen,
             provider.name,
         )
+
+        # Fire-and-forget alert for large topups. Threshold <=0 means disabled.
+        # Any alerter failure must not break order creation.
+        threshold = self._large_amount_threshold_fen
+        if threshold > 0 and amount_fen >= threshold:
+            try:
+                self._alerter.alert_large_amount(order, threshold)
+            except Exception:
+                logger.exception(
+                    "PaymentAlerter raised; ignoring out_trade_no=%s", out_trade_no
+                )
 
         return CreateOrderResponse(
             order_id=order.id,

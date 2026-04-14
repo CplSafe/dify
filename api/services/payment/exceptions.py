@@ -43,7 +43,4 @@ class ProviderBusinessError(PaymentError):
         return "Alipay business error: " + ", ".join(parts)
 
     def __repr__(self) -> str:
-        return (
-            f"ProviderBusinessError(code={self.code!r}, "
-            f"sub_code={self.sub_code!r}, sub_msg={self.sub_msg!r})"
-        )
+        return f"ProviderBusinessError(code={self.code!r}, sub_code={self.sub_code!r}, sub_msg={self.sub_msg!r})"

@@ -205,14 +205,9 @@ def test_disabled_client_verify_notify_returns_false(disabled_client: AlipayClie
 # ---------------------------------------------------------------------------
 
 
-def test_request_posts_signed_payload_to_gateway(
-    enabled_client: AlipayClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_request_posts_signed_payload_to_gateway(enabled_client: AlipayClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange - mock httpx.post used inside AlipayClient.request
-    fake_body = (
-        '{"alipay_trade_query_response":{"code":"10000","msg":"Success","out_trade_no":"T1"},'
-        '"sign":"ZmFrZQ=="}'
-    )
+    fake_body = '{"alipay_trade_query_response":{"code":"10000","msg":"Success","out_trade_no":"T1"},"sign":"ZmFrZQ=="}'
     mock_response = mock.MagicMock()
     mock_response.status_code = 200
     mock_response.text = fake_body
@@ -240,9 +235,7 @@ def test_request_posts_signed_payload_to_gateway(
     assert result["code"] == "10000"
 
 
-def test_request_raises_on_business_error(
-    enabled_client: AlipayClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_request_raises_on_business_error(enabled_client: AlipayClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange
     fake_body = (
         '{"alipay_trade_query_response":{"code":"40004","msg":"Business Failed","sub_code":"ACQ.TRADE_NOT_EXIST"},'
@@ -338,9 +331,7 @@ def test_from_config_when_enabled_defers_missing_key_error_until_use() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_repr_does_not_contain_private_key_material(
-    enabled_client: AlipayClient, rsa_keypair: tuple[str, str]
-) -> None:
+def test_repr_does_not_contain_private_key_material(enabled_client: AlipayClient, rsa_keypair: tuple[str, str]) -> None:
     # Arrange
     private_pem, _ = rsa_keypair
     # Use a distinctive inner substring unlikely to appear by chance
@@ -351,6 +342,101 @@ def test_repr_does_not_contain_private_key_material(
 
     # Assert
     assert secret_marker not in rendered
+
+
+# ---------------------------------------------------------------------------
+# web_pay_url — pagePay signed-URL generation (no HTTP call)
+# ---------------------------------------------------------------------------
+
+
+def test_web_pay_url_disabled_raises_runtime_error(disabled_client: AlipayClient) -> None:
+    # Act / Assert
+    with pytest.raises(RuntimeError, match="not enabled"):
+        disabled_client.web_pay_url({"out_trade_no": "T1", "total_amount": "10.00", "subject": "s"})
+
+
+def test_web_pay_url_invokes_sdk_api_alipay_trade_page_pay(
+    enabled_client: AlipayClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange - stub the SDK method so no PEM / signing happens here.
+    fake_url = "https://openapi.alipay.com/gateway.do?method=alipay.trade.page.pay&sign=ZmFrZQ%3D%3D"
+    captured: dict[str, Any] = {}
+
+    def fake_page_pay(
+        self: Any,
+        subject: str,
+        out_trade_no: str,
+        total_amount: str,
+        return_url: str | None = None,
+        notify_url: str | None = None,
+        **kwargs: Any,
+    ) -> str:
+        captured["subject"] = subject
+        captured["out_trade_no"] = out_trade_no
+        captured["total_amount"] = total_amount
+        captured["return_url"] = return_url
+        captured["notify_url"] = notify_url
+        captured["kwargs"] = kwargs
+        return fake_url
+
+    monkeypatch.setattr(
+        "services.payment.alipay_client.AliPay.api_alipay_trade_page_pay",
+        fake_page_pay,
+    )
+
+    # Act
+    url = enabled_client.web_pay_url(
+        {
+            "out_trade_no": "T_PAGE_1",
+            "total_amount": "1234.56",
+            "subject": "Dify 钱包充值",
+            "product_code": "FAST_INSTANT_TRADE_PAY",
+            "timeout_express": "30m",
+        }
+    )
+
+    # Assert
+    assert url == fake_url
+    assert captured["subject"] == "Dify 钱包充值"
+    assert captured["out_trade_no"] == "T_PAGE_1"
+    assert captured["total_amount"] == "1234.56"
+    # Defaults to the client's configured return/notify URLs.
+    assert captured["return_url"] == "https://example.com/return"
+    assert captured["notify_url"] == "https://example.com/notify"
+    # Non-core biz fields flow through as **kwargs (product_code, timeout_express).
+    assert captured["kwargs"].get("product_code") == "FAST_INSTANT_TRADE_PAY"
+    assert captured["kwargs"].get("timeout_express") == "30m"
+
+
+def test_web_pay_url_return_url_override(enabled_client: AlipayClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange
+    captured: dict[str, Any] = {}
+
+    def fake_page_pay(
+        self: Any,
+        subject: str,
+        out_trade_no: str,
+        total_amount: str,
+        return_url: str | None = None,
+        notify_url: str | None = None,
+        **kwargs: Any,
+    ) -> str:
+        captured["return_url"] = return_url
+        return "https://fake"
+
+    monkeypatch.setattr(
+        "services.payment.alipay_client.AliPay.api_alipay_trade_page_pay",
+        fake_page_pay,
+    )
+
+    # Act
+    enabled_client.web_pay_url(
+        {"out_trade_no": "T_OVR", "total_amount": "9.99", "subject": "s"},
+        return_url="https://tenant.example.com/topup/callback",
+    )
+
+    # Assert
+    assert captured["return_url"] == "https://tenant.example.com/topup/callback"
 
 
 def _provider_protocol_unused_marker() -> Generator[None, None, None]:

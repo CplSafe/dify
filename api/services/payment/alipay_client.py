@@ -168,11 +168,7 @@ class AlipayClient:
             return False
 
         # Spec: exclude sign / sign_type and empty values before signing.
-        signing_params = {
-            k: v
-            for k, v in params.items()
-            if k not in ("sign", "sign_type") and v not in (None, "")
-        }
+        signing_params = {k: v for k, v in params.items() if k not in ("sign", "sign_type") and v not in (None, "")}
         return self.verify(signing_params, signature)
 
     # ------------------------------------------------------------------
@@ -211,6 +207,56 @@ class AlipayClient:
         response_key = method.replace(".", "_") + "_response"
         # Normal shape: {"<method>_response": {...}, "sign": "..."}
         return dict(body.get(response_key) or body)
+
+    # ------------------------------------------------------------------
+    # Page-pay: signed redirect URL (no HTTP call)
+    # ------------------------------------------------------------------
+
+    def web_pay_url(
+        self,
+        biz_content: dict[str, Any],
+        return_url: str | None = None,
+    ) -> str:
+        """Generate a signed redirect URL for ``alipay.trade.page.pay``.
+
+        Unlike server-to-server methods (precreate, query, close), PC web
+        checkout does not produce a JSON response — the SDK returns a fully
+        signed GET URL the browser must navigate to so the user can complete
+        payment in Alipay's hosted cashier.
+
+        ``biz_content`` must contain the required fields ``out_trade_no``,
+        ``total_amount`` (string with two decimal places), and ``subject``.
+        Extra entries (e.g. ``product_code``, ``timeout_express``,
+        ``business_params``) are forwarded to the SDK as ``**kwargs`` and
+        merged into the Alipay ``biz_content`` payload.
+
+        ``return_url`` — when supplied — overrides the client default so
+        different topup contexts can land on different post-payment pages.
+        The ``notify_url`` is fixed at client construction time (via
+        ``app_notify_url`` on the underlying SDK).
+        """
+        self._require_enabled()
+        sdk = self._get_sdk()
+
+        # Pull out the required positional fields; everything else becomes
+        # kwargs so the SDK folds them into biz_content verbatim.
+        kwargs = dict(biz_content)
+        out_trade_no = kwargs.pop("out_trade_no")
+        total_amount = kwargs.pop("total_amount")
+        subject = kwargs.pop("subject")
+        notify_url_override = kwargs.pop("notify_url", None)
+
+        effective_return_url = return_url or self._return_url or None
+        effective_notify_url = notify_url_override or self._notify_url or None
+
+        return sdk.api_alipay_trade_page_pay(
+            subject=subject,
+            out_trade_no=out_trade_no,
+            total_amount=total_amount,
+            return_url=effective_return_url,
+            notify_url=effective_notify_url,
+            **kwargs,
+        )
 
     # ------------------------------------------------------------------
     # Convenience accessors

@@ -216,9 +216,7 @@ def test_query_order_invokes_trade_query_and_returns_response(
     result = provider.query_order("TOPUP_Q")
 
     # Assert
-    mock_client.request.assert_called_once_with(
-        "alipay.trade.query", {"out_trade_no": "TOPUP_Q"}
-    )
+    mock_client.request.assert_called_once_with("alipay.trade.query", {"out_trade_no": "TOPUP_Q"})
     assert result == expected_response
 
 
@@ -238,9 +236,7 @@ def test_close_order_invokes_trade_close_and_returns_response(
     result = provider.close_order("TOPUP_C")
 
     # Assert
-    mock_client.request.assert_called_once_with(
-        "alipay.trade.close", {"out_trade_no": "TOPUP_C"}
-    )
+    mock_client.request.assert_called_once_with("alipay.trade.close", {"out_trade_no": "TOPUP_C"})
     assert result == expected_response
 
 
@@ -249,9 +245,7 @@ def test_close_order_invokes_trade_close_and_returns_response(
 # ---------------------------------------------------------------------------
 
 
-def test_verify_notify_delegates_true(
-    provider: AlipayQrProvider, mock_client: mock.MagicMock
-) -> None:
+def test_verify_notify_delegates_true(provider: AlipayQrProvider, mock_client: mock.MagicMock) -> None:
     # Arrange
     mock_client.verify_notify.return_value = True
     params = {"out_trade_no": "T", "trade_status": "TRADE_SUCCESS", "sign": "xxx"}
@@ -264,9 +258,7 @@ def test_verify_notify_delegates_true(
     mock_client.verify_notify.assert_called_once_with(params)
 
 
-def test_verify_notify_delegates_false(
-    provider: AlipayQrProvider, mock_client: mock.MagicMock
-) -> None:
+def test_verify_notify_delegates_false(provider: AlipayQrProvider, mock_client: mock.MagicMock) -> None:
     # Arrange
     mock_client.verify_notify.return_value = False
 

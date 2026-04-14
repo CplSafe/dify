@@ -17,9 +17,9 @@ route table and Alipay's official docs for biz-param semantics.
 from __future__ import annotations
 
 import json
-from decimal import Decimal
 from typing import Any
 
+from services.payment._amount import fen_to_yuan_string
 from services.payment.alipay_client import AlipayClient
 from services.payment.exceptions import ProviderBusinessError
 from services.payment.provider import CreateOrderResult
@@ -29,12 +29,6 @@ _PRODUCT_CODE_QR_OFFLINE = "QR_CODE_OFFLINE"
 
 # Upstream top-level success code per the Alipay spec.
 _CODE_SUCCESS = "10000"
-
-# Quantum used to normalise yuan amounts to two decimal places ("12.34").
-_YUAN_QUANTUM = Decimal("0.01")
-
-# One yuan = 100 fen.
-_FEN_PER_YUAN = Decimal(100)
 
 
 class AlipayQrProvider:
@@ -71,7 +65,7 @@ class AlipayQrProvider:
         """
         biz_content: dict[str, Any] = {
             "out_trade_no": out_trade_no,
-            "total_amount": self._fen_to_yuan_string(amount_fen),
+            "total_amount": fen_to_yuan_string(amount_fen),
             "subject": subject,
             "product_code": _PRODUCT_CODE_QR_OFFLINE,
             "timeout_express": timeout_express,
@@ -104,20 +98,6 @@ class AlipayQrProvider:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def _fen_to_yuan_string(amount_fen: int) -> str:
-        """Convert an integer fen amount to Alipay's yuan string format.
-
-        Examples
-        --------
-        >>> AlipayQrProvider._fen_to_yuan_string(1234)
-        '12.34'
-        >>> AlipayQrProvider._fen_to_yuan_string(1)
-        '0.01'
-        """
-        yuan = (Decimal(amount_fen) / _FEN_PER_YUAN).quantize(_YUAN_QUANTUM)
-        return format(yuan, "f")
 
     @staticmethod
     def _raise_on_business_failure(response: dict[str, Any]) -> None:

@@ -242,3 +242,9 @@ scripts/stress-test/reports/
 
 # Code Agent Folder
 .qoder/*
+.claire/
+.claude/package-manager.json
+
+# Local DB dumps
+dify_*.sql
+

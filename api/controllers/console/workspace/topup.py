@@ -208,8 +208,14 @@ class TopupOrderListApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @tenant_owner_required
     def get(self):
-        """Any workspace member can view the top-up history for audit."""
+        """Owner-only: list top-up orders for the workspace.
+
+        Restricted to owner because the order stream exposes per-topup
+        amounts and timestamps — financial info members don't need.
+        Aggregate balance is still visible via ``/workspaces/current/wallet``.
+        """
         _, current_tenant_id = current_account_with_tenant()
         limit = min(int(request.args.get("limit", 20)), 100)
         offset = max(int(request.args.get("offset", 0)), 0)
@@ -233,7 +239,10 @@ class TopupOrderDetailApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @tenant_owner_required
     def get(self, out_trade_no: str):
+        """Owner-only: fetch a single top-up order. Same rationale as the
+        list endpoint — the QR code / amount / status are owner-scoped."""
         _, current_tenant_id = current_account_with_tenant()
         try:
             order = PaymentService.from_config().get_order(

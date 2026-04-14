@@ -129,3 +129,26 @@ class AllocationService:
             operator_id,
         )
         return record
+
+    @classmethod
+    def list_tenant_allocations(
+        cls,
+        *,
+        tenant_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[AllocationRecord], int]:
+        """Return a page of allocation records for a workspace (newest first).
+
+        Mirrors ``PaymentService.list_tenant_orders`` so the console audit
+        view can render allocations and topups with the same pagination
+        contract.
+        """
+        base = select(AllocationRecord).where(AllocationRecord.tenant_id == tenant_id)
+        total = db.session.scalar(select(db.func.count()).select_from(base.subquery())) or 0
+        rows = list(
+            db.session.scalars(
+                base.order_by(AllocationRecord.created_at.desc()).limit(limit).offset(offset)
+            ).all()
+        )
+        return rows, total

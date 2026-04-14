@@ -244,3 +244,40 @@ def test_reclaim_records_preserve_signed_amount(
 
     assert allocation.amount == Decimal(-15)
     assert billing.amount == Decimal(-15)
+
+
+# ---------------------------------------------------------------------------
+# list_tenant_allocations
+# ---------------------------------------------------------------------------
+
+
+@patch("services.wallet.allocation_service.select")
+@patch("services.wallet.allocation_service.db")
+def test_list_tenant_allocations_returns_rows_and_total(mock_db, mock_select):
+    """Paginated read-side for the owner console audit view."""
+    fake_rows = [object(), object()]
+    # scalar() is called once for COUNT; rows are pulled via scalars().all()
+    mock_db.session.scalar.return_value = 2
+    mock_db.session.scalars.return_value.all.return_value = fake_rows
+
+    rows, total = AllocationService.list_tenant_allocations(
+        tenant_id="t1", limit=20, offset=0
+    )
+
+    assert rows == fake_rows
+    assert total == 2
+
+
+@patch("services.wallet.allocation_service.select")
+@patch("services.wallet.allocation_service.db")
+def test_list_tenant_allocations_returns_zero_when_empty(mock_db, mock_select):
+    """Empty workspace returns ``([], 0)``; ``None`` count normalises to 0."""
+    mock_db.session.scalar.return_value = None
+    mock_db.session.scalars.return_value.all.return_value = []
+
+    rows, total = AllocationService.list_tenant_allocations(
+        tenant_id="empty", limit=20, offset=0
+    )
+
+    assert rows == []
+    assert total == 0

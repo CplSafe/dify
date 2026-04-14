@@ -199,6 +199,7 @@ from .tag import tags
 from .workspace import (
     account,
     agent_providers,
+    allocation,
     endpoint,
     load_balancing_config,
     members,
@@ -220,6 +221,7 @@ __all__ = [
     "advanced_prompt_template",
     "agent",
     "agent_providers",
+    "allocation",
     "annotation",
     "api",
     "apikey",

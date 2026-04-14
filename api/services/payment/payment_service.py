@@ -384,6 +384,14 @@ class PaymentService:
     def close_order(self, *, tenant_id: str, out_trade_no: str) -> PaymentOrder:
         """Close a pending order locally and upstream.
 
+        The row is fetched under ``SELECT ... FOR UPDATE`` so concurrent
+        ``handle_notify`` calls (which also lock the row) serialize with us.
+        Without the lock, a close racing a paid notify could overwrite
+        ``status=PAID`` with ``status=CLOSED`` — after which the next notify
+        retry would no longer short-circuit on idempotency, re-crediting the
+        wallet. The post-lock status check guards the same invariant from
+        the other direction: if the notify committed first, we bail.
+
         Upstream-close business errors (e.g. ``ACQ.TRADE_NOT_EXIST`` when the
         order was never confirmed at Alipay) are logged but do not prevent
         the local close — the end state is identical.
@@ -393,9 +401,19 @@ class PaymentService:
         OrderNotFound
             No such order for this tenant.
         OrderAlreadyClosed
-            Order is not in the PENDING state.
+            Order is not in the PENDING state (possibly flipped by a
+            concurrent notify before we acquired the lock).
         """
-        order = self.get_order(tenant_id=tenant_id, out_trade_no=out_trade_no)
+        order = db.session.scalar(
+            select(PaymentOrder)
+            .where(
+                PaymentOrder.out_trade_no == out_trade_no,
+                PaymentOrder.tenant_id == tenant_id,
+            )
+            .with_for_update()
+        )
+        if order is None:
+            raise OrderNotFound(out_trade_no=out_trade_no)
         if order.status != PaymentOrderStatus.PENDING.value:
             raise OrderAlreadyClosed(status=order.status)
 

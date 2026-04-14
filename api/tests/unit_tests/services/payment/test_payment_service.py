@@ -704,6 +704,36 @@ def test_close_order_swallows_upstream_business_error(
     mock_db.session.commit.assert_called_once()
 
 
+@mock.patch("services.payment.payment_service.select")
+@mock.patch("services.payment.payment_service.db")
+def test_close_order_acquires_row_lock_before_transition(
+    mock_db: mock.MagicMock,
+    mock_select: mock.MagicMock,
+    service: PaymentService,
+    qr_provider: mock.MagicMock,
+) -> None:
+    """close_order must read the row under ``FOR UPDATE`` so a concurrent
+    ``handle_notify`` cannot flip status → PAID in between the read and the
+    local UPDATE. Assert the select() chain ends with ``with_for_update()``.
+    """
+    order = _make_order()
+    # Build the chained select: select(PaymentOrder).where(...).with_for_update()
+    stmt = mock.MagicMock(name="stmt")
+    where_stmt = mock.MagicMock(name="where_stmt")
+    locked_stmt = mock.MagicMock(name="locked_stmt")
+    mock_select.return_value = stmt
+    stmt.where.return_value = where_stmt
+    where_stmt.with_for_update.return_value = locked_stmt
+    mock_db.session.scalar.return_value = order
+    qr_provider.close_order.return_value = {"code": "10000"}
+
+    service.close_order(tenant_id="t-1", out_trade_no=order.out_trade_no)
+
+    where_stmt.with_for_update.assert_called_once()
+    # And the locked statement is what we actually executed.
+    mock_db.session.scalar.assert_called_once_with(locked_stmt)
+
+
 # ---------------------------------------------------------------------------
 # _route helper
 # ---------------------------------------------------------------------------

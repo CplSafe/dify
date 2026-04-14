@@ -752,6 +752,11 @@ class AlipayConfig(BaseSettings):
         default=100000,
     )
 
+    ALIPAY_PAGE_MAX_FEN: int = Field(
+        description="Hard upper limit in fen for alipay_page. Orders above this are rejected before Alipay call.",
+        default=10000000,
+    )
+
     ALIPAY_ORDER_TIMEOUT_MIN: int = Field(
         description="Minutes before an unpaid order expires and is auto-closed by Celery",
         default=15,

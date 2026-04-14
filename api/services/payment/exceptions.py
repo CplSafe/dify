@@ -44,3 +44,51 @@ class ProviderBusinessError(PaymentError):
 
     def __repr__(self) -> str:
         return f"ProviderBusinessError(code={self.code!r}, sub_code={self.sub_code!r}, sub_msg={self.sub_msg!r})"
+
+
+class PaymentDisabled(PaymentError):  # noqa: N818
+    """Raised when topup is attempted while ``ALIPAY_ENABLED=false``."""
+
+    code = "PAYMENT_DISABLED"
+
+
+class AmountTooSmall(PaymentError):  # noqa: N818
+    """Raised when the requested topup amount is below the per-tx floor."""
+
+    code = "AMOUNT_TOO_SMALL"
+
+    def __init__(self, *, amount_fen: int, min_fen: int) -> None:
+        super().__init__(f"Amount {amount_fen} fen is below minimum {min_fen}")
+        self.amount_fen = amount_fen
+        self.min_fen = min_fen
+
+
+class AmountTooLarge(PaymentError):  # noqa: N818
+    """Raised when the requested topup amount exceeds the per-tx ceiling."""
+
+    code = "AMOUNT_TOO_LARGE"
+
+    def __init__(self, *, amount_fen: int, max_fen: int) -> None:
+        super().__init__(f"Amount {amount_fen} fen exceeds maximum {max_fen}")
+        self.amount_fen = amount_fen
+        self.max_fen = max_fen
+
+
+class OrderNotFound(PaymentError):  # noqa: N818
+    """Raised when a PaymentOrder lookup by out_trade_no returns no row."""
+
+    code = "ORDER_NOT_FOUND"
+
+    def __init__(self, *, out_trade_no: str) -> None:
+        super().__init__(f"Payment order {out_trade_no} not found")
+        self.out_trade_no = out_trade_no
+
+
+class OrderAlreadyClosed(PaymentError):  # noqa: N818
+    """Raised when attempting to close an order that is not in PENDING state."""
+
+    code = "ORDER_ALREADY_CLOSED"
+
+    def __init__(self, *, status: str) -> None:
+        super().__init__(f"Order is already {status}")
+        self.status = status

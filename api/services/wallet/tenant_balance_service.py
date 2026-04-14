@@ -11,6 +11,7 @@ atomic transfers live in AllocationService.
 """
 
 import logging
+from decimal import Decimal
 
 from sqlalchemy import select
 
@@ -47,3 +48,25 @@ class TenantBalanceService:
         """True if the workspace has any money (balance or locked) on record."""
         b = cls.get(tenant_id)
         return b is not None and (b.balance > 0 or b.locked > 0)
+
+    @classmethod
+    def topup(cls, *, tenant_id: str, amount: Decimal) -> TenantBalance:
+        """Credit a workspace with paid-in funds from a completed top-up.
+
+        Increments both ``balance`` (spendable) and ``total_topup`` (audit).
+        Must run inside an outer transaction — this method does NOT commit so
+        callers can bundle the wallet write with PaymentOrder / BillingRecord
+        updates atomically.
+
+        Raises
+        ------
+        ValueError
+            If ``amount`` is not strictly positive.
+        """
+        if amount <= Decimal(0):
+            raise ValueError("Top-up amount must be positive")
+        balance = cls.get_or_create(tenant_id)
+        balance.balance += amount
+        balance.total_topup += amount
+        db.session.add(balance)
+        return balance

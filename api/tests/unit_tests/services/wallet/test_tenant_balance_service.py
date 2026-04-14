@@ -2,6 +2,8 @@
 from decimal import Decimal
 from unittest.mock import patch
 
+import pytest
+
 from services.wallet.tenant_balance_service import TenantBalanceService
 
 
@@ -89,3 +91,64 @@ def test_has_funds_false_when_row_missing(mock_db):
     mock_db.session.scalar.return_value = None
 
     assert TenantBalanceService.has_funds("t-missing") is False
+
+
+# ---------------------------------------------------------------------------
+# topup
+# ---------------------------------------------------------------------------
+
+
+@patch("services.wallet.tenant_balance_service.db")
+def test_topup_adds_to_balance_and_total_topup(mock_db):
+    """Positive amount credits both spendable balance and audit total_topup."""
+    # Arrange
+    from models.creator import TenantBalance
+
+    existing = TenantBalance(tenant_id="t-1")
+    existing.balance = Decimal(10)
+    existing.total_topup = Decimal(5)
+    mock_db.session.scalar.return_value = existing
+
+    # Act
+    result = TenantBalanceService.topup(tenant_id="t-1", amount=Decimal("20.00"))
+
+    # Assert
+    assert result.balance == Decimal("30.00")
+    assert result.total_topup == Decimal("25.00")
+    # topup itself must NOT commit — caller owns the transaction boundary.
+    mock_db.session.commit.assert_not_called()
+    mock_db.session.add.assert_called_with(existing)
+
+
+@patch("services.wallet.tenant_balance_service.db")
+def test_topup_rejects_zero_amount(mock_db):
+    """Zero amount is rejected — only strictly positive credits allowed."""
+    with pytest.raises(ValueError, match="must be positive"):
+        TenantBalanceService.topup(tenant_id="t-1", amount=Decimal(0))
+
+
+@patch("services.wallet.tenant_balance_service.db")
+def test_topup_rejects_negative_amount(mock_db):
+    """Negative amounts are rejected — use AllocationService for reclaim."""
+    with pytest.raises(ValueError, match="must be positive"):
+        TenantBalanceService.topup(tenant_id="t-1", amount=Decimal(-5))
+
+
+@patch("services.wallet.tenant_balance_service.db")
+def test_topup_accumulates_across_calls(mock_db):
+    """Multiple topups compound both balance and total_topup correctly."""
+    # Arrange
+    from models.creator import TenantBalance
+
+    existing = TenantBalance(tenant_id="t-1")
+    existing.balance = Decimal(0)
+    existing.total_topup = Decimal(0)
+    mock_db.session.scalar.return_value = existing
+
+    # Act
+    TenantBalanceService.topup(tenant_id="t-1", amount=Decimal(100))
+    TenantBalanceService.topup(tenant_id="t-1", amount=Decimal(50))
+
+    # Assert
+    assert existing.balance == Decimal(150)
+    assert existing.total_topup == Decimal(150)

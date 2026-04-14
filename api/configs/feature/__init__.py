@@ -685,6 +685,84 @@ class ModelLoadBalanceConfig(BaseSettings):
     )
 
 
+class AlipayConfig(BaseSettings):
+    """
+    Configuration for Alipay topup integration.
+
+    Supports dual-channel routing:
+    - alipay_qr (当面付/precreate): QR scan-pay, default ¥1,000/tx limit
+    - alipay_page (电脑网站支付/pagePay): Full-page redirect, default ¥100,000/tx limit
+
+    PaymentService routes between channels by comparing order amount against
+    ALIPAY_QR_MAX_FEN: amounts ≤ threshold use QR, larger amounts use Page.
+    """
+
+    ALIPAY_ENABLED: bool = Field(
+        description="Enable or disable Alipay topup functionality",
+        default=False,
+    )
+
+    ALIPAY_APP_ID: str = Field(
+        description="Alipay merchant app ID issued by open.alipay.com",
+        default="",
+    )
+
+    ALIPAY_APP_PRIVATE_KEY_PATH: str = Field(
+        description="Filesystem path to the merchant RSA private key (PEM)",
+        default="",
+    )
+
+    ALIPAY_PUBLIC_KEY_PATH: str = Field(
+        description="Filesystem path to the Alipay public key (PEM) used to verify callbacks",
+        default="",
+    )
+
+    ALIPAY_GATEWAY: str = Field(
+        description="Alipay OpenAPI gateway URL. Switch to openapi-sandbox for sandbox testing",
+        default="https://openapi.alipay.com/gateway.do",
+    )
+
+    ALIPAY_USE_SANDBOX: bool = Field(
+        description="Route requests to the Alipay sandbox environment",
+        default=False,
+    )
+
+    ALIPAY_NOTIFY_URL: str = Field(
+        description="Public HTTPS URL Alipay POSTs async notifications to (both channels)",
+        default="",
+    )
+
+    ALIPAY_RETURN_URL: str = Field(
+        description="Browser redirect URL after page-pay completion (alipay_page only)",
+        default="",
+    )
+
+    ALIPAY_SIGN_TYPE: str = Field(
+        description="Signature algorithm. RSA2 (SHA256withRSA) is the only value Alipay accepts",
+        default="RSA2",
+    )
+
+    ALIPAY_MIN_AMOUNT_FEN: int = Field(
+        description="Minimum topup amount in fen; orders below this are rejected before Alipay call",
+        default=100,
+    )
+
+    ALIPAY_QR_MAX_FEN: int = Field(
+        description="Routing threshold in fen. Orders ≤ this use alipay_qr, larger use alipay_page",
+        default=100000,
+    )
+
+    ALIPAY_ORDER_TIMEOUT_MIN: int = Field(
+        description="Minutes before an unpaid order expires and is auto-closed by Celery",
+        default=15,
+    )
+
+    ALIPAY_LARGE_AMOUNT_THRESHOLD: int = Field(
+        description="Amount (fen) above which an alert is emitted for operations monitoring",
+        default=5000,
+    )
+
+
 class BillingConfig(BaseSettings):
     """
     Configuration for platform billing features
@@ -1384,6 +1462,7 @@ class SandboxExpiredRecordsCleanConfig(BaseSettings):
 
 class FeatureConfig(
     # place the configs in alphabet order
+    AlipayConfig,
     AppExecutionConfig,
     AuthConfig,  # Changed from OAuthConfig to AuthConfig
     BillingConfig,

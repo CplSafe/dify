@@ -1,0 +1,177 @@
+"""Test dual deduction (Tenant + User) for workflow runs.
+
+The refactored ``deduct_for_workflow_run`` must decrement BOTH
+``UserBalance.balance`` AND ``TenantBalance.locked`` atomically, and must
+write two ``BillingRecord`` rows (``scope="user"`` and ``scope="tenant"``).
+
+Both wallets are permitted to go negative - a deliberate product choice so
+workflows already in flight are not killed mid-run when a user is low on
+credits.
+"""
+
+from decimal import Decimal
+from unittest.mock import patch
+
+from models.creator import BillingRecord, BillingRecordType, TenantBalance, UserBalance
+from services.user_billing_service import UserBillingService
+
+
+def _make_tenant_balance(*, locked: Decimal = Decimal("0"), balance: Decimal = Decimal("0")) -> TenantBalance:
+    tb = TenantBalance(tenant_id="t1")
+    tb.locked = locked
+    tb.balance = balance
+    return tb
+
+
+def _make_user_balance(*, balance: Decimal = Decimal("0")) -> UserBalance:
+    ub = UserBalance(account_id="a1")
+    ub.balance = balance
+    return ub
+
+
+def _added_billing_records(mock_db) -> list[BillingRecord]:
+    """Collect every BillingRecord added via either ``db.session.add`` or
+    ``db.session.add_all`` on the mocked session."""
+    records: list[BillingRecord] = []
+    for call in mock_db.session.add.call_args_list:
+        obj = call.args[0]
+        if isinstance(obj, BillingRecord):
+            records.append(obj)
+    for call in mock_db.session.add_all.call_args_list:
+        objs = call.args[0]
+        for obj in objs:
+            if isinstance(obj, BillingRecord):
+                records.append(obj)
+    return records
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+@patch("services.user_billing_service.db")
+def test_deduct_decrements_both_wallets(mock_db, mock_tb_svc):
+    # Arrange
+    tb = _make_tenant_balance(locked=Decimal("100"))
+    ub = _make_user_balance(balance=Decimal("100"))
+    mock_tb_svc.get_or_create.return_value = tb
+
+    # Act
+    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+        UserBillingService.deduct_for_workflow_run(
+            account_id="a1",
+            tenant_id="t1",
+            workflow_run_id="w1",
+            total_tokens=1000,
+            price_per_1k_tokens=Decimal("0.5"),
+        )
+
+    # Assert
+    assert ub.balance == Decimal("99.500000")
+    assert tb.locked == Decimal("99.500000")
+    records = _added_billing_records(mock_db)
+    assert len(records) == 2
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+@patch("services.user_billing_service.db")
+def test_deduct_writes_both_scope_records(mock_db, mock_tb_svc):
+    # Arrange
+    tb = _make_tenant_balance(locked=Decimal("100"))
+    ub = _make_user_balance(balance=Decimal("100"))
+    mock_tb_svc.get_or_create.return_value = tb
+
+    # Act
+    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+        UserBillingService.deduct_for_workflow_run(
+            account_id="a1",
+            tenant_id="t1",
+            workflow_run_id="w1",
+            total_tokens=2000,
+            price_per_1k_tokens=Decimal("0.1"),
+        )
+
+    # Assert
+    records = _added_billing_records(mock_db)
+    type_scope_pairs = {(r.record_type, r.scope) for r in records}
+    assert (BillingRecordType.DEDUCTION.value, "user") in type_scope_pairs
+    assert (BillingRecordType.DEDUCTION.value, "tenant") in type_scope_pairs
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+@patch("services.user_billing_service.db")
+def test_deduct_zero_tokens_returns_none_and_no_mutation(mock_db, mock_tb_svc):
+    # Arrange
+    tb = _make_tenant_balance(locked=Decimal("100"))
+    ub = _make_user_balance(balance=Decimal("100"))
+    mock_tb_svc.get_or_create.return_value = tb
+
+    # Act
+    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub) as mock_get_ub:
+        result = UserBillingService.deduct_for_workflow_run(
+            account_id="a1",
+            tenant_id="t1",
+            workflow_run_id="w1",
+            total_tokens=0,
+            price_per_1k_tokens=Decimal("0.5"),
+        )
+
+    # Assert
+    assert result is None
+    assert ub.balance == Decimal("100")
+    assert tb.locked == Decimal("100")
+    mock_get_ub.assert_not_called()
+    mock_tb_svc.get_or_create.assert_not_called()
+    mock_db.session.commit.assert_not_called()
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+@patch("services.user_billing_service.db")
+def test_deduct_allows_negative_balance(mock_db, mock_tb_svc):
+    """Starting at zero on both wallets, deduction still succeeds and both
+    balances become negative. Deliberate product choice: workflows in flight
+    are not blocked mid-run."""
+    # Arrange
+    tb = _make_tenant_balance(locked=Decimal("0"))
+    ub = _make_user_balance(balance=Decimal("0"))
+    mock_tb_svc.get_or_create.return_value = tb
+
+    # Act
+    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+        result = UserBillingService.deduct_for_workflow_run(
+            account_id="a1",
+            tenant_id="t1",
+            workflow_run_id="w1",
+            total_tokens=1000,
+            price_per_1k_tokens=Decimal("0.5"),
+        )
+
+    # Assert
+    assert result is not None
+    assert ub.balance == Decimal("-0.500000")
+    assert tb.locked == Decimal("-0.500000")
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+@patch("services.user_billing_service.db")
+def test_deduct_returns_user_record(mock_db, mock_tb_svc):
+    """Caller relies on the returned record being the user-scope one."""
+    # Arrange
+    tb = _make_tenant_balance(locked=Decimal("100"))
+    ub = _make_user_balance(balance=Decimal("100"))
+    mock_tb_svc.get_or_create.return_value = tb
+
+    # Act
+    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+        record = UserBillingService.deduct_for_workflow_run(
+            account_id="a1",
+            tenant_id="t1",
+            workflow_run_id="w1",
+            total_tokens=1000,
+            price_per_1k_tokens=Decimal("0.5"),
+        )
+
+    # Assert
+    assert record is not None
+    assert record.scope == "user"
+    assert record.record_type == BillingRecordType.DEDUCTION.value
+    assert record.account_id == "a1"
+    assert record.tenant_id == "t1"
+    assert record.workflow_run_id == "w1"

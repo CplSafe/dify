@@ -17,6 +17,7 @@ from sqlalchemy import select
 
 from models.creator import BillingRecord, BillingRecordType, UserBalance
 from models.engine import db
+from services.wallet.tenant_balance_service import TenantBalanceService
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +58,17 @@ class UserBillingService:
         total_tokens: int,
         price_per_1k_tokens: Decimal,
     ) -> BillingRecord | None:
-        """Deduct cost of a workflow run from user balance.
+        """Dual-deduct cost of a workflow run from both tenant and user wallets.
 
-        Returns the created BillingRecord, or None if total_tokens == 0.
-        Balance is allowed to go negative.
+        Decrements ``TenantBalance.locked`` and ``UserBalance.balance`` by the
+        same amount in a single commit, and writes two ``BillingRecord`` rows
+        (``scope="user"`` and ``scope="tenant"``) for independent ledger views.
+
+        Returns the user-scope ``BillingRecord``, or ``None`` if ``total_tokens``
+        is zero or the computed amount rounds to zero.
+
+        Both balances are permitted to go negative: this is a deliberate product
+        choice so that workflows already in flight are not blocked mid-run.
         """
         if total_tokens <= 0:
             return None
@@ -71,30 +79,60 @@ class UserBillingService:
         if amount <= Decimal(0):
             return None
 
-        # Update balance (may go negative)
-        balance = cls.get_or_create_balance(account_id)
-        balance.balance -= amount
-        db.session.add(balance)
+        user_balance = cls.get_or_create_balance(account_id)
+        tenant_balance = TenantBalanceService.get_or_create(tenant_id)
 
-        record = BillingRecord(
+        # Decrement both wallets. Either may go negative; we log and proceed so
+        # that in-flight workflows are not killed mid-run.
+        user_balance.balance -= amount
+        tenant_balance.locked -= amount
+        db.session.add(user_balance)
+        db.session.add(tenant_balance)
+
+        if user_balance.balance < Decimal(0):
+            logger.warning(
+                "User balance went negative after workflow deduction account=%s balance=%s",
+                account_id,
+                str(user_balance.balance),
+            )
+        if tenant_balance.locked < Decimal(0):
+            logger.warning(
+                "Tenant locked went negative after workflow deduction tenant=%s locked=%s",
+                tenant_id,
+                str(tenant_balance.locked),
+            )
+
+        description = f"Workflow run {workflow_run_id}: {total_tokens} tokens"
+        user_record = BillingRecord(
             account_id=account_id,
             tenant_id=tenant_id,
             workflow_run_id=workflow_run_id,
             amount=amount,
             record_type=BillingRecordType.DEDUCTION.value,
-            description=f"Workflow run {workflow_run_id}: {total_tokens} tokens",
+            scope="user",
+            description=description,
         )
-        db.session.add(record)
+        tenant_record = BillingRecord(
+            account_id=account_id,
+            tenant_id=tenant_id,
+            workflow_run_id=workflow_run_id,
+            amount=amount,
+            record_type=BillingRecordType.DEDUCTION.value,
+            scope="tenant",
+            description=description,
+        )
+        db.session.add_all([user_record, tenant_record])
         db.session.commit()
 
         logger.info(
-            "Billed account=%s workflow=%s tokens=%d amount=%s",
+            "Billed account=%s tenant=%s workflow=%s tokens=%d amount=%s",
             account_id,
+            tenant_id,
             workflow_run_id,
             total_tokens,
             str(amount),
         )
-        return record
+        return user_record
 
     @classmethod
     def topup(cls, *, account_id: str, amount: Decimal, description: str = "") -> BillingRecord:

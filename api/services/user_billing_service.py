@@ -44,9 +44,41 @@ class UserBillingService:
 
     @classmethod
     def check_balance_positive(cls, account_id: str) -> bool:
-        """Return True if balance > 0."""
+        """Return True if the user balance is positive.
+
+        Backward-compatible gate used by callers that only know about per-user
+        balance. Prefer ``check_can_run`` when the tenant is available, as it
+        also guards against a drained workspace pool.
+        """
         balance = cls.get_or_create_balance(account_id)
         return balance.is_sufficient()
+
+    @classmethod
+    def check_can_run(cls, account_id: str, tenant_id: str) -> tuple[bool, str | None]:
+        """Pre-flight check before starting a workflow run.
+
+        Returns ``(can_run, error_code)``. ``error_code`` is ``None`` when the
+        run may proceed, otherwise one of:
+
+        - ``"INSUFFICIENT_USER_BUDGET"`` — the member's personal balance is
+          not positive.
+        - ``"INSUFFICIENT_TENANT_BUDGET"`` — the workspace's allocated pool
+          (``TenantBalance.locked``) is exhausted; no member can run even if
+          their personal balance is still positive on paper.
+
+        Both checks are strict (> 0) because ``deduct_for_workflow_run`` is
+        allowed to push either wallet negative mid-run. Blocking here prevents
+        starting *new* runs once the pool is empty.
+        """
+        user_balance = cls.get_or_create_balance(account_id)
+        if not user_balance.is_sufficient():
+            return False, "INSUFFICIENT_USER_BUDGET"
+
+        tenant_balance = TenantBalanceService.get_or_create(tenant_id)
+        if tenant_balance.locked <= Decimal(0):
+            return False, "INSUFFICIENT_TENANT_BUDGET"
+
+        return True, None
 
     @classmethod
     def deduct_for_workflow_run(

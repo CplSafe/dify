@@ -10,7 +10,6 @@ import { toast } from '@/app/components/base/ui/toast'
 import { resolveHomeRoute } from '@/app/signin/utils/resolve-home-route'
 import { validPassword } from '@/config'
 import { useRouter, useSearchParams } from '@/next/navigation'
-import { post } from '@/service/base'
 import { useMailRegister } from '@/service/use-common'
 import { cn } from '@/utils/classnames'
 import { sendGAEvent } from '@/utils/gtag'
@@ -62,10 +61,17 @@ const ChangePasswordForm = () => {
     if (!valid())
       return
     try {
+      // Pass invite_code inside the register call so the backend can bind
+      // it transactionally. A separate POST /creator/invitations/bind would
+      // silently 401 — the fresh account has no auth cookie yet (the token
+      // pair only comes back in the JSON body of /email-register).
+      const rawInvite = searchParams.get('invite_code')
+      const inviteCode = rawInvite ? decodeURIComponent(rawInvite) : undefined
       const res = await register({
         token,
         new_password: password,
         password_confirm: confirmPassword,
+        ...(inviteCode ? { invite_code: inviteCode } : {}),
       })
       const { result } = res as MailRegisterResponse
       if (result === 'success') {
@@ -91,20 +97,6 @@ const ChangePasswordForm = () => {
         )
         Cookies.remove('utm_info') // Clean up: remove utm_info cookie
 
-        // Auto-bind invite code if present in URL params
-        const inviteCode = searchParams.get('invite_code')
-        if (inviteCode) {
-          try {
-            await post('/creator/invitations/bind', {
-              body: { invite_code: decodeURIComponent(inviteCode) },
-            })
-          }
-          catch (e) {
-            // Non-blocking: binding failure shouldn't prevent registration completion
-            console.warn('Failed to bind invite code:', e)
-          }
-        }
-
         toast.success(t('api.actionSuccess', { ns: 'common' }))
         router.replace(await resolveHomeRoute())
       }
@@ -112,7 +104,7 @@ const ChangePasswordForm = () => {
     catch (error) {
       console.error(error)
     }
-  }, [password, token, valid, confirmPassword, register])
+  }, [password, token, valid, confirmPassword, register, searchParams])
 
   return (
     <div

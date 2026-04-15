@@ -15,11 +15,15 @@ from sqlalchemy import and_, select
 from werkzeug.exceptions import BadRequest, Forbidden, NotFound
 
 from controllers.console import console_ns
-from controllers.console.wraps import account_initialization_required, setup_required
+from controllers.console.wraps import (
+    account_initialization_required,
+    setup_required,
+    tenant_owner_required,
+)
 from extensions.ext_database import db
-from libs.datetime_utils import naive_utc_now
 from libs.login import current_account_with_tenant, login_required
 from models.creator import AccountInvitation
+from services.invitation_service import BindOutcome, InvitationService
 
 
 def _generate_invite_code() -> str:
@@ -33,6 +37,7 @@ class InvitationListApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @tenant_owner_required
     def get(self):
         """List all invitation codes created by the current user, with invitee info."""
         current_user, _ = current_account_with_tenant()
@@ -66,6 +71,7 @@ class InvitationListApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @tenant_owner_required
     def post(self):
         """Generate a new invitation code for the current user."""
         current_user, _ = current_account_with_tenant()
@@ -88,6 +94,7 @@ class InvitationItemApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @tenant_owner_required
     def delete(self, invitation_id: str):
         """Revoke an unused invitation code."""
         current_user, _ = current_account_with_tenant()
@@ -115,7 +122,12 @@ class InvitationBindApi(Resource):
     def post(self):
         """Bind an invite code to the current (newly registered) user.
 
-        Called after registration with an invite code.
+        Used for explicit late-bind flows (e.g. a member who joined without an
+        invite code and wants to attach one afterwards). The registration path
+        binds transactionally inside ``POST /email-register`` via
+        :class:`services.invitation_service.InvitationService` so that a dead
+        auth cookie on the freshly created account can no longer swallow the
+        bind silently — see git blame for context.
         """
         current_user, _ = current_account_with_tenant()
         payload = request.get_json() or {}
@@ -124,36 +136,23 @@ class InvitationBindApi(Resource):
         if not invite_code:
             raise BadRequest("invite_code is required")
 
-        # Check if user already has an inviter
-        existing = db.session.scalar(
-            select(AccountInvitation).where(
-                and_(
-                    AccountInvitation.invitee_account_id == current_user.id,
-                    AccountInvitation.status == "used",
-                )
-            )
+        result = InvitationService.bind_invite_code(
+            invite_code=invite_code,
+            invitee_account_id=current_user.id,
         )
-        if existing:
+
+        if result.outcome is BindOutcome.ALREADY_BOUND:
             raise BadRequest("您已绑定邀请人，无法重复绑定")
-
-        invitation = db.session.scalar(
-            select(AccountInvitation).where(
-                AccountInvitation.invite_code == invite_code
-            )
-        )
-        if not invitation:
+        if result.outcome is BindOutcome.NOT_FOUND:
             raise NotFound("邀请码不存在")
-        if invitation.status != "pending":
+        if result.outcome is BindOutcome.NOT_PENDING:
             raise BadRequest("邀请码已使用或已撤销")
-        if invitation.inviter_account_id == current_user.id:
+        if result.outcome is BindOutcome.SELF_INVITE:
             raise BadRequest("不能使用自己的邀请码")
+        # EMPTY_CODE is pre-checked above; any non-OK outcome is user-facing.
 
-        invitation.invitee_account_id = current_user.id
-        invitation.status = "used"
-        invitation.used_at = naive_utc_now()
         db.session.commit()
-
-        return {"result": "success", "inviter_account_id": invitation.inviter_account_id}
+        return {"result": "success", "inviter_account_id": result.inviter_account_id}
 
 
 @console_ns.route("/creator/invitations/my-inviter")

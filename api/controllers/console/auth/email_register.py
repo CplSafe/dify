@@ -1,3 +1,5 @@
+import logging
+
 from flask import request
 from flask_restx import Resource
 from pydantic import BaseModel, Field, field_validator
@@ -21,9 +23,12 @@ from models import Account
 from services.account_service import AccountService
 from services.billing_service import BillingService
 from services.errors.account import AccountNotFoundError, AccountRegisterError
+from services.invitation_service import InvitationService
 
 from ..error import AccountInFreezeError, EmailSendIpLimitError
 from ..wraps import email_password_login_enabled, email_register_enabled, setup_required
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_REF_TEMPLATE_SWAGGER_2_0 = "#/definitions/{model}"
 
@@ -43,6 +48,12 @@ class EmailRegisterResetPayload(BaseModel):
     token: str = Field(...)
     new_password: str = Field(...)
     password_confirm: str = Field(...)
+    # Optional invite code captured from the signup URL. Bound inside the
+    # registration transaction so the referral link survives — a separate
+    # POST /creator/invitations/bind call cannot work here: the freshly
+    # created account has no auth cookie yet (the frontend only gets the
+    # token_pair back in JSON), so @login_required would reject it.
+    invite_code: str | None = Field(default=None)
 
     @field_validator("new_password", "password_confirm")
     @classmethod
@@ -162,6 +173,41 @@ class EmailRegisterResetApi(Resource):
                     raise AccountNotFoundError()
                 token_pair = AccountService.login(account=account, ip_address=extract_remote_ip(request))
                 AccountService.reset_login_error_rate_limit(normalized_email)
+
+        # Best-effort invite-code binding.
+        # Ordering: must run AFTER account creation (needs account.id) and
+        # AFTER the account/tenant transaction closes, because
+        # create_account_and_tenant commits on db.session. Binding failures
+        # (bad code, already used, self-invite) must NOT roll back the
+        # successful registration — the user is already logged in and we
+        # fall through to returning the token_pair. The operator-visible
+        # reason lands in logs so a support engineer can re-attempt the
+        # bind via POST /creator/invitations/bind if needed.
+        if args.invite_code:
+            try:
+                result = InvitationService.bind_invite_code(
+                    invite_code=args.invite_code,
+                    invitee_account_id=account.id,
+                )
+                if result.ok:
+                    db.session.commit()
+                    logger.info(
+                        "Invite bound during registration account=%s inviter=%s",
+                        account.id,
+                        result.inviter_account_id,
+                    )
+                else:
+                    db.session.rollback()
+                    logger.warning(
+                        "Invite bind skipped during registration account=%s outcome=%s",
+                        account.id,
+                        result.outcome.value,
+                    )
+            except Exception:
+                db.session.rollback()
+                logger.exception(
+                    "Invite bind errored during registration account=%s", account.id
+                )
 
         return {"result": "success", "data": token_pair.model_dump()}
 

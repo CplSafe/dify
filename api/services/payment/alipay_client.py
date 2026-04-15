@@ -249,7 +249,10 @@ class AlipayClient:
         effective_return_url = return_url or self._return_url or None
         effective_notify_url = notify_url_override or self._notify_url or None
 
-        return sdk.api_alipay_trade_page_pay(
+        # ``api_alipay_trade_page_pay`` returns a signed query string WITHOUT
+        # the gateway prefix (unlike ``api_alipay_trade_wap_pay``, which does
+        # prepend it). Prepend it ourselves so callers get a navigable URL.
+        signed_query = sdk.api_alipay_trade_page_pay(
             subject=subject,
             out_trade_no=out_trade_no,
             total_amount=total_amount,
@@ -257,6 +260,7 @@ class AlipayClient:
             notify_url=effective_notify_url,
             **kwargs,
         )
+        return f"{self._gateway}?{signed_query}"
 
     # ------------------------------------------------------------------
     # Convenience accessors

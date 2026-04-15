@@ -56,7 +56,10 @@ def test_deduct_decrements_both_wallets(mock_db, mock_tb_svc):
     mock_tb_svc.get_or_create.return_value = tb
 
     # Act
-    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+    with (
+        patch.object(UserBillingService, "get_or_create_balance", return_value=ub),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=False),
+    ):
         UserBillingService.deduct_for_workflow_run(
             account_id="a1",
             tenant_id="t1",
@@ -81,7 +84,10 @@ def test_deduct_writes_both_scope_records(mock_db, mock_tb_svc):
     mock_tb_svc.get_or_create.return_value = tb
 
     # Act
-    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+    with (
+        patch.object(UserBillingService, "get_or_create_balance", return_value=ub),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=False),
+    ):
         UserBillingService.deduct_for_workflow_run(
             account_id="a1",
             tenant_id="t1",
@@ -136,7 +142,10 @@ def test_deduct_allows_negative_balance(mock_db, mock_tb_svc):
     mock_tb_svc.get_or_create.return_value = tb
 
     # Act
-    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+    with (
+        patch.object(UserBillingService, "get_or_create_balance", return_value=ub),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=False),
+    ):
         result = UserBillingService.deduct_for_workflow_run(
             account_id="a1",
             tenant_id="t1",
@@ -162,7 +171,10 @@ def test_check_can_run_allows_when_both_positive(mock_tb_svc):
     ub = _make_user_balance(balance=Decimal(5))
     mock_tb_svc.get_or_create.return_value = tb
 
-    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+    with (
+        patch.object(UserBillingService, "get_or_create_balance", return_value=ub),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=False),
+    ):
         ok, code = UserBillingService.check_can_run("a1", "t1")
 
     assert ok is True
@@ -175,7 +187,10 @@ def test_check_can_run_blocks_when_user_zero(mock_tb_svc):
     ub = _make_user_balance(balance=Decimal(0))
     mock_tb_svc.get_or_create.return_value = tb
 
-    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+    with (
+        patch.object(UserBillingService, "get_or_create_balance", return_value=ub),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=False),
+    ):
         ok, code = UserBillingService.check_can_run("a1", "t1")
 
     assert ok is False
@@ -188,7 +203,10 @@ def test_check_can_run_blocks_when_user_negative(mock_tb_svc):
     ub = _make_user_balance(balance=Decimal("-0.1"))
     mock_tb_svc.get_or_create.return_value = tb
 
-    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+    with (
+        patch.object(UserBillingService, "get_or_create_balance", return_value=ub),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=False),
+    ):
         ok, code = UserBillingService.check_can_run("a1", "t1")
 
     assert ok is False
@@ -203,7 +221,10 @@ def test_check_can_run_blocks_when_tenant_pool_drained(mock_tb_svc):
     ub = _make_user_balance(balance=Decimal(5))
     mock_tb_svc.get_or_create.return_value = tb
 
-    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+    with (
+        patch.object(UserBillingService, "get_or_create_balance", return_value=ub),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=False),
+    ):
         ok, code = UserBillingService.check_can_run("a1", "t1")
 
     assert ok is False
@@ -232,7 +253,10 @@ def test_deduct_returns_user_record(mock_db, mock_tb_svc):
     mock_tb_svc.get_or_create.return_value = tb
 
     # Act
-    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+    with (
+        patch.object(UserBillingService, "get_or_create_balance", return_value=ub),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=False),
+    ):
         record = UserBillingService.deduct_for_workflow_run(
             account_id="a1",
             tenant_id="t1",
@@ -262,7 +286,10 @@ def test_assert_can_run_returns_silently_when_allowed(mock_tb_svc):
     ub = _make_user_balance(balance=Decimal(5))
     mock_tb_svc.get_or_create.return_value = tb
 
-    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+    with (
+        patch.object(UserBillingService, "get_or_create_balance", return_value=ub),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=False),
+    ):
         # Should not raise.
         UserBillingService.assert_can_run("a1", "t1")
 
@@ -275,7 +302,10 @@ def test_assert_can_run_raises_with_user_budget_code(mock_tb_svc):
     ub = _make_user_balance(balance=Decimal(0))
     mock_tb_svc.get_or_create.return_value = tb
 
-    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+    with (
+        patch.object(UserBillingService, "get_or_create_balance", return_value=ub),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=False),
+    ):
         with pytest.raises(WorkflowBudgetExceeded) as exc:
             UserBillingService.assert_can_run("a1", "t1")
     assert exc.value.code == "INSUFFICIENT_USER_BUDGET"
@@ -289,7 +319,105 @@ def test_assert_can_run_raises_with_tenant_budget_code(mock_tb_svc):
     ub = _make_user_balance(balance=Decimal(5))
     mock_tb_svc.get_or_create.return_value = tb
 
-    with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
+    with (
+        patch.object(UserBillingService, "get_or_create_balance", return_value=ub),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=False),
+    ):
         with pytest.raises(WorkflowBudgetExceeded) as exc:
             UserBillingService.assert_can_run("a1", "t1")
     assert exc.value.code == "INSUFFICIENT_TENANT_BUDGET"
+
+
+# ---------------------------------------------------------------------------
+# Owner branch — Solution 2: owners draw from TenantBalance.balance directly
+# and never hold a per-member UserBalance pool.
+# ---------------------------------------------------------------------------
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+@patch("services.user_billing_service.db")
+def test_deduct_for_owner_decrements_tenant_balance_only(mock_db, mock_tb_svc):
+    """Owner path: TenantBalance.balance -= cost; TenantBalance.locked and
+    UserBalance are NOT touched. UserBillingService.get_or_create_balance must
+    not be called at all (owners don't hold a UserBalance pool)."""
+    tb = _make_tenant_balance(balance=Decimal(100), locked=Decimal(50))
+    mock_tb_svc.get_or_create.return_value = tb
+
+    with (
+        patch.object(UserBillingService, "get_or_create_balance") as mock_get_ub,
+        patch.object(UserBillingService, "is_tenant_owner", return_value=True),
+    ):
+        record = UserBillingService.deduct_for_workflow_run(
+            account_id="owner1",
+            tenant_id="t1",
+            workflow_run_id="w1",
+            total_tokens=1000,
+            price_per_1k_tokens=Decimal("0.5"),
+        )
+
+    assert tb.balance == Decimal("99.500000")
+    assert tb.locked == Decimal(50)  # unchanged
+    mock_get_ub.assert_not_called()
+    assert record is not None
+    assert record.scope == "tenant"
+    assert record.record_type == BillingRecordType.DEDUCTION.value
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+@patch("services.user_billing_service.db")
+def test_deduct_for_owner_writes_single_tenant_scope_record(mock_db, mock_tb_svc):
+    """Owner deduction emits exactly one BillingRecord with scope='tenant'."""
+    tb = _make_tenant_balance(balance=Decimal(100), locked=Decimal(0))
+    mock_tb_svc.get_or_create.return_value = tb
+
+    with (
+        patch.object(UserBillingService, "get_or_create_balance"),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=True),
+    ):
+        UserBillingService.deduct_for_workflow_run(
+            account_id="owner1",
+            tenant_id="t1",
+            workflow_run_id="w1",
+            total_tokens=2000,
+            price_per_1k_tokens=Decimal("0.1"),
+        )
+
+    records = _added_billing_records(mock_db)
+    assert len(records) == 1
+    assert records[0].scope == "tenant"
+    assert records[0].record_type == BillingRecordType.DEDUCTION.value
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+def test_check_can_run_owner_allows_when_tenant_balance_positive(mock_tb_svc):
+    """Owner gating is a single check on TenantBalance.balance > 0.
+    UserBalance is irrelevant because the owner never has one."""
+    tb = _make_tenant_balance(balance=Decimal(10), locked=Decimal(0))
+    mock_tb_svc.get_or_create.return_value = tb
+
+    with (
+        patch.object(UserBillingService, "get_or_create_balance") as mock_get_ub,
+        patch.object(UserBillingService, "is_tenant_owner", return_value=True),
+    ):
+        ok, code = UserBillingService.check_can_run("owner1", "t1")
+
+    assert ok is True
+    assert code is None
+    mock_get_ub.assert_not_called()
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+def test_check_can_run_owner_blocks_when_tenant_balance_zero(mock_tb_svc):
+    """Owner gate: TenantBalance.balance == 0 blocks the run with the tenant
+    code (no user code is ever emitted for owners)."""
+    tb = _make_tenant_balance(balance=Decimal(0), locked=Decimal(0))
+    mock_tb_svc.get_or_create.return_value = tb
+
+    with (
+        patch.object(UserBillingService, "get_or_create_balance"),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=True),
+    ):
+        ok, code = UserBillingService.check_can_run("owner1", "t1")
+
+    assert ok is False
+    assert code == "INSUFFICIENT_TENANT_BUDGET"

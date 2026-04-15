@@ -23,8 +23,8 @@ const CreatorLayout = ({ children }: { children: ReactNode }) => {
                 <div className="flex h-screen overflow-hidden bg-background-body">
                   <CreatorSidebar />
                   <main className="relative flex flex-1 flex-col overflow-hidden">
-                    {/* Task center button — top-right corner */}
-                    <div className="absolute top-3 right-4 z-40">
+                    {/* Top-right toolbar: task center */}
+                    <div className="absolute top-3 right-4 z-40 flex items-center gap-1">
                       <TaskCenterButton />
                     </div>
                     {children}

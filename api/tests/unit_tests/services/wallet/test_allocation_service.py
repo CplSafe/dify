@@ -14,6 +14,7 @@ import pytest
 
 from services.wallet.allocation_service import AllocationService
 from services.wallet.exceptions import (
+    AllocateToOwnerNotAllowed,
     InsufficientMemberBalance,
     InsufficientTenantBalance,
     NotTenantMember,
@@ -49,6 +50,7 @@ def test_allocate_decreases_tenant_balance_and_increases_user(
     user_balance = _make_user_balance(Decimal(0))
     mock_tb_svc.get_or_create.return_value = tenant_balance
     mock_ub_svc.get_or_create_balance.return_value = user_balance
+    mock_ub_svc.is_tenant_owner.return_value = False
 
     record = AllocationService.allocate(
         tenant_id="t1",
@@ -78,6 +80,7 @@ def test_reclaim_moves_funds_back_to_tenant(
     user_balance = _make_user_balance(Decimal(80))
     mock_tb_svc.get_or_create.return_value = tenant_balance
     mock_ub_svc.get_or_create_balance.return_value = user_balance
+    mock_ub_svc.is_tenant_owner.return_value = False
 
     record = AllocationService.allocate(
         tenant_id="t1",
@@ -105,6 +108,7 @@ def test_allocate_rejects_when_insufficient_tenant_balance(
     tenant_balance = _make_tenant_balance(Decimal(10), Decimal(0))
     mock_tb_svc.get_or_create.return_value = tenant_balance
     mock_ub_svc.get_or_create_balance.return_value = _make_user_balance(Decimal(0))
+    mock_ub_svc.is_tenant_owner.return_value = False
 
     with pytest.raises(InsufficientTenantBalance):
         AllocationService.allocate(
@@ -132,6 +136,7 @@ def test_reclaim_rejects_when_member_insufficient(
     user_balance = _make_user_balance(Decimal(10))
     mock_tb_svc.get_or_create.return_value = tenant_balance
     mock_ub_svc.get_or_create_balance.return_value = user_balance
+    mock_ub_svc.is_tenant_owner.return_value = False
 
     with pytest.raises(InsufficientMemberBalance):
         AllocationService.allocate(
@@ -187,6 +192,7 @@ def test_allocate_writes_allocation_and_billing_records(
     user_balance = _make_user_balance(Decimal(0))
     mock_tb_svc.get_or_create.return_value = tenant_balance
     mock_ub_svc.get_or_create_balance.return_value = user_balance
+    mock_ub_svc.is_tenant_owner.return_value = False
 
     AllocationService.allocate(
         tenant_id="t1",
@@ -230,6 +236,7 @@ def test_reclaim_records_preserve_signed_amount(
     user_balance = _make_user_balance(Decimal(40))
     mock_tb_svc.get_or_create.return_value = tenant_balance
     mock_ub_svc.get_or_create_balance.return_value = user_balance
+    mock_ub_svc.is_tenant_owner.return_value = False
 
     AllocationService.allocate(
         tenant_id="t1",
@@ -244,6 +251,67 @@ def test_reclaim_records_preserve_signed_amount(
 
     assert allocation.amount == Decimal(-15)
     assert billing.amount == Decimal(-15)
+
+
+# ---------------------------------------------------------------------------
+# Owner rejection — allocating to / reclaiming from owner is not permitted
+# ---------------------------------------------------------------------------
+
+
+@patch("services.wallet.allocation_service._verify_tenant_member")
+@patch("services.wallet.allocation_service.UserBillingService")
+@patch("services.wallet.allocation_service.TenantBalanceService")
+@patch("services.wallet.allocation_service.db")
+def test_allocate_rejects_when_target_is_tenant_owner(
+    mock_db, mock_tb_svc, mock_ub_svc, mock_verify
+):
+    """Owners draw directly from TenantBalance.balance; allocating to them
+    would break ``Σ(UserBalance.balance) == TenantBalance.locked``.
+    Must raise before any mutation or commit."""
+    tenant_balance = _make_tenant_balance(Decimal(100), Decimal(0))
+    user_balance = _make_user_balance(Decimal(0))
+    mock_tb_svc.get_or_create.return_value = tenant_balance
+    mock_ub_svc.get_or_create_balance.return_value = user_balance
+    mock_ub_svc.is_tenant_owner.return_value = True
+
+    with pytest.raises(AllocateToOwnerNotAllowed):
+        AllocationService.allocate(
+            tenant_id="t1",
+            account_id="owner1",
+            operator_id="owner1",
+            amount=Decimal(10),
+        )
+
+    # No mutation applied, no commit issued
+    assert tenant_balance.balance == Decimal(100)
+    assert tenant_balance.locked == Decimal(0)
+    assert user_balance.balance == Decimal(0)
+    mock_db.session.commit.assert_not_called()
+
+
+@patch("services.wallet.allocation_service._verify_tenant_member")
+@patch("services.wallet.allocation_service.UserBillingService")
+@patch("services.wallet.allocation_service.TenantBalanceService")
+@patch("services.wallet.allocation_service.db")
+def test_reclaim_also_rejects_when_target_is_tenant_owner(
+    mock_db, mock_tb_svc, mock_ub_svc, mock_verify
+):
+    """Symmetric: reclaim from the owner is rejected for the same reason."""
+    tenant_balance = _make_tenant_balance(Decimal(0), Decimal(50))
+    user_balance = _make_user_balance(Decimal(50))
+    mock_tb_svc.get_or_create.return_value = tenant_balance
+    mock_ub_svc.get_or_create_balance.return_value = user_balance
+    mock_ub_svc.is_tenant_owner.return_value = True
+
+    with pytest.raises(AllocateToOwnerNotAllowed):
+        AllocationService.allocate(
+            tenant_id="t1",
+            account_id="owner1",
+            operator_id="owner1",
+            amount=Decimal(-10),
+        )
+
+    mock_db.session.commit.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -306,6 +374,7 @@ def test_allocate_locks_both_balance_rows_in_tenant_then_user_order(
     user_balance = _make_user_balance(Decimal(0))
     mock_tb_svc.get_or_create.return_value = tenant_balance
     mock_ub_svc.get_or_create_balance.return_value = user_balance
+    mock_ub_svc.is_tenant_owner.return_value = False
 
     AllocationService.allocate(
         tenant_id="t1",
@@ -336,7 +405,10 @@ def test_deduct_for_workflow_run_locks_rows_in_tenant_then_user_order(
 
     # Patch get_or_create_balance directly on the class so we can assert on
     # the call (it's the SUT's own classmethod — can't easily mock via module).
-    with patch.object(UserBillingService, "get_or_create_balance", return_value=user_balance) as mock_ub_cls:
+    with (
+        patch.object(UserBillingService, "get_or_create_balance", return_value=user_balance) as mock_ub_cls,
+        patch.object(UserBillingService, "is_tenant_owner", return_value=False),
+    ):
         UserBillingService.deduct_for_workflow_run(
             account_id="a1",
             tenant_id="t1",

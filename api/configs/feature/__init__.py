@@ -747,8 +747,20 @@ class AlipayConfig(BaseSettings):
         default=100,
     )
 
+    ALIPAY_QR_ENABLED: bool = Field(
+        description=(
+            "Enable the 当面付 (QR precreate) channel. When False, every order is "
+            "routed to alipay_page regardless of ALIPAY_QR_MAX_FEN. Leave True to "
+            "keep the existing amount-based routing."
+        ),
+        default=True,
+    )
+
     ALIPAY_QR_MAX_FEN: int = Field(
-        description="Routing threshold in fen. Orders ≤ this use alipay_qr, larger use alipay_page",
+        description=(
+            "Routing threshold in fen. Orders ≤ this use alipay_qr, larger use "
+            "alipay_page. Ignored when ALIPAY_QR_ENABLED=false."
+        ),
         default=100000,
     )
 

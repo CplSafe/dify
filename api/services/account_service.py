@@ -1179,12 +1179,19 @@ class TenantService:
 
     @staticmethod
     def get_tenant_members(tenant: Tenant) -> list[Account]:
-        """Get tenant members"""
+        """Get tenant members.
+
+        System admins are joined into every tenant so they can audit workspaces,
+        but they are not "members" of any particular workspace and must not leak
+        into the console's 成员管理 list — otherwise ordinary users would see
+        the platform operator lurking in their team roster.
+        """
         query = (
             db.session.query(Account, TenantAccountJoin.role)
             .select_from(Account)
             .join(TenantAccountJoin, Account.id == TenantAccountJoin.account_id)
             .where(TenantAccountJoin.tenant_id == tenant.id)
+            .where(Account.is_system_admin.is_(False))
         )
 
         # Initialize an empty list to store the updated accounts

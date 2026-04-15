@@ -94,10 +94,12 @@ class PaymentService:
         expected_app_id: str,
         alerter: PaymentAlerter | None = None,
         large_amount_threshold_fen: int = 0,
+        qr_enabled: bool = True,
     ) -> None:
         self._qr = qr_provider
         self._page = page_provider
         self._qr_max_fen = qr_max_fen
+        self._qr_enabled = qr_enabled
         self._min_amount_fen = min_amount_fen
         self._max_amount_fen = max_amount_fen
         self._order_timeout_min = order_timeout_min
@@ -118,6 +120,7 @@ class PaymentService:
             qr_provider=AlipayQrProvider(client),
             page_provider=AlipayPageProvider(client),
             qr_max_fen=dify_config.ALIPAY_QR_MAX_FEN,
+            qr_enabled=dify_config.ALIPAY_QR_ENABLED,
             min_amount_fen=dify_config.ALIPAY_MIN_AMOUNT_FEN,
             max_amount_fen=dify_config.ALIPAY_PAGE_MAX_FEN,
             order_timeout_min=dify_config.ALIPAY_ORDER_TIMEOUT_MIN,
@@ -370,9 +373,48 @@ class PaymentService:
         tenant_id: str,
         limit: int = 50,
         offset: int = 0,
+        status: str | None = None,
     ) -> tuple[list[PaymentOrder], int]:
-        """Return a page of orders for a workspace (newest first) with total."""
+        """Return a page of orders for a workspace (newest first) with total.
+
+        ``status`` — when provided — filters by ``PaymentOrderStatus`` value
+        so the frontend can tab between 待支付 / 已支付 / 已关闭 without
+        client-side pagination skew.
+        """
         base = select(PaymentOrder).where(PaymentOrder.tenant_id == tenant_id)
+        if status:
+            base = base.where(PaymentOrder.status == status)
+        total = db.session.scalar(select(db.func.count()).select_from(base.subquery())) or 0
+        rows = list(
+            db.session.scalars(
+                base.order_by(PaymentOrder.created_at.desc()).limit(limit).offset(offset)
+            ).all()
+        )
+        return rows, total
+
+    def list_platform_orders(
+        self,
+        *,
+        tenant_id: str | None = None,
+        account_id: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[PaymentOrder], int]:
+        """Super-admin: list every top-up order across the platform.
+
+        Distinct from :meth:`list_tenant_orders` — that one is workspace-scoped
+        and owner-gated. This one exposes everyone's orders and MUST only be
+        called from super-admin controllers. Filters are AND-composed so the
+        admin UI can drill down by tenant / account / status independently.
+        """
+        base = select(PaymentOrder)
+        if tenant_id:
+            base = base.where(PaymentOrder.tenant_id == tenant_id)
+        if account_id:
+            base = base.where(PaymentOrder.account_id == account_id)
+        if status:
+            base = base.where(PaymentOrder.status == status)
         total = db.session.scalar(select(db.func.count()).select_from(base.subquery())) or 0
         rows = list(
             db.session.scalars(
@@ -439,9 +481,13 @@ class PaymentService:
     def _route(self, amount_fen: int) -> PaymentProvider:
         """Select a provider based on amount.
 
-        ``amount_fen <= ALIPAY_QR_MAX_FEN`` → QR (当面付 precreate).
-        Otherwise → Page (电脑网站支付 page.pay).
+        When ``ALIPAY_QR_ENABLED=false`` the QR channel is skipped entirely
+        and every order is served by Page. Otherwise the amount-based rule
+        applies: ``amount_fen <= ALIPAY_QR_MAX_FEN`` → QR (当面付 precreate),
+        larger → Page (电脑网站支付 page.pay).
         """
+        if not self._qr_enabled:
+            return self._page
         return self._qr if amount_fen <= self._qr_max_fen else self._page
 
     def _provider_for(self, provider_name: str) -> PaymentProvider:

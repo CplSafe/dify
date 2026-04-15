@@ -1,173 +1,220 @@
 'use client'
+/* eslint-disable tailwindcss/enforce-consistent-class-order -- TODO(wallet): preexisting issues tracked for a follow-up cleanup */
 
-import { RiAddLine, RiHome4Line, RiLayoutGridLine, RiTimeLine, RiVideoLine } from '@remixicon/react'
-import Link from 'next/link'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { RiHome4Line, RiVideoLine } from '@remixicon/react'
 import { useEffect, useState } from 'react'
-import { get } from '@/service/base'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/app/components/base/ui/tooltip'
+import Link from '@/next/link'
+import { usePathname, useSearchParams } from '@/next/navigation'
 import { cn } from '@/utils/classnames'
 import CreatorUserMenu from './user-menu'
 
-type MarketplaceApp = {
-  id: string
-  app_id: string
-  app_name: string
-  app_description: string
-  app_mode: string
-  app_icon: string
-  published_at: string
+const COLLAPSED_STORAGE_KEY = 'creator-sidebar-collapsed'
+
+// ChatGPT-style sidebar toggle icon
+const SidebarToggleIcon = ({ className }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <line x1="9" y1="4" x2="9" y2="20" />
+    <circle cx="6" cy="8" r="0.6" fill="currentColor" stroke="none" />
+    <circle cx="6" cy="11" r="0.6" fill="currentColor" stroke="none" />
+    <circle cx="6" cy="14" r="0.6" fill="currentColor" stroke="none" />
+  </svg>
+)
+
+type NavItemProps = {
+  href: string
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  active: boolean
+  collapsed: boolean
+}
+
+function NavItem({ href, icon: Icon, label, active, collapsed }: NavItemProps) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      title={collapsed ? label : undefined}
+      className={cn(
+        'group/item relative flex cursor-default items-center rounded-lg text-sm font-medium transition-colors',
+        collapsed ? 'h-10 w-10 justify-center' : 'gap-3 px-3 py-2',
+        active
+          ? 'bg-primary-50 text-primary-700'
+          : 'text-text-secondary hover:bg-black/[0.04] hover:text-text-primary',
+      )}
+    >
+      {active && !collapsed && (
+        <span className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full bg-primary-600" />
+      )}
+      <Icon className="h-4 w-4 shrink-0" />
+      {!collapsed && <span className="truncate">{label}</span>}
+    </Link>
+  )
 }
 
 export default function CreatorSidebar() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const [marketplaceApps, setMarketplaceApps] = useState<MarketplaceApp[]>([])
-  const [loading, setLoading] = useState(true)
+  const [collapsed, setCollapsed] = useState(false)
 
   const selectedAppId = searchParams.get('app_id')
-  const isCreatorInstalledPage = pathname.startsWith('/creator/installed/')
   const isCreatorHome = pathname === '/creator' && !selectedAppId
+  const isCreatorWorks = pathname === '/creator-works'
 
+  // Hydrate collapsed state from localStorage on mount (client-only to avoid SSR mismatch)
   useEffect(() => {
-    get<{ data: MarketplaceApp[] }>('/creator/marketplace/apps')
-      .then(data => setMarketplaceApps(data.data || []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    const stored = globalThis.localStorage?.getItem(COLLAPSED_STORAGE_KEY)
+
+    if (stored === '1')
+      setCollapsed(true) // eslint-disable-line react/set-state-in-effect
   }, [])
 
-  const formatDate = (iso: string) => {
-    const d = new Date(iso)
-    const now = new Date()
-    const diffMs = now.getTime() - d.getTime()
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-    if (diffDays === 0)
-      return '今天'
-    if (diffDays === 1)
-      return '昨天'
-    if (diffDays < 7)
-      return `${diffDays}天前`
-    return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-  }
-
-  const isNew = (iso: string) => {
-    const d = new Date(iso)
-    const diffMs = Date.now() - d.getTime()
-    return diffMs < 7 * 24 * 60 * 60 * 1000
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev
+      globalThis.localStorage?.setItem(COLLAPSED_STORAGE_KEY, next ? '1' : '0')
+      return next
+    })
   }
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-divider-subtle bg-background-sidebar">
-      {/* Logo / Brand */}
-      <div className="flex h-16 items-center px-5 border-b border-divider-subtle">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600">
-            <RiVideoLine className="h-4 w-4 text-white" />
-          </div>
-          <span className="text-base font-semibold text-text-primary">创作Agent</span>
-        </div>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex flex-1 flex-col overflow-y-auto py-4">
-        {/* Home */}
-        <div className="px-3 mb-2">
-          <Link
-            href="/creator"
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              isCreatorHome
-                ? 'bg-state-base-active text-text-primary'
-                : 'text-text-secondary hover:bg-state-base-hover hover:text-text-primary',
-            )}
-          >
-            <RiHome4Line className="h-4 w-4" />
-            <span>首页</span>
-          </Link>
-        </div>
-
-        {/* App Marketplace section - 暂时隐藏创意中心和应用市场 */}
-        {/* <div className="px-3 mt-4">
-          <div className="mb-2 flex items-center justify-between px-3">
-            <span className="text-xs font-medium uppercase text-text-quaternary tracking-wider">创意中心</span>
-          </div>
-
-          {loading
+    <div
+      className={cn(
+        'relative h-full shrink-0 transition-[width] duration-200 ease-out',
+        collapsed ? 'w-20' : 'w-64',
+      )}
+    >
+      <aside className="flex h-full w-full flex-col border-r border-divider-subtle bg-white/60 backdrop-blur-xl">
+        {/* Logo / Brand */}
+        <div
+          className={cn(
+            'flex h-16 items-center border-b border-divider-subtle',
+            collapsed ? 'justify-center px-0' : 'justify-between px-4',
+          )}
+        >
+          {collapsed
             ? (
-                <div className="px-3 py-2 text-xs text-text-quaternary">加载中...</div>
-              )
-            : marketplaceApps.length === 0
-              ? (
-                  <div className="px-3 py-2 text-xs text-text-quaternary">暂无应用</div>
-                )
-              : (
-                  <div className="space-y-1">
-                    {marketplaceApps.map(app => (
-                      <Link
-                        key={app.id}
-                        href={`/creator?app_id=${app.app_id}`}
-                        className={cn(
-                          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                          (selectedAppId === app.app_id && (pathname === '/creator' || isCreatorInstalledPage))
-                            ? 'bg-state-base-active text-text-primary'
-                            : 'text-text-secondary hover:bg-state-base-hover hover:text-text-primary',
-                        )}
+                <Tooltip>
+                  <TooltipTrigger
+                    delay={0}
+                    render={(
+                      <button
+                        type="button"
+                        onClick={toggleCollapsed}
+                        aria-label="打开侧边栏"
+                        aria-expanded={false}
+                        className="group relative flex h-10 w-16 cursor-e-resize items-center justify-center rounded-md text-text-tertiary transition-colors hover:bg-black/[0.04] hover:text-text-primary"
                       >
-                        <RiLayoutGridLine className="h-4 w-4 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1">
-                            <span className="truncate text-sm">{app.app_name}</span>
-                            {isNew(app.published_at) && (
-                              <span className="shrink-0 rounded bg-primary-100 px-1 py-0.5 text-[10px] font-medium text-primary-700">NEW</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 text-xs text-text-quaternary">
-                            <RiTimeLine className="h-3 w-3" />
-                            <span>{formatDate(app.published_at)}</span>
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-
-          <Link
-            href="/creator-marketplace"
-            className={cn(
-              'mt-1 flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-              pathname === '/creator-marketplace'
-                ? 'bg-state-base-active text-text-primary'
-                : 'text-text-secondary hover:bg-state-base-hover hover:text-text-primary',
-            )}
-          >
-            <RiAddLine className="h-4 w-4" />
-            <span>应用市场</span>
-          </Link>
-        </div> */}
-
-        {/* Distribution section */}
-        <div className="px-3 mt-6">
-          <div className="mb-2 flex items-center justify-between px-3">
-            <span className="text-xs font-medium uppercase text-text-quaternary tracking-wider">分发运营</span>
-          </div>
-          <Link
-            href="/creator-works"
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-              pathname === '/creator-works'
-                ? 'bg-state-base-active text-text-primary'
-                : 'text-text-secondary hover:bg-state-base-hover hover:text-text-primary',
-            )}
-          >
-            <RiVideoLine className="h-4 w-4" />
-            <span>发布作品</span>
-          </Link>
+                        <img
+                          src="/logo/logo.svg"
+                          alt="构界Agent"
+                          className="h-5 w-auto transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0"
+                        />
+                        <SidebarToggleIcon className="pointer-events-none absolute h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+                      </button>
+                    )}
+                  />
+                  <TooltipContent placement="right">打开侧边栏</TooltipContent>
+                </Tooltip>
+              )
+            : (
+                <>
+                  <Link
+                    href="/creator"
+                    aria-label="构界Agent 首页"
+                    className="flex cursor-default items-center"
+                  >
+                    <img
+                      src="/logo/logo.svg"
+                      alt="构界Agent"
+                      className="h-7 w-auto"
+                    />
+                  </Link>
+                  <Tooltip>
+                    <TooltipTrigger
+                      delay={0}
+                      render={(
+                        <button
+                          type="button"
+                          onClick={toggleCollapsed}
+                          aria-label="关闭侧边栏"
+                          aria-expanded={true}
+                          className="flex h-8 w-8 cursor-w-resize items-center justify-center rounded-md text-text-tertiary transition-colors hover:bg-black/[0.04] hover:text-text-primary"
+                        >
+                          <SidebarToggleIcon className="h-5 w-5" />
+                        </button>
+                      )}
+                    />
+                    <TooltipContent placement="bottom">关闭侧边栏</TooltipContent>
+                  </Tooltip>
+                </>
+              )}
         </div>
-      </nav>
 
-      {/* Bottom user area */}
-      <div className="border-t border-divider-subtle p-3">
-        <CreatorUserMenu />
-      </div>
-    </aside>
+        {/* Navigation */}
+        <nav
+          className={cn(
+            'flex flex-1 flex-col overflow-y-auto py-5',
+            collapsed ? 'items-center' : '',
+          )}
+        >
+          {/* Home */}
+          <div className={cn('mb-2', collapsed ? 'px-0' : 'px-3')}>
+            <NavItem
+              href="/creator"
+              icon={RiHome4Line}
+              label="首页"
+              active={isCreatorHome}
+              collapsed={collapsed}
+            />
+          </div>
+
+          {/* Distribution section */}
+          <div className={cn('mt-8', collapsed ? 'px-0' : 'px-3')}>
+            {!collapsed && (
+              <div className="mb-2 px-3">
+                <span className="text-[11px] font-medium text-text-tertiary">
+                  分发运营
+                </span>
+              </div>
+            )}
+            <NavItem
+              href="/creator-works"
+              icon={RiVideoLine}
+              label="发布作品"
+              active={isCreatorWorks}
+              collapsed={collapsed}
+            />
+          </div>
+        </nav>
+
+        {/* Bottom user area */}
+        <div
+          className={cn(
+            'border-t border-divider-subtle',
+            collapsed ? 'p-2' : 'p-3',
+          )}
+        >
+          <CreatorUserMenu collapsed={collapsed} />
+        </div>
+      </aside>
+    </div>
   )
 }

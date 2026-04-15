@@ -750,6 +750,30 @@ def test_route_above_qr_max_uses_page(service: PaymentService, page_provider: mo
     assert service._route(MAX_AMOUNT_FEN) is page_provider
 
 
+def test_route_when_qr_disabled_always_uses_page(
+    qr_provider: mock.MagicMock, page_provider: mock.MagicMock
+) -> None:
+    """With ALIPAY_QR_ENABLED=false, amount-based routing is bypassed and
+    every order — including small ones that would normally go to QR — is
+    served by the Page channel."""
+    service = PaymentService(
+        qr_provider=qr_provider,
+        page_provider=page_provider,
+        qr_max_fen=QR_MAX_FEN,
+        qr_enabled=False,
+        min_amount_fen=MIN_AMOUNT_FEN,
+        max_amount_fen=MAX_AMOUNT_FEN,
+        order_timeout_min=ORDER_TIMEOUT_MIN,
+        enabled=True,
+        expected_app_id=APP_ID,
+    )
+    assert service._route(0) is page_provider
+    assert service._route(1) is page_provider
+    assert service._route(QR_MAX_FEN) is page_provider
+    assert service._route(QR_MAX_FEN + 1) is page_provider
+    assert service._route(MAX_AMOUNT_FEN) is page_provider
+
+
 # ---------------------------------------------------------------------------
 # _amounts_match helper (covers the edge of tampered/missing payloads)
 # ---------------------------------------------------------------------------

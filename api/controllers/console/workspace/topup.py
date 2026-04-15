@@ -17,6 +17,8 @@ alongside for display only.
 
 from __future__ import annotations
 
+import json
+
 from flask import request
 from flask_restx import Resource
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -128,12 +130,37 @@ def _user_balance_payload(account_id: str) -> dict:
     }
 
 
-def _order_payload(order) -> dict:
+def _extract_pay_url(order) -> str | None:
+    """Pull ``pay_url`` out of a page-channel order's prepay_raw envelope.
+
+    Page-channel orders store ``{"pay_url": "..."}`` JSON on ``prepay_raw``
+    (see :class:`AlipayPageProvider`). QR-channel orders use ``qr_code``
+    instead and have no ``pay_url``. Returning ``None`` for QR / malformed
+    envelopes is deliberate — the frontend checks ``qr_code`` first.
+    """
+    raw = order.prepay_raw
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    url = data.get("pay_url") if isinstance(data, dict) else None
+    return url if isinstance(url, str) else None
+
+
+def serialize_order(order) -> dict:
     """Serialise a PaymentOrder row for the console API.
 
-    We only expose the QR / pay_url returned at creation time. The raw
-    Alipay payloads (``prepay_raw``, ``notify_raw``) are intentionally
-    omitted — they contain signatures and are for backend audit only.
+    Exposes ``qr_code`` (QR channel) and ``pay_url`` (page channel) so the
+    frontend can resume a pending order without re-creating it. The raw
+    Alipay payloads (``prepay_raw``, ``notify_raw``) stay server-side —
+    they carry signatures and are for backend audit only.
+
+    Exported (not underscore-prefixed) so the super-admin order-list endpoint
+    in ``creator/balance.py`` can share the exact same shape — if one caller
+    ever needs a different subset, split into two serialisers rather than
+    letting the shapes silently diverge.
     """
     return {
         "order_id": order.id,
@@ -147,6 +174,7 @@ def _order_payload(order) -> dict:
         "subject": order.subject,
         "status": order.status,
         "qr_code": order.qr_code,
+        "pay_url": _extract_pay_url(order),
         "paid_at": order.paid_at.isoformat() if order.paid_at else None,
         "expires_at": order.expires_at.isoformat() if order.expires_at else None,
         "created_at": order.created_at.isoformat(),
@@ -219,13 +247,15 @@ class TopupOrderListApi(Resource):
         _, current_tenant_id = current_account_with_tenant()
         limit = min(int(request.args.get("limit", 20)), 100)
         offset = max(int(request.args.get("offset", 0)), 0)
+        status = request.args.get("status") or None
         orders, total = PaymentService.from_config().list_tenant_orders(
             tenant_id=current_tenant_id,
             limit=limit,
             offset=offset,
+            status=status,
         )
         return {
-            "data": [_order_payload(o) for o in orders],
+            "data": [serialize_order(o) for o in orders],
             "total": total,
             "limit": limit,
             "offset": offset,
@@ -250,7 +280,7 @@ class TopupOrderDetailApi(Resource):
             )
         except OrderNotFound:
             raise TopupOrderNotFoundError()
-        return _order_payload(order), 200
+        return serialize_order(order), 200
 
 
 @console_ns.route("/workspaces/current/topup/orders/<string:out_trade_no>/close")
@@ -271,4 +301,4 @@ class TopupOrderCloseApi(Resource):
             raise TopupOrderNotFoundError()
         except OrderAlreadyClosed:
             raise TopupOrderAlreadyClosedError()
-        return _order_payload(order), 200
+        return serialize_order(order), 200

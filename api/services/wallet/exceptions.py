@@ -29,6 +29,18 @@ class NotTenantMember(WalletError):  # noqa: N818
     code = "NOT_TENANT_MEMBER"
 
 
+class AllocateToOwnerNotAllowed(WalletError):  # noqa: N818
+    """Raised when allocate/reclaim targets the tenant owner.
+
+    Owners consume workspace funds directly from ``TenantBalance.balance``
+    — they never hold a per-member ``UserBalance`` pool. Trying to
+    allocate to or reclaim from the owner would break the invariant
+    ``Σ(UserBalance.balance for members) == TenantBalance.locked``.
+    """
+
+    code = "ALLOCATE_TO_OWNER_NOT_ALLOWED"
+
+
 class WorkflowBudgetExceeded(WalletError):  # noqa: N818
     """Raised at the workflow entry gate when no wallet can fund the run.
 

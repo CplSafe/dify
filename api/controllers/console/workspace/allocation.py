@@ -26,6 +26,7 @@ from decimal import Decimal, InvalidOperation
 from flask import request
 from flask_restx import Resource
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from sqlalchemy import select
 
 from controllers.console import console_ns
 from controllers.console.wraps import (
@@ -35,8 +36,12 @@ from controllers.console.wraps import (
 )
 from libs.exception import BaseHTTPException
 from libs.login import current_account_with_tenant, login_required
+from models.account import Account, TenantAccountJoin
+from models.creator import UserBalance
+from models.engine import db
 from services.wallet.allocation_service import AllocationService
 from services.wallet.exceptions import (
+    AllocateToOwnerNotAllowed,
     InsufficientMemberBalance,
     InsufficientTenantBalance,
     NotTenantMember,
@@ -68,6 +73,15 @@ class AllocationInsufficientTenantBalanceError(BaseHTTPException):
 class AllocationInsufficientMemberBalanceError(BaseHTTPException):
     error_code = "allocation_insufficient_member_balance"
     description = "Member wallet has insufficient balance for this reclaim."
+    code = 409
+
+
+class AllocationToOwnerNotAllowedError(BaseHTTPException):
+    error_code = "allocation_to_owner_not_allowed"
+    description = (
+        "Cannot allocate to or reclaim from the workspace owner; "
+        "owners draw funds directly from the workspace wallet."
+    )
     code = 409
 
 
@@ -155,6 +169,8 @@ class MemberAllocationApi(Resource):
             raise AllocationAmountInvalidError(str(e))
         except NotTenantMember:
             raise AllocationMemberNotFoundError()
+        except AllocateToOwnerNotAllowed:
+            raise AllocationToOwnerNotAllowedError()
         except InsufficientTenantBalance:
             raise AllocationInsufficientTenantBalanceError()
         except InsufficientMemberBalance:
@@ -185,4 +201,49 @@ class TenantAllocationListApi(Resource):
             "total": total,
             "limit": limit,
             "offset": offset,
+        }, 200
+
+
+@console_ns.route("/workspaces/current/members/balances")
+class MemberBalancesApi(Resource):
+    """Return current wallet balances for every member of the workspace.
+
+    Owner-only: the allocation UI needs this to show "member X has ¥Y
+    left" before deciding how much to top up or claw back. System admins
+    are excluded for the same reason as ``get_tenant_members`` — they
+    are joined to every tenant for ops access, not as real members.
+
+    Response shape mirrors the ``UserBalance`` fragment returned by the
+    wallet endpoint (balance as decimal string) so the console never
+    has to switch contracts mid-flow.
+    """
+
+    @setup_required
+    @login_required
+    @account_initialization_required
+    @tenant_owner_required
+    def get(self):
+        _, current_tenant_id = current_account_with_tenant()
+
+        # Left outer join — a member without a UserBalance row yet still
+        # appears, rendered as ¥0 by the service contract (balance rows
+        # are lazily created on first topup/allocation).
+        rows = db.session.execute(
+            select(Account.id, UserBalance.balance, UserBalance.currency)
+            .select_from(TenantAccountJoin)
+            .join(Account, Account.id == TenantAccountJoin.account_id)
+            .join(UserBalance, UserBalance.account_id == Account.id, isouter=True)
+            .where(TenantAccountJoin.tenant_id == current_tenant_id)
+            .where(Account.is_system_admin.is_(False))
+        ).all()
+
+        return {
+            "data": [
+                {
+                    "account_id": account_id,
+                    "balance": str(balance) if balance is not None else "0",
+                    "currency": currency or "CNY",
+                }
+                for account_id, balance, currency in rows
+            ],
         }, 200

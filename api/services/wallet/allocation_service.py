@@ -32,6 +32,7 @@ from models.creator import (
 from models.engine import db
 from services.user_billing_service import UserBillingService
 from services.wallet.exceptions import (
+    AllocateToOwnerNotAllowed,
     InsufficientMemberBalance,
     InsufficientTenantBalance,
     NotTenantMember,
@@ -80,6 +81,18 @@ class AllocationService:
             raise ValueError("amount must be non-zero")
 
         _verify_tenant_member(tenant_id, account_id)
+
+        # Owners consume workspace funds directly from TenantBalance.balance —
+        # they don't hold a per-member UserBalance pool. Allocating to the
+        # owner would credit a wallet that's never read back, and
+        # reclaiming would drain a wallet that's never been funded, both of
+        # which break the invariant
+        # ``Σ(UserBalance.balance for members) == TenantBalance.locked``.
+        if UserBillingService.is_tenant_owner(account_id, tenant_id):
+            raise AllocateToOwnerNotAllowed(
+                f"account {account_id} is the owner of tenant {tenant_id}; "
+                f"owners draw directly from TenantBalance.balance"
+            )
 
         # Lock order: tenant → user (see module docstring). The lock must be
         # held across the balance check below so a concurrent allocate /

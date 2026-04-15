@@ -16,6 +16,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from models import TenantAccountJoin, TenantAccountRole
 from models.creator import BillingRecord, BillingRecordType, UserBalance
 from models.engine import db
 from services.wallet.tenant_balance_service import TenantBalanceService
@@ -74,6 +75,24 @@ class UserBillingService:
         return cls.get_or_create_balance(account_id)
 
     @classmethod
+    def is_tenant_owner(cls, account_id: str, tenant_id: str) -> bool:
+        """Return True when the account is the owner of the tenant.
+
+        Used by ``check_can_run`` and ``deduct_for_workflow_run`` to route
+        the owner down the single-wallet path (``TenantBalance.balance``
+        only) instead of the dual-deduct path. Allocation rules also key
+        off this — the owner's funds are workspace funds, so allocating
+        "to the owner" is a no-op that would break the invariant.
+        """
+        role = db.session.scalar(
+            select(TenantAccountJoin.role).where(
+                TenantAccountJoin.tenant_id == tenant_id,
+                TenantAccountJoin.account_id == account_id,
+            )
+        )
+        return role == TenantAccountRole.OWNER.value
+
+    @classmethod
     def check_balance_positive(cls, account_id: str) -> bool:
         """Return True if the user balance is positive.
 
@@ -92,20 +111,36 @@ class UserBillingService:
         run may proceed, otherwise one of:
 
         - ``"INSUFFICIENT_USER_BUDGET"`` — the member's personal balance is
-          not positive.
-        - ``"INSUFFICIENT_TENANT_BUDGET"`` — the workspace's allocated pool
-          (``TenantBalance.locked``) is exhausted; no member can run even if
-          their personal balance is still positive on paper.
+          not positive (member path only).
+        - ``"INSUFFICIENT_TENANT_BUDGET"`` — the workspace pool is
+          exhausted. For the owner this means ``TenantBalance.balance`` is
+          not positive; for members it means ``TenantBalance.locked`` (the
+          already-allocated pool) is drained.
 
-        Both checks are strict (> 0) because ``deduct_for_workflow_run`` is
-        allowed to push either wallet negative mid-run. Blocking here prevents
-        starting *new* runs once the pool is empty.
+        Owner path (single wallet): owners spend workspace funds directly
+        from ``TenantBalance.balance``. They don't hold a ``UserBalance``,
+        so the user-budget check is skipped.
+
+        Member path (dual wallet): member must have personal budget AND
+        the allocated pool (``locked``) must still be positive — a drained
+        pool blocks every member even if their personal balance looks
+        positive on paper (it would drive the invariant deeper into red).
+
+        All checks are strict (> 0) because ``deduct_for_workflow_run`` is
+        allowed to push wallets negative mid-run. Blocking here prevents
+        starting *new* runs once a pool is empty.
         """
+        tenant_balance = TenantBalanceService.get_or_create(tenant_id)
+
+        if cls.is_tenant_owner(account_id, tenant_id):
+            if tenant_balance.balance <= Decimal(0):
+                return False, "INSUFFICIENT_TENANT_BUDGET"
+            return True, None
+
         user_balance = cls.get_or_create_balance(account_id)
         if not user_balance.is_sufficient():
             return False, "INSUFFICIENT_USER_BUDGET"
 
-        tenant_balance = TenantBalanceService.get_or_create(tenant_id)
         if tenant_balance.locked <= Decimal(0):
             return False, "INSUFFICIENT_TENANT_BUDGET"
 
@@ -149,17 +184,26 @@ class UserBillingService:
         total_tokens: int,
         price_per_1k_tokens: Decimal,
     ) -> BillingRecord | None:
-        """Dual-deduct cost of a workflow run from both tenant and user wallets.
+        """Deduct cost of a workflow run from the caller's effective wallet.
 
-        Decrements ``TenantBalance.locked`` and ``UserBalance.balance`` by the
-        same amount in a single commit, and writes two ``BillingRecord`` rows
-        (``scope="user"`` and ``scope="tenant"``) for independent ledger views.
+        Two branches:
 
-        Returns the user-scope ``BillingRecord``, or ``None`` if ``total_tokens``
-        is zero or the computed amount rounds to zero.
+        - **Owner** (single-wallet): decrement ``TenantBalance.balance``.
+          Owners spend workspace funds directly; they don't hold a
+          ``UserBalance``. Only one ``BillingRecord`` is written
+          (``scope="tenant"``).
+        - **Member** (dual-wallet): decrement BOTH ``UserBalance.balance``
+          AND ``TenantBalance.locked`` by the same amount, atomically,
+          and write two ``BillingRecord`` rows (``scope="user"`` and
+          ``scope="tenant"``) for independent ledger views.
 
-        Both balances are permitted to go negative: this is a deliberate product
-        choice so that workflows already in flight are not blocked mid-run.
+        Returns the primary record (tenant-scope for owner, user-scope for
+        member), or ``None`` if ``total_tokens`` is zero or the computed
+        amount rounds to zero.
+
+        Balances are permitted to go negative: this is a deliberate
+        product choice so workflows already in flight are not killed
+        mid-run when a wallet just crosses zero.
         """
         if total_tokens <= 0:
             return None
@@ -170,6 +214,46 @@ class UserBillingService:
         if amount <= Decimal(0):
             return None
 
+        description = f"Workflow run {workflow_run_id}: {total_tokens} tokens"
+
+        if cls.is_tenant_owner(account_id, tenant_id):
+            # Owner path: single-wallet deduction against TenantBalance.balance.
+            # No UserBalance is touched — the owner does not hold one.
+            tenant_balance = TenantBalanceService.get_or_create(tenant_id, for_update=True)
+            tenant_balance.balance -= amount
+            db.session.add(tenant_balance)
+
+            if tenant_balance.balance < Decimal(0):
+                logger.warning(
+                    "Tenant balance went negative after owner workflow deduction "
+                    "tenant=%s balance=%s",
+                    tenant_id,
+                    str(tenant_balance.balance),
+                )
+
+            tenant_record = BillingRecord(
+                account_id=account_id,
+                tenant_id=tenant_id,
+                workflow_run_id=workflow_run_id,
+                amount=amount,
+                record_type=BillingRecordType.DEDUCTION.value,
+                scope="tenant",
+                description=description,
+            )
+            db.session.add(tenant_record)
+            db.session.commit()
+
+            logger.info(
+                "Billed owner account=%s tenant=%s workflow=%s tokens=%d amount=%s",
+                account_id,
+                tenant_id,
+                workflow_run_id,
+                total_tokens,
+                str(amount),
+            )
+            return tenant_record
+
+        # Member path: dual-wallet deduction.
         # Lock both rows before mutating — concurrent workflow completions
         # for the same user/tenant would otherwise race each other's
         # read-modify-write and produce inconsistent locked totals.
@@ -198,7 +282,6 @@ class UserBillingService:
                 str(tenant_balance.locked),
             )
 
-        description = f"Workflow run {workflow_run_id}: {total_tokens} tokens"
         user_record = BillingRecord(
             account_id=account_id,
             tenant_id=tenant_id,

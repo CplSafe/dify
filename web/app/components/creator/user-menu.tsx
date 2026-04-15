@@ -1,8 +1,11 @@
 'use client'
+/* eslint-disable tailwindcss/enforce-consistent-class-order -- TODO(wallet): preexisting issues tracked for a follow-up cleanup */
 
 import type { CreatorSettingsTab } from './settings/creator-settings-modal'
 import {
+  RiAddCircleLine,
   RiDashboardLine,
+  RiFileList3Line,
   RiLoader4Line,
   RiLogoutBoxRLine,
   RiTeamLine,
@@ -24,6 +27,7 @@ import { get } from '@/service/base'
 import { useLogout } from '@/service/use-common'
 import { cn } from '@/utils/classnames'
 import CreatorSettingsModal from './settings/creator-settings-modal'
+import TopupModal from './wallet/topup-modal'
 
 type Balance = {
   balance: string
@@ -31,8 +35,15 @@ type Balance = {
   is_sufficient: boolean
 }
 
-export default function CreatorUserMenu() {
-  const { userProfile, isSystemAdmin } = useAppContext()
+type CreatorUserMenuProps = {
+  collapsed?: boolean
+}
+
+export default function CreatorUserMenu({
+  collapsed = false,
+}: CreatorUserMenuProps) {
+  const { userProfile, isSystemAdmin, isCurrentWorkspaceOwner }
+    = useAppContext()
   const router = useRouter()
   const { mutateAsync: logout } = useLogout()
 
@@ -41,6 +52,7 @@ export default function CreatorUserMenu() {
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<CreatorSettingsTab>('account')
+  const [topupOpen, setTopupOpen] = useState(false)
 
   const loadBalance = useCallback(() => {
     // eslint-disable-next-line react/set-state-in-effect
@@ -91,41 +103,50 @@ export default function CreatorUserMenu() {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger className="group flex w-full items-center gap-3.5 rounded-xl py-3 pr-3 pl-4 text-left transition-all hover:bg-[#F5F5F7] active:bg-[#EDEDF0]">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-700 shadow-sm ring-2 ring-white transition-transform group-hover:scale-[1.02]">
+        <DropdownMenuTrigger
+          aria-label={collapsed ? userProfile?.name || '用户菜单' : undefined}
+          title={collapsed ? userProfile?.name || '用户' : undefined}
+          className={cn(
+            'group flex w-full cursor-default items-center rounded-xl text-left transition-colors hover:bg-black/[0.04] active:bg-black/[0.06]',
+            collapsed ? 'justify-center p-2' : 'gap-3 py-2.5 pr-3 pl-2.5',
+          )}
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#4D80FF] to-[#B98DFF] text-sm font-bold text-white">
             {avatarLetter}
           </div>
-          <div className="min-w-0 flex-1 text-left">
-            <div className="truncate text-sm font-semibold text-text-primary">
-              {userProfile?.name || '用户'}
-            </div>
-            <div className="mt-0.5 flex items-center gap-1.5">
-              {balanceLoading
-                ? (
-                    <RiLoader4Line className="h-3 w-3 animate-spin text-text-quaternary" />
-                  )
-                : balance
+          {!collapsed && (
+            <div className="min-w-0 flex-1 text-left">
+              <div className="truncate text-sm font-semibold text-text-primary">
+                {userProfile?.name || '用户'}
+              </div>
+              <div className="mt-0.5 flex items-center gap-1.5">
+                {balanceLoading
                   ? (
-                      <span
-                        className={cn(
-                          'bg-opacity-10 rounded-md px-1.5 py-0.5 text-xs font-medium',
-                          balance.is_sufficient
-                            ? 'bg-state-success text-state-success-text'
-                            : 'bg-state-destructive text-state-destructive-text',
-                        )}
-                      >
-                        {Number(balance.balance).toFixed(2)}
-                        {' '}
-                        {balance.currency}
-                      </span>
+                      <RiLoader4Line className="h-3 w-3 animate-spin text-text-quaternary" />
                     )
-                  : (
-                      <span className="truncate text-xs text-text-quaternary opacity-80">
-                        {userProfile?.email || ''}
-                      </span>
-                    )}
+                  : balance
+                    ? (
+                        <span
+                          className={cn(
+                            'rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums',
+                            balance.is_sufficient
+                              ? 'bg-primary-50 text-primary-700'
+                              : 'bg-state-destructive-hover text-state-destructive-text',
+                          )}
+                        >
+                          {Number(balance.balance).toFixed(2)}
+                          {' '}
+                          {balance.currency}
+                        </span>
+                      )
+                    : (
+                        <span className="truncate text-xs text-text-tertiary">
+                          {userProfile?.email || ''}
+                        </span>
+                      )}
+              </div>
             </div>
-          </div>
+          )}
         </DropdownMenuTrigger>
 
         <DropdownMenuContent
@@ -135,40 +156,66 @@ export default function CreatorUserMenu() {
         >
           {/* User info header */}
           <div className="px-3 py-3">
-            <div className="text-sm font-medium text-text-primary">
+            <div className="truncate text-sm font-medium text-text-primary">
               {userProfile?.name}
             </div>
-            <div className="text-xs text-text-quaternary">
+            <div className="truncate text-xs text-text-tertiary">
               {userProfile?.email}
             </div>
-            {balance && (
-              <div
-                className={cn(
-                  'mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
-                  balance.is_sufficient
-                    ? 'text-state-success-text bg-state-success-hover'
-                    : 'text-state-destructive-text bg-state-destructive-hover',
-                )}
-              >
-                <RiWalletLine className="h-3 w-3" />
-                {Number(balance.balance).toFixed(2)}
-                {' '}
-                {balance.currency}
-              </div>
-            )}
           </div>
 
           <DropdownMenuSeparator className="my-0! bg-divider-subtle" />
+
+          {isCurrentWorkspaceOwner && (
+            <>
+              <DropdownMenuGroup className="py-1">
+                <DropdownMenuItem
+                  onClick={() => setTopupOpen(true)}
+                  className={cn(
+                    balance
+                    && !balance.is_sufficient
+                    && 'bg-state-warning-hover/40',
+                  )}
+                >
+                  <RiAddCircleLine className="mr-2 h-4 w-4 text-primary-600" />
+                  <span className="font-medium text-text-primary">充值</span>
+                  {balance && (
+                    <span
+                      className={cn(
+                        'ml-auto text-xs tabular-nums',
+                        balance.is_sufficient
+                          ? 'text-text-tertiary'
+                          : 'font-medium text-state-destructive-text',
+                      )}
+                    >
+                      {Number(balance.balance).toFixed(2)}
+                    </span>
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => router.push('/creator/wallet/orders')}
+                >
+                  <RiFileList3Line className="mr-2 h-4 w-4 text-text-tertiary" />
+                  <span className="font-medium text-text-primary">
+                    充值订单
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator className="my-0! bg-divider-subtle" />
+            </>
+          )}
 
           <DropdownMenuGroup className="py-1">
             <DropdownMenuItem onClick={() => openSettings('account')}>
               <RiUserLine className="mr-2 h-4 w-4 text-text-tertiary" />
               账户设置
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => openSettings('members')}>
-              <RiTeamLine className="mr-2 h-4 w-4 text-text-tertiary" />
-              成员管理
-            </DropdownMenuItem>
+            {isCurrentWorkspaceOwner && (
+              <DropdownMenuItem onClick={() => openSettings('members')}>
+                <RiTeamLine className="mr-2 h-4 w-4 text-text-tertiary" />
+                成员管理
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={() => openSettings('balance')}>
               <RiWalletLine className="mr-2 h-4 w-4 text-text-tertiary" />
               余额账单
@@ -180,6 +227,12 @@ export default function CreatorUserMenu() {
           {isSystemAdmin && (
             <>
               <DropdownMenuGroup className="py-1">
+                <DropdownMenuItem
+                  onClick={() => router.push('/creator/admin/topup-orders')}
+                >
+                  <RiFileList3Line className="mr-2 h-4 w-4 text-text-tertiary" />
+                  支付订单（超管）
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/apps')}>
                   <RiDashboardLine className="mr-2 h-4 w-4 text-text-tertiary" />
                   返回管理平台
@@ -205,6 +258,12 @@ export default function CreatorUserMenu() {
           // Refresh balance after closing (in case topup happened)
           loadBalance()
         }}
+      />
+
+      <TopupModal
+        open={topupOpen}
+        onOpenChange={setTopupOpen}
+        onPaid={loadBalance}
       />
     </>
   )

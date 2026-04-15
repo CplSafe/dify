@@ -74,6 +74,7 @@ const MENU_ITEMS: MenuItem[] = [
     iconClass: 'i-ri-money-cny-circle-line',
     activeIconClass: 'i-ri-money-cny-circle-fill',
     ownerOnly: true,
+    hidden: true,
   },
 ]
 

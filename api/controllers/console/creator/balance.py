@@ -63,7 +63,14 @@ class UserBalanceApi(Resource):
 
 @console_ns.route("/creator/admin/balances")
 class AdminBalancesApi(Resource):
-    """List all user balances (super admin only)."""
+    """List every account's authoritative wallet balance (super admin only).
+
+    Enumerates accounts (not wallet rows) so newly-registered owners — who
+    don't yet have a ``UserBalance`` row because owners draw from
+    ``TenantBalance`` instead — remain visible. Previously the admin view
+    silently dropped these users until their first tenant-wallet write
+    materialised the row.
+    """
 
     @setup_required
     @login_required
@@ -75,28 +82,31 @@ class AdminBalancesApi(Resource):
         limit = min(int(request.args.get("limit", 50)), 100)
         offset = int(request.args.get("offset", 0))
 
-        balances, total = UserBillingService.get_all_balances(limit=limit, offset=offset)
-
-        # Enrich with account names
-        from sqlalchemy import select
-
-        from models.account import Account
-        from models.engine import db
-
-        result = []
-        for b in balances:
-            account = db.session.scalar(select(Account).where(Account.id == b.account_id))
-            result.append({
-                "account_id": b.account_id,
-                "account_name": account.name if account else "",
-                "account_email": account.email if account else "",
-                "balance": str(b.balance),
-                "currency": b.currency,
-                "is_sufficient": b.is_sufficient(),
-                "updated_at": b.updated_at.isoformat(),
-            })
-
-        return {"data": result, "total": total, "limit": limit, "offset": offset}
+        rows, total = UserBillingService.list_admin_account_balances(
+            limit=limit, offset=offset
+        )
+        return {
+            "data": [
+                {
+                    "account_id": r.account_id,
+                    "account_name": r.account_name,
+                    "account_email": r.account_email,
+                    "role": r.role,
+                    "tenant_id": r.tenant_id,
+                    "balance": str(r.balance),
+                    "currency": r.currency,
+                    "is_sufficient": r.is_sufficient,
+                    # Null updated_at means the wallet row hasn't been created
+                    # yet (fresh owner pre-first-top-up). Empty string rather
+                    # than None keeps the response shape stable for the UI.
+                    "updated_at": r.updated_at.isoformat() if r.updated_at else "",
+                }
+                for r in rows
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
 
 
 @console_ns.route("/creator/admin/topup")

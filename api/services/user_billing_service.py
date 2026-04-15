@@ -11,15 +11,42 @@ Rules:
 
 import logging
 import secrets
+from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from models import TenantAccountJoin, TenantAccountRole
-from models.creator import BillingRecord, BillingRecordType, UserBalance
+from models import Account, TenantAccountJoin, TenantAccountRole
+from models.creator import BillingRecord, BillingRecordType, TenantBalance, UserBalance
 from models.engine import db
 from services.wallet.tenant_balance_service import TenantBalanceService
+
+
+@dataclass(frozen=True)
+class AdminBalanceRow:
+    """Denormalised super-admin balance row.
+
+    One row per account (not per wallet), so newly-created owners — who
+    have an ``accounts`` row and a ``TenantAccountJoin`` but no
+    ``UserBalance`` yet — still show up. ``role`` reflects the account's
+    role in its *current* tenant; owners read ``TenantBalance.balance``,
+    members read ``UserBalance.balance``. When the authoritative wallet
+    row is missing we report 0 so operators see the account instead of
+    having it silently disappear.
+    """
+
+    account_id: str
+    account_name: str
+    account_email: str
+    role: str | None  # "owner" | "admin" | "normal" | None (no tenant yet)
+    tenant_id: str | None
+    balance: Decimal
+    currency: str
+    is_sufficient: bool
+    updated_at: datetime | None
+
 
 logger = logging.getLogger(__name__)
 
@@ -94,11 +121,16 @@ class UserBillingService:
 
     @classmethod
     def check_balance_positive(cls, account_id: str) -> bool:
-        """Return True if the user balance is positive.
+        """Return True if the user's personal ``UserBalance`` is positive.
 
-        Backward-compatible gate used by callers that only know about per-user
-        balance. Prefer ``check_can_run`` when the tenant is available, as it
-        also guards against a drained workspace pool.
+        WARNING: user-balance-only. Does NOT consider the owner's
+        ``TenantBalance.balance`` (single-wallet path) or the workspace
+        pool (``TenantBalance.locked``). Using this on the marketplace path
+        falsely blocks owners who hold all their funds on the tenant wallet.
+
+        Prefer ``check_can_run(account_id, tenant_id)`` anywhere the tenant
+        is known — it handles owner vs member correctly and returns the
+        differentiated error code callers need for user-facing messages.
         """
         balance = cls.get_or_create_balance(account_id)
         return balance.is_sufficient()
@@ -384,18 +416,100 @@ class UserBillingService:
         return records, total
 
     @classmethod
-    def get_all_balances(cls, *, limit: int = 50, offset: int = 0) -> tuple[list[UserBalance], int]:
-        """Return all user balances (for super admin)."""
-        base_query = select(UserBalance)
+    def list_admin_account_balances(
+        cls, *, limit: int = 50, offset: int = 0
+    ) -> tuple[list[AdminBalanceRow], int]:
+        """Enumerate accounts with their authoritative balance for the super admin view.
+
+        Driven by ``accounts`` (one row per user), LEFT JOIN the current
+        tenant/role + both wallet tables. The old ``SELECT * FROM user_balances``
+        implementation missed every freshly-registered owner because
+        ``UserBalance`` is only created for members — owners live on
+        ``TenantBalance``. Keying off ``accounts`` makes the view
+        account-complete instead of wallet-complete.
+
+        Ordering by ``Account.created_at DESC`` surfaces newly-registered
+        users first, which matches the operator's mental model when
+        investigating a just-signed-up report.
+        """
+        # Total count is "every account", paginated below. We deliberately do
+        # NOT filter out BANNED/CLOSED accounts here — operators need to see
+        # them to debug billing disputes. UI can filter client-side if desired.
         total = db.session.scalar(
-            select(db.func.count()).select_from(base_query.subquery())
+            select(func.count()).select_from(Account)
         ) or 0
-        balances = list(
-            db.session.scalars(
-                base_query.order_by(UserBalance.created_at.desc()).limit(limit).offset(offset)
-            ).all()
+
+        # Pick the account's "current" tenant/role (one current row per
+        # account by convention) so the balance shown matches which wallet
+        # they actually draw from. Accounts with no current tenant yet
+        # (mid-registration, edge state) fall through to role=NULL.
+        current_join = (
+            select(
+                TenantAccountJoin.account_id,
+                TenantAccountJoin.tenant_id,
+                TenantAccountJoin.role,
+            )
+            .where(TenantAccountJoin.current.is_(True))
+            .subquery()
         )
-        return balances, total
+
+        # LEFT JOIN both wallet tables so a missing row renders as 0 instead
+        # of dropping the account. The CASE in the SELECT picks the
+        # authoritative wallet based on role.
+        rows = db.session.execute(
+            select(
+                Account.id,
+                Account.name,
+                Account.email,
+                current_join.c.tenant_id,
+                current_join.c.role,
+                UserBalance.balance,
+                UserBalance.currency,
+                UserBalance.updated_at,
+                TenantBalance.balance,
+                TenantBalance.currency,
+                TenantBalance.updated_at,
+            )
+            .select_from(Account)
+            .join(current_join, current_join.c.account_id == Account.id, isouter=True)
+            .join(UserBalance, UserBalance.account_id == Account.id, isouter=True)
+            .join(TenantBalance, TenantBalance.tenant_id == current_join.c.tenant_id, isouter=True)
+            .order_by(Account.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        ).all()
+
+        result: list[AdminBalanceRow] = []
+        for (
+            acc_id, acc_name, acc_email,
+            tenant_id, role,
+            ub_balance, ub_currency, ub_updated,
+            tb_balance, tb_currency, tb_updated,
+        ) in rows:
+            is_owner = role == TenantAccountRole.OWNER.value
+            if is_owner:
+                balance = tb_balance if tb_balance is not None else Decimal(0)
+                currency = tb_currency or "CNY"
+                updated_at = tb_updated
+            else:
+                balance = ub_balance if ub_balance is not None else Decimal(0)
+                currency = ub_currency or "CNY"
+                updated_at = ub_updated
+
+            result.append(
+                AdminBalanceRow(
+                    account_id=acc_id,
+                    account_name=acc_name or "",
+                    account_email=acc_email or "",
+                    role=role,
+                    tenant_id=tenant_id,
+                    balance=balance,
+                    currency=currency,
+                    is_sufficient=balance > Decimal(0),
+                    updated_at=updated_at,
+                )
+            )
+        return result, total
 
 
 def generate_api_key() -> str:

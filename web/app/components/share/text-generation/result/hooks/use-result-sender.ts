@@ -11,10 +11,16 @@ import {
   sendWorkflowMessage,
 } from '@/service/share'
 import { sleep } from '@/utils'
-import { buildResultRequestData, validateResultRequest } from '../result-request'
+import {
+  buildResultRequestData,
+  validateResultRequest,
+} from '../result-request'
 import { createWorkflowStreamHandlers } from '../workflow-stream-handlers'
 
-type Notify = (payload: { type: 'error' | 'info' | 'warning', message: string }) => void
+type Notify = (payload: {
+  type: 'error' | 'info' | 'warning'
+  message: string
+}) => void
 type Translate = (key: string, options?: Record<string, unknown>) => string
 
 type UseResultSenderOptions = {
@@ -28,7 +34,15 @@ type UseResultSenderOptions = {
   isPC: boolean
   isWorkflow: boolean
   notify: Notify
-  onCompleted: (completionRes: string, taskId?: number, success?: boolean) => void
+  onCompleted: (
+    completionRes: string,
+    taskId?: number,
+    success?: boolean,
+  ) => void
+  onMessageStart?: (params: {
+    installedAppId: string
+    conversationId: string | null
+  }) => void
   onResultCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
   onRunStart: () => void
   onShowRes: () => void
@@ -56,6 +70,7 @@ export const useResultSender = ({
   isWorkflow,
   notify,
   onCompleted,
+  onMessageStart,
   onResultCompleted,
   onRunStart,
   onShowRes,
@@ -69,7 +84,10 @@ export const useResultSender = ({
 
   const handleSend = useCallback(async () => {
     if (runState.isResponding) {
-      notify({ type: 'info', message: t('errorMessage.waitForResponse', { ns: 'appDebug' }) })
+      notify({
+        type: 'info',
+        message: t('errorMessage.waitForResponse', { ns: 'appDebug' }),
+      })
       return false
     }
 
@@ -94,6 +112,11 @@ export const useResultSender = ({
 
     runState.prepareForNewRun()
 
+    onMessageStart?.({
+      installedAppId: appId || '',
+      conversationId: null,
+    })
+
     if (!isPC) {
       onShowRes()
       onRunStart()
@@ -106,22 +129,33 @@ export const useResultSender = ({
     let completionChunks: string[] = []
     let tempMessageId = ''
 
+    const notifyTimeoutWarning = () => {
+      notify({
+        type: 'warning',
+        message: t('warningMessage.timeoutExceeded', { ns: 'appDebug' }),
+      })
+    }
+
+    const finalizeRun = (success: boolean) => {
+      runState.setRespondingFalse()
+      runState.resetRunState()
+      const completionRes = runState.getCompletionRes()
+      onCompleted(completionRes, taskId, success)
+      void onResultCompleted?.({
+        content: completionRes,
+        success,
+        inputs,
+        messageId: tempMessageId || undefined,
+        workflowRunId: isWorkflow ? tempMessageId || undefined : undefined,
+      })
+    }
+
     void (async () => {
       await sleep(TEXT_GENERATION_TIMEOUT_MS)
-      if (!isEnd) {
-        runState.setRespondingFalse()
-        const completionRes = runState.getCompletionRes()
-        onCompleted(completionRes, taskId, false)
-        void onResultCompleted?.({
-          content: completionRes,
-          success: false,
-          inputs,
-          messageId: tempMessageId || undefined,
-          workflowRunId: isWorkflow ? tempMessageId || undefined : undefined,
-        })
-        runState.resetRunState()
-        isTimeout = true
-      }
+      if (isEnd)
+        return
+      finalizeRun(false)
+      isTimeout = true
     })()
 
     if (isWorkflow) {
@@ -146,70 +180,57 @@ export const useResultSender = ({
         taskId,
       })
 
-      void sendWorkflowMessage(data, otherOptions, appSourceType, appId).catch((error) => {
-        runState.setRespondingFalse()
-        runState.resetRunState()
-        logRequestError(notify, error)
-      })
+      void sendWorkflowMessage(data, otherOptions, appSourceType, appId).catch(
+        (error) => {
+          runState.setRespondingFalse()
+          runState.resetRunState()
+          logRequestError(notify, error)
+        },
+      )
       return true
     }
 
-    void sendCompletionMessage(data, {
-      onData: (chunk, _isFirstMessage, { messageId, taskId: nextTaskId }) => {
-        tempMessageId = messageId
-        if (nextTaskId && nextTaskId.trim() !== '')
-          runState.setCurrentTaskId(prev => prev ?? nextTaskId)
+    void sendCompletionMessage(
+      data,
+      {
+        onData: (chunk, _isFirstMessage, { messageId, taskId: nextTaskId }) => {
+          tempMessageId = messageId
+          if (nextTaskId && nextTaskId.trim() !== '')
+            runState.setCurrentTaskId(prev => prev ?? nextTaskId)
 
-        completionChunks.push(chunk)
-        runState.setCompletionRes(completionChunks.join(''))
-      },
-      onCompleted: () => {
-        if (isTimeout) {
-          notify({ type: 'warning', message: t('warningMessage.timeoutExceeded', { ns: 'appDebug' }) })
-          return
-        }
+          completionChunks.push(chunk)
+          runState.setCompletionRes(completionChunks.join(''))
+        },
+        onCompleted: () => {
+          if (isTimeout) {
+            notifyTimeoutWarning()
+            return
+          }
 
-        runState.setRespondingFalse()
-        runState.resetRunState()
-        runState.setMessageId(tempMessageId)
-        const completionRes = runState.getCompletionRes()
-        onCompleted(completionRes, taskId, true)
-        void onResultCompleted?.({
-          content: completionRes,
-          success: true,
-          inputs,
-          messageId: tempMessageId || undefined,
-          workflowRunId: isWorkflow ? tempMessageId || undefined : undefined,
-        })
-        isEnd = true
-      },
-      onMessageReplace: (messageReplace) => {
-        completionChunks = [messageReplace.answer]
-        runState.setCompletionRes(completionChunks.join(''))
-      },
-      onError: () => {
-        if (isTimeout) {
-          notify({ type: 'warning', message: t('warningMessage.timeoutExceeded', { ns: 'appDebug' }) })
-          return
-        }
+          runState.setMessageId(tempMessageId)
+          finalizeRun(true)
+          isEnd = true
+        },
+        onMessageReplace: (messageReplace) => {
+          completionChunks = [messageReplace.answer]
+          runState.setCompletionRes(completionChunks.join(''))
+        },
+        onError: () => {
+          if (isTimeout) {
+            notifyTimeoutWarning()
+            return
+          }
 
-        runState.setRespondingFalse()
-        runState.resetRunState()
-        const completionRes = runState.getCompletionRes()
-        onCompleted(completionRes, taskId, false)
-        void onResultCompleted?.({
-          content: completionRes,
-          success: false,
-          inputs,
-          messageId: tempMessageId || undefined,
-          workflowRunId: isWorkflow ? tempMessageId || undefined : undefined,
-        })
-        isEnd = true
+          finalizeRun(false)
+          isEnd = true
+        },
+        getAbortController: (abortController) => {
+          runState.abortControllerRef.current = abortController
+        },
       },
-      getAbortController: (abortController) => {
-        runState.abortControllerRef.current = abortController
-      },
-    }, appSourceType, appId)
+      appSourceType,
+      appId,
+    )
 
     return true
   }, [
@@ -222,6 +243,7 @@ export const useResultSender = ({
     isWorkflow,
     notify,
     onCompleted,
+    onMessageStart,
     onResultCompleted,
     onRunStart,
     onShowRes,

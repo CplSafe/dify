@@ -23,7 +23,11 @@ type TextGenerationResultPanelProps = {
   controlSend: number
   controlStopResponding: number
   exportRes: Record<string, string>[]
-  handleCompleted: (completionRes: string, taskId?: number, isSuccess?: boolean) => void
+  handleCompleted: (
+    completionRes: string,
+    taskId?: number,
+    isSuccess?: boolean,
+  ) => void
   handleRetryAllFailedTask: () => void
   handleSaveMessage: (messageId: string) => Promise<void>
   inputs: Record<string, InputValueTypes>
@@ -34,6 +38,10 @@ type TextGenerationResultPanelProps = {
   moreLikeThisEnabled: boolean
   noPendingTask: boolean
   onHideResultPanel: () => void
+  onMessageStart?: (params: {
+    installedAppId: string
+    conversationId: string | null
+  }) => void
   onResultCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
   onRunControlChange: (control: TextGenerationRunControl | null) => void
   onRunStart: () => void
@@ -68,6 +76,7 @@ const TextGenerationResultPanel: FC<TextGenerationResultPanelProps> = ({
   moreLikeThisEnabled,
   noPendingTask,
   onHideResultPanel,
+  onMessageStart,
   onResultCompleted,
   onRunControlChange,
   onRunStart,
@@ -101,6 +110,7 @@ const TextGenerationResultPanel: FC<TextGenerationResultPanelProps> = ({
       handleSaveMessage={handleSaveMessage}
       taskId={task?.id}
       onCompleted={handleCompleted}
+      onMessageStart={!isCallBatchAPI ? onMessageStart : undefined}
       onResultCompleted={onResultCompleted}
       visionConfig={visionConfig}
       completionFiles={completionFiles}
@@ -134,8 +144,7 @@ const TextGenerationResultPanel: FC<TextGenerationResultPanelProps> = ({
           onClick={() => {
             if (isShowResultPanel)
               onHideResultPanel()
-            else
-              onShowResultPanel()
+            else onShowResultPanel()
           }}
         >
           <div className="h-1 w-8 cursor-grab rounded-sm bg-divider-solid" />
@@ -144,7 +153,8 @@ const TextGenerationResultPanel: FC<TextGenerationResultPanelProps> = ({
       <div
         className={cn(
           'relative flex h-full flex-col',
-          !isPC && 'h-[calc(100vh-36px)] rounded-t-2xl shadow-lg backdrop-blur-xs',
+          !isPC
+          && 'h-[calc(100vh-36px)] rounded-t-2xl shadow-lg backdrop-blur-xs',
           !isPC
             ? isShowResultPanel
               ? 'bg-background-default-burn'
@@ -159,12 +169,14 @@ const TextGenerationResultPanel: FC<TextGenerationResultPanelProps> = ({
               !isPC && 'px-4 pb-1 pt-3',
             )}
           >
-            <div className="text-text-primary system-md-semibold-uppercase">{t('generation.executions', { ns: 'share', num: allTaskList.length })}</div>
+            <div className="text-text-primary system-md-semibold-uppercase">
+              {t('generation.executions', {
+                ns: 'share',
+                num: allTaskList.length,
+              })}
+            </div>
             {allSuccessTaskList.length > 0 && (
-              <ResDownload
-                isMobile={!isPC}
-                values={exportRes}
-              />
+              <ResDownload isMobile={!isPC} values={exportRes} />
             )}
           </div>
         )}
@@ -176,7 +188,9 @@ const TextGenerationResultPanel: FC<TextGenerationResultPanelProps> = ({
             !isPC && 'p-0 pb-2',
           )}
         >
-          {isCallBatchAPI ? showTaskList.map(task => renderResult(task)) : renderResult()}
+          {isCallBatchAPI
+            ? showTaskList.map(task => renderResult(task))
+            : renderResult()}
           {!noPendingTask && (
             <div className="mt-4">
               <Loading type="area" />
@@ -185,10 +199,23 @@ const TextGenerationResultPanel: FC<TextGenerationResultPanelProps> = ({
         </div>
         {isCallBatchAPI && allFailedTaskList.length > 0 && (
           <div className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-components-panel-border bg-components-panel-bg-blur p-3 shadow-lg backdrop-blur-xs">
-            <span aria-hidden className="i-ri-error-warning-fill h-4 w-4 text-text-destructive" />
-            <div className="text-text-secondary system-sm-medium">{t('generation.batchFailed.info', { ns: 'share', num: allFailedTaskList.length })}</div>
+            <span
+              aria-hidden
+              className="i-ri-error-warning-fill h-4 w-4 text-text-destructive"
+            />
+            <div className="text-text-secondary system-sm-medium">
+              {t('generation.batchFailed.info', {
+                ns: 'share',
+                num: allFailedTaskList.length,
+              })}
+            </div>
             <div className="h-3.5 w-px bg-divider-regular"></div>
-            <div onClick={handleRetryAllFailedTask} className="cursor-pointer text-text-accent system-sm-semibold-uppercase">{t('generation.batchFailed.retry', { ns: 'share' })}</div>
+            <div
+              onClick={handleRetryAllFailedTask}
+              className="cursor-pointer text-text-accent system-sm-semibold-uppercase"
+            >
+              {t('generation.batchFailed.retry', { ns: 'share' })}
+            </div>
           </div>
         )}
       </div>

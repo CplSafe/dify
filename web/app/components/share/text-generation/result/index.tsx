@@ -34,22 +34,68 @@ type IResultProps = {
   onShowRes: () => void
   handleSaveMessage: (messageId: string) => void
   taskId?: number
-  onCompleted: (completionRes: string, taskId?: number, success?: boolean) => void
+  onCompleted: (
+    completionRes: string,
+    taskId?: number,
+    success?: boolean,
+  ) => void
+  onMessageStart?: (params: {
+    installedAppId: string
+    conversationId: string | null
+  }) => void
   onResultCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
   visionConfig: VisionSettings
   completionFiles: VisionFile[]
   siteInfo: SiteInfo | null
   onRunStart: () => void
-  onRunControlChange?: (control: {
-    onStop: () => Promise<void> | void
-    isStopping: boolean
-  } | null) => void
+  onRunControlChange?: (
+    control: {
+      onStop: () => Promise<void> | void
+      isStopping: boolean
+    } | null,
+  ) => void
   hideInlineStopButton?: boolean
 }
-const Result: FC<IResultProps> = ({ isWorkflow, isCallBatchAPI, isPC, isMobile, appSourceType, appId, isError, isShowTextToSpeech, promptConfig, moreLikeThisEnabled, inputs, controlSend, controlRetry, controlStopResponding, onShowRes, handleSaveMessage, taskId, onCompleted, onResultCompleted, visionConfig, completionFiles, siteInfo, onRunStart, onRunControlChange, hideInlineStopButton = false }) => {
-  const notify = useCallback(({ type, message }: { type: 'error' | 'info' | 'success' | 'warning', message: string }) => {
-    toast(message, { type })
-  }, [])
+const Result: FC<IResultProps> = ({
+  isWorkflow,
+  isCallBatchAPI,
+  isPC,
+  isMobile,
+  appSourceType,
+  appId,
+  isError,
+  isShowTextToSpeech,
+  promptConfig,
+  moreLikeThisEnabled,
+  inputs,
+  controlSend,
+  controlRetry,
+  controlStopResponding,
+  onShowRes,
+  handleSaveMessage,
+  taskId,
+  onCompleted,
+  onMessageStart,
+  onResultCompleted,
+  visionConfig,
+  completionFiles,
+  siteInfo,
+  onRunStart,
+  onRunControlChange,
+  hideInlineStopButton = false,
+}) => {
+  const notify = useCallback(
+    ({
+      type,
+      message,
+    }: {
+      type: 'error' | 'info' | 'success' | 'warning'
+      message: string
+    }) => {
+      toast(message, { type })
+    },
+    [],
+  )
   const runState = useResultRunState({
     appId,
     appSourceType,
@@ -70,6 +116,7 @@ const Result: FC<IResultProps> = ({ isWorkflow, isCallBatchAPI, isPC, isMobile, 
     isWorkflow,
     notify,
     onCompleted,
+    onMessageStart,
     onResultCompleted,
     onRunStart,
     onShowRes,
@@ -82,13 +129,33 @@ const Result: FC<IResultProps> = ({ isWorkflow, isCallBatchAPI, isPC, isMobile, 
   const isNoData = !runState.completionRes
   const renderTextGenerationRes = () => (
     <>
-      {!hideInlineStopButton && runState.isResponding && runState.currentTaskId && (
-        <div className={`mb-3 flex ${isPC ? 'justify-end' : 'justify-center'}`}>
-          <Button variant="secondary" disabled={runState.isStopping} onClick={runState.handleStop}>
+      {!hideInlineStopButton
+        && runState.isResponding
+        && runState.currentTaskId && (
+        <div
+          className={`mb-3 flex ${isPC ? 'justify-end' : 'justify-center'}`}
+        >
+          <Button
+            variant="secondary"
+            disabled={runState.isStopping}
+            onClick={runState.handleStop}
+          >
             {runState.isStopping
-              ? <span aria-hidden className="i-ri-loader-2-line mr-[5px] h-3.5 w-3.5 animate-spin" />
-              : <span aria-hidden className="i-ri-stop-circle-fill mr-[5px] h-3.5 w-3.5" />}
-            <span className="text-xs font-normal">{t('operation.stopResponding', { ns: 'appDebug' })}</span>
+              ? (
+                  <span
+                    aria-hidden
+                    className="i-ri-loader-2-line mr-[5px] h-3.5 w-3.5 animate-spin"
+                  />
+                )
+              : (
+                  <span
+                    aria-hidden
+                    className="i-ri-stop-circle-fill mr-[5px] h-3.5 w-3.5"
+                  />
+                )}
+            <span className="text-xs font-normal">
+              {t('operation.stopResponding', { ns: 'appDebug' })}
+            </span>
           </Button>
         </div>
       )}
@@ -109,7 +176,13 @@ const Result: FC<IResultProps> = ({ isWorkflow, isCallBatchAPI, isPC, isMobile, 
         installedAppId={appId}
         // isLoading={isCallBatchAPI ? (!completionRes && isResponding) : false}
         isLoading={false}
-        taskId={isCallBatchAPI ? ((taskId as number) < 10 ? `0${taskId}` : `${taskId}`) : undefined}
+        taskId={
+          isCallBatchAPI
+            ? (taskId as number) < 10
+                ? `0${taskId}`
+                : `${taskId}`
+            : undefined
+        }
         controlClearMoreLikeThis={runState.controlClearMoreLikeThis}
         isShowTextToSpeech={isShowTextToSpeech}
         hideProcessDetail
@@ -119,28 +192,32 @@ const Result: FC<IResultProps> = ({ isWorkflow, isCallBatchAPI, isPC, isMobile, 
   )
   return (
     <>
-      {!isCallBatchAPI && !isWorkflow && ((runState.isResponding && !runState.completionRes)
-        ? (
-            <div className="flex h-full w-full items-center justify-center">
-              <Loading type="area" />
-            </div>
-          )
-        : (
-            <>
-              {(isNoData)
-                ? <NoData />
-                : renderTextGenerationRes()}
-            </>
-          ))}
-      {!isCallBatchAPI && isWorkflow && ((runState.isResponding && !runState.workflowProcessData)
-        ? (
-            <div className="flex h-full w-full items-center justify-center">
-              <Loading type="area" />
-            </div>
-          )
-        : !runState.workflowProcessData
-            ? <NoData />
-            : renderTextGenerationRes())}
+      {!isCallBatchAPI
+        && !isWorkflow
+        && (runState.isResponding && !runState.completionRes
+          ? (
+              <div className="flex h-full w-full items-center justify-center">
+                <Loading type="area" />
+              </div>
+            )
+          : (
+              <>{isNoData ? <NoData /> : renderTextGenerationRes()}</>
+            ))}
+      {!isCallBatchAPI
+        && isWorkflow
+        && (runState.isResponding && !runState.workflowProcessData
+          ? (
+              <div className="flex h-full w-full items-center justify-center">
+                <Loading type="area" />
+              </div>
+            )
+          : !runState.workflowProcessData
+              ? (
+                  <NoData />
+                )
+              : (
+                  renderTextGenerationRes()
+                ))}
       {isCallBatchAPI && renderTextGenerationRes()}
     </>
   )

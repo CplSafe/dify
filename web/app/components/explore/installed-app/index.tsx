@@ -200,6 +200,7 @@ const InstalledApp = ({
         <TextGenerationApp
           isInstalledApp
           installedAppInfo={installedApp}
+          onMessageStart={onMessageStart}
           onResultCompleted={onResultCompleted}
         />
       )}
@@ -208,6 +209,7 @@ const InstalledApp = ({
           isWorkflow
           isInstalledApp
           installedAppInfo={installedApp}
+          onMessageStart={onMessageStart}
           onResultCompleted={onResultCompleted}
         />
       )}

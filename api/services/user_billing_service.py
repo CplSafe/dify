@@ -112,10 +112,14 @@ class UserBillingService:
 
         - ``"INSUFFICIENT_USER_BUDGET"`` — the member's personal balance is
           not positive (member path only).
-        - ``"INSUFFICIENT_TENANT_BUDGET"`` — the workspace pool is
-          exhausted. For the owner this means ``TenantBalance.balance`` is
-          not positive; for members it means ``TenantBalance.locked`` (the
-          already-allocated pool) is drained.
+        - ``"INSUFFICIENT_OWNER_BUDGET"`` — the owner's spendable
+          ``TenantBalance.balance`` is exhausted (owner path only). Surfaces
+          a different HTTP error so the UI can prompt the owner to top up
+          instead of telling them to "ask the owner".
+        - ``"INSUFFICIENT_TENANT_BUDGET"`` — the workspace's allocated pool
+          (``TenantBalance.locked``) is drained. Member-only signal: it
+          means there's nothing left to bill against even if the member's
+          personal wallet still looks positive.
 
         Owner path (single wallet): owners spend workspace funds directly
         from ``TenantBalance.balance``. They don't hold a ``UserBalance``,
@@ -134,7 +138,7 @@ class UserBillingService:
 
         if cls.is_tenant_owner(account_id, tenant_id):
             if tenant_balance.balance <= Decimal(0):
-                return False, "INSUFFICIENT_TENANT_BUDGET"
+                return False, "INSUFFICIENT_OWNER_BUDGET"
             return True, None
 
         user_balance = cls.get_or_create_balance(account_id)

@@ -408,8 +408,10 @@ def test_check_can_run_owner_allows_when_tenant_balance_positive(mock_tb_svc):
 
 @patch("services.user_billing_service.TenantBalanceService")
 def test_check_can_run_owner_blocks_when_tenant_balance_zero(mock_tb_svc):
-    """Owner gate: TenantBalance.balance == 0 blocks the run with the tenant
-    code (no user code is ever emitted for owners)."""
+    """Owner gate: TenantBalance.balance == 0 blocks the run with the
+    owner-specific code (distinct from the member-facing tenant code so the
+    HTTP layer can prompt the owner to top up instead of telling them to
+    'ask the workspace owner')."""
     tb = _make_tenant_balance(balance=Decimal(0), locked=Decimal(0))
     mock_tb_svc.get_or_create.return_value = tb
 
@@ -420,4 +422,23 @@ def test_check_can_run_owner_blocks_when_tenant_balance_zero(mock_tb_svc):
         ok, code = UserBillingService.check_can_run("owner1", "t1")
 
     assert ok is False
-    assert code == "INSUFFICIENT_TENANT_BUDGET"
+    assert code == "INSUFFICIENT_OWNER_BUDGET"
+
+
+@patch("services.user_billing_service.TenantBalanceService")
+def test_assert_can_run_raises_with_owner_budget_code(mock_tb_svc):
+    """Owner-path exception carries the owner-specific code through to the
+    HTTP layer. The wallet UI relies on this code to render 'top up' instead
+    of 'ask the workspace owner to top up'."""
+    from services.wallet.exceptions import WorkflowBudgetExceeded
+
+    tb = _make_tenant_balance(balance=Decimal(0), locked=Decimal(0))
+    mock_tb_svc.get_or_create.return_value = tb
+
+    with (
+        patch.object(UserBillingService, "get_or_create_balance"),
+        patch.object(UserBillingService, "is_tenant_owner", return_value=True),
+    ):
+        with pytest.raises(WorkflowBudgetExceeded) as exc:
+            UserBillingService.assert_can_run("owner1", "t1")
+    assert exc.value.code == "INSUFFICIENT_OWNER_BUDGET"

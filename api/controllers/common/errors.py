@@ -70,6 +70,25 @@ class InsufficientTenantBudgetError(BaseHTTPException):
     code = 402  # Payment Required
 
 
+class InsufficientOwnerBudgetError(BaseHTTPException):
+    """The workspace owner's spendable balance is exhausted.
+
+    Distinct from ``InsufficientTenantBudgetError`` (member-facing): owners
+    are the *only* ones who can fix this — telling them to "ask the owner to
+    top up" is a UX dead-end. The owner spends from ``TenantBalance.balance``
+    (the un-allocated pool); funds already moved into ``locked`` belong to
+    members and can't be reclaimed by running workflows.
+    """
+
+    error_code = "insufficient_owner_budget"
+    description = (
+        "Your workspace balance is not enough to start this run. "
+        "Please top up to continue. Funds already allocated to members "
+        "cannot be spent on owner workflows."
+    )
+    code = 402  # Payment Required
+
+
 def raise_workflow_budget_http_error(error_code: str) -> None:
     """Translate a ``WorkflowBudgetExceeded.code`` into the matching 402 HTTP error.
 
@@ -79,4 +98,6 @@ def raise_workflow_budget_http_error(error_code: str) -> None:
     """
     if error_code == "INSUFFICIENT_USER_BUDGET":
         raise InsufficientUserBudgetError()
+    if error_code == "INSUFFICIENT_OWNER_BUDGET":
+        raise InsufficientOwnerBudgetError()
     raise InsufficientTenantBudgetError()

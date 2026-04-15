@@ -6,13 +6,12 @@ import {
   RiAddCircleLine,
   RiDashboardLine,
   RiFileList3Line,
-  RiLoader4Line,
   RiLogoutBoxRLine,
   RiTeamLine,
   RiUserLine,
   RiWalletLine,
 } from '@remixicon/react'
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,17 +22,15 @@ import {
 } from '@/app/components/base/ui/dropdown-menu'
 import { useAppContext } from '@/context/app-context'
 import { useRouter } from '@/next/navigation'
-import { get } from '@/service/base'
 import { useLogout } from '@/service/use-common'
 import { cn } from '@/utils/classnames'
 import CreatorSettingsModal from './settings/creator-settings-modal'
 import TopupModal from './wallet/topup-modal'
 
-type Balance = {
-  balance: string
-  currency: string
-  is_sufficient: boolean
-}
+// 产品决定：user-menu 左下角和下拉菜单里都不再展示余额数值，
+// 余额只在"余额账单" tab 中可见。相应地这里把 /creator/balance 的 fetch、
+// loading 态、金额徽章都移除。后端 /creator/balance 接口仍保留，供
+// BalanceTab 使用，日后要恢复只需把 loadBalance 相关逻辑加回来即可。
 
 type CreatorUserMenuProps = {
   collapsed?: boolean
@@ -47,61 +44,9 @@ export default function CreatorUserMenu({
   const router = useRouter()
   const { mutateAsync: logout } = useLogout()
 
-  const [balance, setBalance] = useState<Balance | null>(null)
-  const [balanceLoading, setBalanceLoading] = useState(true)
-
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<CreatorSettingsTab>('account')
   const [topupOpen, setTopupOpen] = useState(false)
-
-  // Re-bind balance to the current account: when the user logs out and
-  // back in as someone else, ``userProfile.id`` flips, which both
-  // (a) wipes the previous numeric balance from view (no stale flash) and
-  // (b) triggers a fresh fetch keyed to the new identity. Without the
-  // explicit reset, ``setBalance`` retains the previous user's value
-  // until the new fetch resolves.
-  const accountId = userProfile?.id
-  const loadBalance = useCallback(() => {
-    if (!accountId) {
-      // eslint-disable-next-line react/set-state-in-effect
-      setBalance(null)
-      // eslint-disable-next-line react/set-state-in-effect
-      setBalanceLoading(false)
-      return
-    }
-    // eslint-disable-next-line react/set-state-in-effect
-    setBalance(null)
-    // eslint-disable-next-line react/set-state-in-effect
-    setBalanceLoading(true)
-    get<Balance>('/creator/balance')
-      .then(setBalance)
-      .catch(() => {})
-      // eslint-disable-next-line react/set-state-in-effect
-      .finally(() => setBalanceLoading(false))
-  }, [accountId])
-
-  useEffect(() => {
-    loadBalance()
-  }, [loadBalance])
-
-  useEffect(() => {
-    const handleFocus = () => {
-      loadBalance()
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible')
-        loadBalance()
-    }
-
-    globalThis.addEventListener('focus', handleFocus)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    return () => {
-      globalThis.removeEventListener('focus', handleFocus)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [loadBalance])
 
   const openSettings = (tab: CreatorSettingsTab) => {
     setSettingsTab(tab)
@@ -135,31 +80,8 @@ export default function CreatorUserMenu({
               <div className="truncate text-sm font-semibold text-text-primary">
                 {userProfile?.name || '用户'}
               </div>
-              <div className="mt-0.5 flex items-center gap-1.5">
-                {balanceLoading
-                  ? (
-                      <RiLoader4Line className="h-3 w-3 animate-spin text-text-quaternary" />
-                    )
-                  : balance
-                    ? (
-                        <span
-                          className={cn(
-                            'rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums',
-                            balance.is_sufficient
-                              ? 'bg-primary-50 text-primary-700'
-                              : 'bg-state-destructive-hover text-state-destructive-text',
-                          )}
-                        >
-                          {Number(balance.balance).toFixed(2)}
-                          {' '}
-                          {balance.currency}
-                        </span>
-                      )
-                    : (
-                        <span className="truncate text-xs text-text-tertiary">
-                          {userProfile?.email || ''}
-                        </span>
-                      )}
+              <div className="mt-0.5 truncate text-xs text-text-tertiary">
+                {userProfile?.email || ''}
               </div>
             </div>
           )}
@@ -185,28 +107,9 @@ export default function CreatorUserMenu({
           {isCurrentWorkspaceOwner && (
             <>
               <DropdownMenuGroup className="py-1">
-                <DropdownMenuItem
-                  onClick={() => setTopupOpen(true)}
-                  className={cn(
-                    balance
-                    && !balance.is_sufficient
-                    && 'bg-state-warning-hover/40',
-                  )}
-                >
+                <DropdownMenuItem onClick={() => setTopupOpen(true)}>
                   <RiAddCircleLine className="mr-2 h-4 w-4 text-primary-600" />
                   <span className="font-medium text-text-primary">充值</span>
-                  {balance && (
-                    <span
-                      className={cn(
-                        'ml-auto text-xs tabular-nums',
-                        balance.is_sufficient
-                          ? 'text-text-tertiary'
-                          : 'font-medium text-state-destructive-text',
-                      )}
-                    >
-                      {Number(balance.balance).toFixed(2)}
-                    </span>
-                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => router.push('/creator/wallet/orders')}
@@ -269,18 +172,10 @@ export default function CreatorUserMenu({
       <CreatorSettingsModal
         show={settingsOpen}
         defaultTab={settingsTab}
-        onClose={() => {
-          setSettingsOpen(false)
-          // Refresh balance after closing (in case topup happened)
-          loadBalance()
-        }}
+        onClose={() => setSettingsOpen(false)}
       />
 
-      <TopupModal
-        open={topupOpen}
-        onOpenChange={setTopupOpen}
-        onPaid={loadBalance}
-      />
+      <TopupModal open={topupOpen} onOpenChange={setTopupOpen} />
     </>
   )
 }

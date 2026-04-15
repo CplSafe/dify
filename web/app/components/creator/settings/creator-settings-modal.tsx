@@ -29,6 +29,9 @@ type MenuItem = {
   // When true, the tab is only meaningful for workspace owners — members
   // can neither create invite codes nor receive rebates.
   ownerOnly?: boolean
+  // 产品侧临时隐藏该 tab。保留菜单定义、Tab 组件和路由分支，日后把
+  // hidden 去掉即可恢复。后端接口仍然可用，不受影响。
+  hidden?: boolean
 }
 
 const MENU_ITEMS: MenuItem[] = [
@@ -63,6 +66,7 @@ const MENU_ITEMS: MenuItem[] = [
     iconClass: 'i-ri-user-add-line',
     activeIconClass: 'i-ri-user-add-fill',
     ownerOnly: true,
+    hidden: true,
   },
   {
     key: 'rebate',
@@ -91,7 +95,9 @@ export default function CreatorSettingsModal({
   // won't load data.
   const visibleMenuItems = useMemo(
     () =>
-      MENU_ITEMS.filter(item => !item.ownerOnly || isCurrentWorkspaceOwner),
+      MENU_ITEMS.filter(
+        item => !item.hidden && (!item.ownerOnly || isCurrentWorkspaceOwner),
+      ),
     [isCurrentWorkspaceOwner],
   )
   const fallbackTab: CreatorSettingsTab

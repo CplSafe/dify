@@ -231,9 +231,14 @@ def test_check_can_run_blocks_when_tenant_pool_drained(mock_tb_svc):
     assert code == "INSUFFICIENT_TENANT_BUDGET"
 
 
-def test_check_balance_positive_backwards_compat_delegates_to_check_can_run():
-    """Existing callers that pass only account_id still work, by assuming
-    the user's balance is the binding check."""
+def test_check_balance_positive_only_inspects_user_balance():
+    """``check_balance_positive`` is a user-balance-only gate.
+
+    It does NOT delegate to ``check_can_run`` and it does NOT consider the
+    tenant pool or the owner's ``TenantBalance.balance``. This is why the
+    marketplace flow had to switch to ``check_can_run``: owners hold funds
+    in ``TenantBalance.balance`` and would be falsely blocked here.
+    """
     ub = _make_user_balance(balance=Decimal(5))
     with patch.object(UserBillingService, "get_or_create_balance", return_value=ub):
         assert UserBillingService.check_balance_positive("a1") is True

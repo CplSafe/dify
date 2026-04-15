@@ -51,8 +51,14 @@ def payload_patch(payload_data):
 
 
 @pytest.fixture(autouse=True)
-def creator_balance_check_patch():
-    with patch.object(completion_module, "_creator_marketplace_balance_insufficient", return_value=False):
+def creator_balance_check_patch(request):
+    # Tests whose enclosing class sets ``_exercise_real_balance_reason = True``
+    # exercise the real gate and must NOT be double-patched.
+    cls = getattr(request.node, "cls", None)
+    if cls is not None and getattr(cls, "_exercise_real_balance_reason", False):
+        yield
+        return
+    with patch.object(completion_module, "_creator_marketplace_balance_reason", return_value=None):
         yield
 
 
@@ -225,7 +231,7 @@ class TestCompletionApi:
             with pytest.raises(completion_module.CompletionRequestError):
                 method(completion_app)
 
-    def test_streaming_balance_insufficient_returns_sse_message(self, app, completion_app, user):
+    def test_streaming_owner_balance_insufficient_returns_owner_message(self, app, completion_app, user):
         api = completion_module.CompletionApi()
         method = unwrap(api.post)
         payload = {"inputs": {}, "query": "hi", "response_mode": "streaming"}
@@ -239,7 +245,11 @@ class TestCompletionApi:
                 return_value=payload,
             ),
             patch.object(completion_module, "current_user", user),
-            patch.object(completion_module, "_creator_marketplace_balance_insufficient", return_value=True),
+            patch.object(
+                completion_module,
+                "_creator_marketplace_balance_reason",
+                return_value=completion_module._INSUFFICIENT_OWNER_BALANCE_MESSAGE,
+            ),
         ):
             result = method(completion_app)
 
@@ -247,7 +257,32 @@ class TestCompletionApi:
         assert result.status_code == 200
         assert result.mimetype == "text/event-stream"
         assert '"event": "message"' in body
-        assert completion_module._INSUFFICIENT_BALANCE_MESSAGE in body
+        assert completion_module._INSUFFICIENT_OWNER_BALANCE_MESSAGE in body
+
+    def test_blocking_member_balance_insufficient_returns_member_message(self, app, completion_app, user):
+        api = completion_module.CompletionApi()
+        method = unwrap(api.post)
+        payload = {"inputs": {}, "query": "hi", "response_mode": "blocking"}
+
+        with (
+            app.test_request_context("/", json={}),
+            patch.object(
+                type(completion_module.console_ns),
+                "payload",
+                new_callable=PropertyMock,
+                return_value=payload,
+            ),
+            patch.object(completion_module, "current_user", user),
+            patch.object(
+                completion_module,
+                "_creator_marketplace_balance_reason",
+                return_value=completion_module._INSUFFICIENT_MEMBER_BALANCE_MESSAGE,
+            ),
+        ):
+            body, status = method(completion_app)
+
+        assert status == 402
+        assert body == {"message": completion_module._INSUFFICIENT_MEMBER_BALANCE_MESSAGE}
 
 
 class TestCompletionStopApi:
@@ -326,7 +361,7 @@ class TestChatApi:
             with pytest.raises(InvokeRateLimitHttpError):
                 method(chat_app)
 
-    def test_balance_insufficient_returns_sse_message(self, app, chat_app, user, payload_patch):
+    def test_owner_balance_insufficient_returns_owner_sse_message(self, app, chat_app, user, payload_patch):
         api = completion_module.ChatApi()
         method = unwrap(api.post)
 
@@ -334,7 +369,11 @@ class TestChatApi:
             app.test_request_context("/", json={}),
             payload_patch,
             patch.object(completion_module, "current_user", user),
-            patch.object(completion_module, "_creator_marketplace_balance_insufficient", return_value=True),
+            patch.object(
+                completion_module,
+                "_creator_marketplace_balance_reason",
+                return_value=completion_module._INSUFFICIENT_OWNER_BALANCE_MESSAGE,
+            ),
         ):
             result = method(chat_app)
 
@@ -342,7 +381,28 @@ class TestChatApi:
         assert result.status_code == 200
         assert result.mimetype == "text/event-stream"
         assert '"event": "message"' in body
-        assert completion_module._INSUFFICIENT_BALANCE_MESSAGE in body
+        assert completion_module._INSUFFICIENT_OWNER_BALANCE_MESSAGE in body
+
+    def test_member_balance_insufficient_returns_member_sse_message(self, app, chat_app, user, payload_patch):
+        api = completion_module.ChatApi()
+        method = unwrap(api.post)
+
+        with (
+            app.test_request_context("/", json={}),
+            payload_patch,
+            patch.object(completion_module, "current_user", user),
+            patch.object(
+                completion_module,
+                "_creator_marketplace_balance_reason",
+                return_value=completion_module._INSUFFICIENT_MEMBER_BALANCE_MESSAGE,
+            ),
+        ):
+            result = method(chat_app)
+
+        body = result.get_data(as_text=True)
+        assert result.status_code == 200
+        assert result.mimetype == "text/event-stream"
+        assert completion_module._INSUFFICIENT_MEMBER_BALANCE_MESSAGE in body
 
     def test_conversation_completed_chat(self, app, chat_app, user, payload_patch):
         api = completion_module.ChatApi()
@@ -479,6 +539,104 @@ class TestChatApi:
         ):
             with pytest.raises(InternalServerError):
                 method(chat_app)
+
+
+class TestCreatorMarketplaceBalanceReason:
+    """Cover the actual gate used by explore/completion for marketplace apps.
+
+    Regression: members used to call ``check_balance_positive(account_id)``
+    which only inspects ``UserBalance`` and blocks owners who hold their funds
+    in ``TenantBalance.balance``. The gate now delegates to ``check_can_run``
+    so owners with a positive workspace balance are allowed through.
+    """
+
+    _exercise_real_balance_reason = True
+
+    def _patch_marketplace_hit(self):
+        return patch.object(
+            completion_module.db.session,
+            "scalar",
+            return_value=MagicMock(),
+        )
+
+    def _patch_marketplace_miss(self):
+        return patch.object(
+            completion_module.db.session,
+            "scalar",
+            return_value=None,
+        )
+
+    def test_private_app_skips_billing_check(self):
+        user = MagicMock(spec=Account, id="u1")
+
+        with (
+            self._patch_marketplace_miss(),
+            patch.object(completion_module.UserBillingService, "check_can_run") as check_can_run,
+        ):
+            result = completion_module._creator_marketplace_balance_reason("app1", user, "tenant1")
+
+        assert result is None
+        check_can_run.assert_not_called()
+
+    def test_owner_with_positive_tenant_balance_passes(self):
+        user = MagicMock(spec=Account, id="owner1")
+
+        with (
+            self._patch_marketplace_hit(),
+            patch.object(
+                completion_module.UserBillingService,
+                "check_can_run",
+                return_value=(True, None),
+            ),
+        ):
+            result = completion_module._creator_marketplace_balance_reason("app1", user, "tenant1")
+
+        assert result is None
+
+    def test_owner_without_tenant_balance_returns_owner_message(self):
+        user = MagicMock(spec=Account, id="owner1")
+
+        with (
+            self._patch_marketplace_hit(),
+            patch.object(
+                completion_module.UserBillingService,
+                "check_can_run",
+                return_value=(False, "INSUFFICIENT_OWNER_BUDGET"),
+            ),
+        ):
+            result = completion_module._creator_marketplace_balance_reason("app1", user, "tenant1")
+
+        assert result == completion_module._INSUFFICIENT_OWNER_BALANCE_MESSAGE
+
+    def test_member_without_user_balance_returns_member_message(self):
+        user = MagicMock(spec=Account, id="member1")
+
+        with (
+            self._patch_marketplace_hit(),
+            patch.object(
+                completion_module.UserBillingService,
+                "check_can_run",
+                return_value=(False, "INSUFFICIENT_USER_BUDGET"),
+            ),
+        ):
+            result = completion_module._creator_marketplace_balance_reason("app1", user, "tenant1")
+
+        assert result == completion_module._INSUFFICIENT_MEMBER_BALANCE_MESSAGE
+
+    def test_drained_tenant_pool_returns_member_message(self):
+        user = MagicMock(spec=Account, id="member1")
+
+        with (
+            self._patch_marketplace_hit(),
+            patch.object(
+                completion_module.UserBillingService,
+                "check_can_run",
+                return_value=(False, "INSUFFICIENT_TENANT_BUDGET"),
+            ),
+        ):
+            result = completion_module._creator_marketplace_balance_reason("app1", user, "tenant1")
+
+        assert result == completion_module._INSUFFICIENT_MEMBER_BALANCE_MESSAGE
 
 
 class TestChatStopApi:

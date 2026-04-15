@@ -45,20 +45,43 @@ from services.wallet.exceptions import WorkflowBudgetExceeded
 from .. import console_ns
 
 logger = logging.getLogger(__name__)
-_INSUFFICIENT_BALANCE_MESSAGE = "余额不足，请先前往[充值页](/creator/balance)处理后再继续生成。"
+# Owner sees a top-up CTA because they control the workspace wallet.
+_INSUFFICIENT_OWNER_BALANCE_MESSAGE = "余额不足，请先前往[充值页](/creator/balance)处理后再继续生成。"
+# Members can't top up the workspace pool themselves — they must ask the owner.
+_INSUFFICIENT_MEMBER_BALANCE_MESSAGE = "您的额度不足，请联系工作区所有者为您分配额度或充值。"
 
 
-def _creator_marketplace_balance_insufficient(app_id: str, account: Account) -> bool:
+def _creator_marketplace_balance_reason(app_id: str, account: Account, tenant_id: str) -> str | None:
+    """Return the localized error message when the marketplace run must be blocked.
+
+    Returns ``None`` when the run may proceed. Differentiates the owner vs
+    member case so the UI can direct the owner to top up while telling the
+    member to contact their workspace owner.
+
+    The check only applies to marketplace-published apps — private apps keep
+    their existing (non-billing) explore flow.
+    """
     marketplace_entry = db.session.scalar(
         select(MarketplaceApp).where(
             MarketplaceApp.app_id == str(app_id),
             MarketplaceApp.is_active == True,
         )
     )
-    return bool(marketplace_entry) and not UserBillingService.check_balance_positive(account.id)
+    if not marketplace_entry:
+        return None
+
+    can_run, error_code = UserBillingService.check_can_run(account.id, tenant_id)
+    if can_run:
+        return None
+    if error_code == "INSUFFICIENT_OWNER_BUDGET":
+        return _INSUFFICIENT_OWNER_BALANCE_MESSAGE
+    return _INSUFFICIENT_MEMBER_BALANCE_MESSAGE
 
 
-def _creator_marketplace_balance_stream_response(conversation_id: str | None = None) -> Generator[str, None, None]:
+def _creator_marketplace_balance_stream_response(
+    message: str,
+    conversation_id: str | None = None,
+) -> Generator[str, None, None]:
     message_id = str(uuid4())
     safe_conversation_id = conversation_id or ""
     yield f"data: {dumps({
@@ -66,7 +89,7 @@ def _creator_marketplace_balance_stream_response(conversation_id: str | None = N
         'conversation_id': safe_conversation_id,
         'task_id': '',
         'id': message_id,
-        'answer': _INSUFFICIENT_BALANCE_MESSAGE,
+        'answer': message,
     }, ensure_ascii=False)}\n\n"
     yield f"data: {dumps({
         'event': 'message_end',
@@ -135,10 +158,15 @@ class CompletionApi(InstalledAppResource):
         try:
             if not isinstance(current_user, Account):
                 raise ValueError("current_user must be an Account instance")
-            if _creator_marketplace_balance_insufficient(app_model.id, current_user):
+            balance_reason = _creator_marketplace_balance_reason(
+                app_model.id, current_user, installed_app.tenant_id
+            )
+            if balance_reason is not None:
                 if streaming:
-                    return helper.compact_generate_response(_creator_marketplace_balance_stream_response())
-                return {"message": _INSUFFICIENT_BALANCE_MESSAGE}, 402
+                    return helper.compact_generate_response(
+                        _creator_marketplace_balance_stream_response(balance_reason)
+                    )
+                return {"message": balance_reason}, 402
             response = AppGenerateService.generate(
                 app_model=app_model, user=current_user, args=args, invoke_from=InvokeFrom.EXPLORE, streaming=streaming
             )
@@ -212,9 +240,12 @@ class ChatApi(InstalledAppResource):
         try:
             if not isinstance(current_user, Account):
                 raise ValueError("current_user must be an Account instance")
-            if _creator_marketplace_balance_insufficient(app_model.id, current_user):
+            balance_reason = _creator_marketplace_balance_reason(
+                app_model.id, current_user, installed_app.tenant_id
+            )
+            if balance_reason is not None:
                 return helper.compact_generate_response(
-                    _creator_marketplace_balance_stream_response(payload.conversation_id)
+                    _creator_marketplace_balance_stream_response(balance_reason, payload.conversation_id)
                 )
             response = AppGenerateService.generate(
                 app_model=app_model, user=current_user, args=args, invoke_from=InvokeFrom.EXPLORE, streaming=True

@@ -54,7 +54,23 @@ export default function CreatorUserMenu({
   const [settingsTab, setSettingsTab] = useState<CreatorSettingsTab>('account')
   const [topupOpen, setTopupOpen] = useState(false)
 
+  // Re-bind balance to the current account: when the user logs out and
+  // back in as someone else, ``userProfile.id`` flips, which both
+  // (a) wipes the previous numeric balance from view (no stale flash) and
+  // (b) triggers a fresh fetch keyed to the new identity. Without the
+  // explicit reset, ``setBalance`` retains the previous user's value
+  // until the new fetch resolves.
+  const accountId = userProfile?.id
   const loadBalance = useCallback(() => {
+    if (!accountId) {
+      // eslint-disable-next-line react/set-state-in-effect
+      setBalance(null)
+      // eslint-disable-next-line react/set-state-in-effect
+      setBalanceLoading(false)
+      return
+    }
+    // eslint-disable-next-line react/set-state-in-effect
+    setBalance(null)
     // eslint-disable-next-line react/set-state-in-effect
     setBalanceLoading(true)
     get<Balance>('/creator/balance')
@@ -62,7 +78,7 @@ export default function CreatorUserMenu({
       .catch(() => {})
       // eslint-disable-next-line react/set-state-in-effect
       .finally(() => setBalanceLoading(false))
-  }, [])
+  }, [accountId])
 
   useEffect(() => {
     loadBalance()

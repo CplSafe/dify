@@ -21,7 +21,7 @@ import type {
   UserProfileResponse,
 } from '@/models/common'
 import type { RETRIEVE_METHOD } from '@/types/app'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { IS_DEV } from '@/config'
 import { get, post } from './base'
 
@@ -230,9 +230,21 @@ export const useIsLogin = () => {
 }
 
 export const useLogout = () => {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationKey: [NAME_SPACE, 'logout'],
     mutationFn: () => post('/logout'),
+    // Wipe every cached query on logout so the next sign-in doesn't paint
+    // the previous account's user profile / workspace / balance for a frame
+    // before re-fetching. TanStack Query's global cache is keyed only by
+    // query name (no account_id), so without this the next mount returns
+    // stale data first and revalidates — the user sees the old account's
+    // name and balance flash for a moment after switching accounts.
+    // Run on settled (success or error): a failed network logout still
+    // clears the local session token, so we must clear cache to match.
+    onSettled: () => {
+      queryClient.clear()
+    },
   })
 }
 

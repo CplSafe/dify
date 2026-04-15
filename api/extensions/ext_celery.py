@@ -43,6 +43,37 @@ def _get_celery_ssl_options() -> dict[str, Any] | None:
     return ssl_options
 
 
+def _resolve_rebate_hours(app: DifyApp) -> tuple[int, int]:
+    """Resolve settlement + unfreeze hours from RebateConfig, with fallback.
+
+    Beat boots before any request, so we wrap the DB read in ``app_context``
+    and swallow failures — a fresh database without the rebate_configs table
+    yet (first-boot / pre-migration) must not crash worker startup. The
+    fallback 02:00/03:00 matches the legacy hardcoded schedule.
+    """
+    default_settlement = 2
+    default_unfreeze = 3
+    try:
+        with app.app_context():
+            from sqlalchemy import select
+
+            from extensions.ext_database import db
+            from models.creator import RebateConfig
+
+            config = db.session.scalar(select(RebateConfig).limit(1))
+            if not config:
+                return default_settlement, default_unfreeze
+            settlement = int(config.settlement_hour) % 24
+            # +1 hour, wrapping at midnight. Keeps unfreeze after settlement
+            # on the same operational "day" as seen by operators reviewing
+            # the rebate logs.
+            return settlement, (settlement + 1) % 24
+    except Exception:
+        # Any init-time DB failure (table missing, connection refused during
+        # docker compose startup, etc.) falls through to the defaults.
+        return default_settlement, default_unfreeze
+
+
 def init_app(app: DifyApp) -> Celery:
     class FlaskTask(Task):
         def __call__(self, *args: object, **kwargs: object) -> object:
@@ -210,11 +241,24 @@ def init_app(app: DifyApp) -> Celery:
             "schedule": timedelta(minutes=dify_config.API_TOKEN_LAST_USED_UPDATE_INTERVAL),
         }
 
-    # Creator rebate daily settlement — always enabled, runs at 02:00 daily
+    # Creator rebate — settlement + unfreeze tasks.
+    #
+    # Settlement runs at ``RebateConfig.settlement_hour`` (read once at beat
+    # boot with a safe fallback). Unfreeze runs one hour later to avoid racing
+    # with a still-in-flight settlement commit on the same inviter's balance
+    # row. Both values are read at beat init — changing ``settlement_hour``
+    # at runtime requires a beat restart to take effect.
+    settlement_hour, unfreeze_hour = _resolve_rebate_hours(app)
+
     imports.append("schedule.rebate_settlement_task")
     beat_schedule["rebate_settlement_task"] = {
         "task": "schedule.rebate_settlement_task.rebate_settlement_task",
-        "schedule": crontab(minute="0", hour="2"),
+        "schedule": crontab(minute="0", hour=str(settlement_hour)),
+    }
+    imports.append("schedule.rebate_unfreeze_task")
+    beat_schedule["rebate_unfreeze_task"] = {
+        "task": "schedule.rebate_unfreeze_task.rebate_unfreeze_task",
+        "schedule": crontab(minute="0", hour=str(unfreeze_hour)),
     }
 
     if dify_config.ENTERPRISE_ENABLED and dify_config.ENTERPRISE_TELEMETRY_ENABLED:

@@ -1,8 +1,16 @@
 """Daily rebate settlement task.
 
-Runs once per day (configurable hour via RebateConfig.settlement_hour).
+Runs once per day (the celery beat schedule is built from
+``RebateConfig.settlement_hour`` at worker boot time — see ext_celery).
 Calculates rebates based on each invitee's **consumption** (deductions)
-from the previous day, then credits the rebate to the inviter's balance.
+from the previous day, then parks the rebate in the inviter's
+``UserBalance.rebate_pending`` (frozen) bucket.
+
+The rebate does NOT become spendable here — the companion task
+``rebate_unfreeze_task`` moves funds from ``rebate_pending`` to ``balance``
+after ``RebateConfig.freeze_days`` elapse. Operators can cancel a pending
+record during the freeze window to reverse rebates tied to abusive
+invitees.
 
 Formula:
   If cost_rate > 0:
@@ -29,6 +37,7 @@ from models.creator import (
     BillingRecordType,
     RebateConfig,
     RebateRecord,
+    RebateRecordStatus,
     UserBalance,
 )
 
@@ -148,7 +157,11 @@ def rebate_settlement_task():
         if rebate_amount <= 0:
             continue
 
-        # 5a. Create RebateRecord
+        # 5a. Create RebateRecord in PENDING status.
+        # No BillingRecord is written here: the ledger-visible cash event
+        # happens at unfreeze time. Writing it now would misrepresent a
+        # frozen amount as spendable income and double-count if the
+        # record is later cancelled.
         rebate_record = RebateRecord(
             inviter_account_id=inviter_account_id,
             invitee_account_id=invitee_account_id,
@@ -158,30 +171,24 @@ def rebate_settlement_task():
             rebate_amount=rebate_amount,
             rebate_rate=rebate_rate,
             cost_rate=cost_rate,
+            status=RebateRecordStatus.PENDING.value,
         )
         db.session.add(rebate_record)
 
-        # 5b. Credit inviter's balance
+        # 5b. Park the rebate in the inviter's frozen bucket. The
+        # spendable ``balance`` field is untouched — the unfreeze task
+        # will move funds across after freeze_days.
         balance = db.session.scalar(
             select(UserBalance).where(UserBalance.account_id == inviter_account_id)
         )
         if balance:
-            balance.balance = balance.balance + rebate_amount
+            balance.rebate_pending = balance.rebate_pending + rebate_amount
         else:
             balance = UserBalance(
                 account_id=inviter_account_id,
-                balance=rebate_amount,
+                rebate_pending=rebate_amount,
             )
             db.session.add(balance)
-
-        # 5c. Create BillingRecord for the rebate income
-        billing = BillingRecord(
-            account_id=inviter_account_id,
-            amount=rebate_amount,
-            record_type=BillingRecordType.REBATE,
-            description=f"返点收入: 下级用户 {invitee_account_id[:8]}... 消耗 {consumption} 元 ({settlement_date_str})",
-        )
-        db.session.add(billing)
 
         total_rebate_distributed += rebate_amount
         records_created += 1

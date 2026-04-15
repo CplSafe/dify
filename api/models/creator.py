@@ -37,6 +37,23 @@ class CreatorWorkShareStatus(enum.StrEnum):
     PUBLISHED_XHS = "published_xhs"
 
 
+class RebateRecordStatus(enum.StrEnum):
+    """Lifecycle of a single rebate record.
+
+    - ``PENDING``: credited to ``UserBalance.rebate_pending`` but not yet
+      spendable. Sits here for ``RebateConfig.freeze_days``.
+    - ``SETTLED``: the unfreeze task moved funds from ``rebate_pending`` into
+      ``balance``. Terminal state for the happy path.
+    - ``CANCELLED``: operator reversed the rebate during the freeze window
+      (e.g. invitee turned out to be abusive). Funds are debited from
+      ``rebate_pending`` without touching ``balance``. Terminal state.
+    """
+
+    PENDING = "pending"
+    SETTLED = "settled"
+    CANCELLED = "cancelled"
+
+
 class UserBalance(TypeBase):
     """Per-account balance pool.
 
@@ -55,6 +72,17 @@ class UserBalance(TypeBase):
     )
     account_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     balance: Mapped[Decimal] = mapped_column(sa.Numeric(precision=20, scale=6), server_default="0", default=Decimal(0))
+    # Frozen rebate income — credited by the daily settlement task, becomes
+    # spendable (moves into ``balance``) after ``RebateConfig.freeze_days``.
+    # Kept in a separate column instead of tagging ``balance`` because:
+    #   1. Rebate is not spendable during the freeze window — a flat ``balance``
+    #      field would let the inviter withdraw money the platform may still
+    #      need to claw back on chargeback/abuse.
+    #   2. UI shows "可用 / 冻结中" separately; merging them would require a
+    #      per-row join against ``rebate_records`` on every wallet read.
+    rebate_pending: Mapped[Decimal] = mapped_column(
+        sa.Numeric(precision=20, scale=6), server_default="0", default=Decimal(0)
+    )
     currency: Mapped[str] = mapped_column(String(10), server_default="CNY", default="CNY")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp(), nullable=False, init=False
@@ -64,7 +92,12 @@ class UserBalance(TypeBase):
     )
 
     def is_sufficient(self) -> bool:
-        """Return True if balance > 0."""
+        """Return True if spendable balance > 0.
+
+        Only ``balance`` counts — ``rebate_pending`` is frozen and must not
+        gate workflow runs. A user with 100 pending / 0 spendable should be
+        blocked, not allowed to spend money that might be clawed back.
+        """
         return self.balance > Decimal(0)
 
 
@@ -316,6 +349,11 @@ class RebateConfig(TypeBase):
     settlement_hour: Mapped[int] = mapped_column(
         sa.Integer, server_default="2", default=2
     )  # default 02:00
+    # Number of days a freshly-settled rebate sits in ``UserBalance.rebate_pending``
+    # before being moved to ``UserBalance.balance`` by the unfreeze task.
+    # Gives operators a buffer to catch abuse (refunds, fake consumption) before
+    # the inviter can actually spend the rebate. 0 = no freeze (legacy behaviour).
+    freeze_days: Mapped[int] = mapped_column(sa.Integer, server_default="7", default=7)
     is_enabled: Mapped[bool] = mapped_column(
         sa.Boolean, server_default=sa.text("true"), default=True
     )
@@ -334,6 +372,7 @@ class RebateConfig(TypeBase):
             "rebate_rate": str(self.rebate_rate),
             "cost_rate": str(self.cost_rate),
             "settlement_hour": self.settlement_hour,
+            "freeze_days": self.freeze_days,
             "is_enabled": self.is_enabled,
             "updated_by": self.updated_by,
             "created_at": self.created_at.isoformat(),
@@ -355,6 +394,10 @@ class RebateRecord(TypeBase):
         sa.Index("rebate_record_invitee_idx", "invitee_account_id"),
         sa.Index("rebate_record_date_idx", "settlement_date"),
         sa.Index("rebate_record_inviter_date_idx", "inviter_account_id", "settlement_date"),
+        # Supports the unfreeze task's "pending rows due for release" scan.
+        # Composite (status, created_at) so Postgres can seek to pending rows
+        # and range-scan by age without reading settled/cancelled history.
+        sa.Index("rebate_record_status_created_idx", "status", "created_at"),
     )
 
     id: Mapped[str] = mapped_column(
@@ -382,6 +425,15 @@ class RebateRecord(TypeBase):
         sa.Numeric(precision=10, scale=4), server_default="0", default=Decimal(0)
     )  # snapshot of cost rate
     currency: Mapped[str] = mapped_column(String(10), server_default="CNY", default="CNY")
+    # Lifecycle status — drives the unfreeze task. See RebateRecordStatus.
+    # ``String`` instead of a Postgres enum so existing rows on pre-freeze
+    # deployments migrate cleanly (the migration defaults old rows to "settled"
+    # because they were already credited to the spendable balance).
+    status: Mapped[str] = mapped_column(
+        String(20), server_default=RebateRecordStatus.PENDING.value,
+        default=RebateRecordStatus.PENDING.value,
+    )
+    unfrozen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp(), nullable=False, init=False
     )
@@ -397,6 +449,8 @@ class RebateRecord(TypeBase):
             "rebate_amount": str(self.rebate_amount),
             "rebate_rate": str(self.rebate_rate),
             "cost_rate": str(self.cost_rate),
+            "status": self.status,
+            "unfrozen_at": self.unfrozen_at.isoformat() if self.unfrozen_at else None,
             "currency": self.currency,
             "created_at": self.created_at.isoformat(),
         }

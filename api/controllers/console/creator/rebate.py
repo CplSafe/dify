@@ -17,10 +17,15 @@ from sqlalchemy import and_, func, select
 from werkzeug.exceptions import BadRequest, Forbidden
 
 from controllers.console import console_ns
-from controllers.console.wraps import account_initialization_required, setup_required
+from controllers.console.wraps import (
+    account_initialization_required,
+    setup_required,
+    tenant_owner_required,
+)
 from extensions.ext_database import db
+from libs.datetime_utils import naive_utc_now
 from libs.login import current_account_with_tenant, login_required
-from models.creator import RebateConfig, RebateRecord
+from models.creator import RebateConfig, RebateRecord, RebateRecordStatus, UserBalance
 
 
 def _require_system_admin(user):
@@ -92,6 +97,15 @@ class RebateConfigApi(Resource):
                 raise BadRequest("settlement_hour must be an integer between 0 and 23")
             config.settlement_hour = hour
 
+        if "freeze_days" in payload:
+            days = payload["freeze_days"]
+            # 0 = release on next unfreeze tick (kept legal for ops flexibility).
+            # Upper bound is arbitrary-but-sane: beyond 90 days pending rebates
+            # accumulate indefinitely and become an ops footgun.
+            if not isinstance(days, int) or days < 0 or days > 90:
+                raise BadRequest("freeze_days must be an integer between 0 and 90")
+            config.freeze_days = days
+
         if "is_enabled" in payload:
             config.is_enabled = bool(payload["is_enabled"])
 
@@ -99,6 +113,60 @@ class RebateConfigApi(Resource):
         db.session.commit()
 
         return config.to_dict()
+
+
+@console_ns.route("/creator/admin/rebate/records/<string:record_id>/cancel")
+class RebateRecordCancelApi(Resource):
+    """Let a super admin claw back a still-pending rebate.
+
+    Works by debiting the inviter's ``rebate_pending`` bucket and marking
+    the record ``cancelled`` — only valid while the rebate is still frozen.
+    Once the unfreeze task has moved the money to spendable ``balance``,
+    the record is already ``settled`` and this endpoint rejects: clawing
+    back spent money needs a separate manual adjustment.
+    """
+
+    @setup_required
+    @login_required
+    @account_initialization_required
+    def post(self, record_id: str):
+        current_user, _ = current_account_with_tenant()
+        _require_system_admin(current_user)
+
+        # Lock the record row: two concurrent cancel clicks would otherwise
+        # both observe ``status == pending`` and both try to debit
+        # rebate_pending, over-subtracting the amount.
+        record = db.session.scalar(
+            select(RebateRecord)
+            .where(RebateRecord.id == record_id)
+            .with_for_update()
+        )
+        if not record:
+            raise BadRequest("Rebate record not found")
+        if record.status != RebateRecordStatus.PENDING.value:
+            raise BadRequest(
+                f"Rebate record is not pending (status={record.status}); cannot cancel"
+            )
+
+        balance = db.session.scalar(
+            select(UserBalance)
+            .where(UserBalance.account_id == record.inviter_account_id)
+            .with_for_update()
+        )
+        rebate_amount = Decimal(str(record.rebate_amount))
+        if balance and balance.rebate_pending >= rebate_amount:
+            balance.rebate_pending = balance.rebate_pending - rebate_amount
+        # If balance is missing or rebate_pending already drained, we still
+        # mark the record cancelled so it can't be swept by unfreeze — a
+        # stuck pending row is worse than a minor ledger mismatch, which an
+        # operator can reconcile manually from the audit log.
+
+        record.status = RebateRecordStatus.CANCELLED.value
+        record.unfrozen_at = naive_utc_now()
+        db.session.add(record)
+        db.session.commit()
+
+        return record.to_dict()
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +180,7 @@ class RebateRecordListApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @tenant_owner_required
     def get(self):
         """Get paginated rebate income records for the current user."""
         current_user, _ = current_account_with_tenant()
@@ -171,6 +240,7 @@ class RebateSummaryApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @tenant_owner_required
     def get(self):
         """Get summary of rebate income for the current user."""
         current_user, _ = current_account_with_tenant()

@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Button from '@/app/components/base/button'
 import { ScrollArea } from '@/app/components/base/ui/scroll-area'
 import MenuDialog from '@/app/components/header/account-setting/menu-dialog'
+import { useAppContext } from '@/context/app-context'
 import { cn } from '@/utils/classnames'
 import AccountTab from './tabs/account-tab'
 import ApiKeyTab from './tabs/api-key-tab'
@@ -12,13 +13,22 @@ import InvitationTab from './tabs/invitation-tab'
 import MembersTab from './tabs/members-tab'
 import RebateTab from './tabs/rebate-tab'
 
-export type CreatorSettingsTab = 'account' | 'members' | 'balance' | 'api-key' | 'invitation' | 'rebate'
+export type CreatorSettingsTab
+  = | 'account'
+    | 'members'
+    | 'balance'
+    | 'api-key'
+    | 'invitation'
+    | 'rebate'
 
 type MenuItem = {
   key: CreatorSettingsTab
   label: string
   iconClass: string
   activeIconClass: string
+  // When true, the tab is only meaningful for workspace owners — members
+  // can neither create invite codes nor receive rebates.
+  ownerOnly?: boolean
 }
 
 const MENU_ITEMS: MenuItem[] = [
@@ -33,6 +43,7 @@ const MENU_ITEMS: MenuItem[] = [
     label: '成员管理',
     iconClass: 'i-ri-group-2-line',
     activeIconClass: 'i-ri-group-2-fill',
+    ownerOnly: true,
   },
   {
     key: 'balance',
@@ -51,12 +62,14 @@ const MENU_ITEMS: MenuItem[] = [
     label: '邀请管理',
     iconClass: 'i-ri-user-add-line',
     activeIconClass: 'i-ri-user-add-fill',
+    ownerOnly: true,
   },
   {
     key: 'rebate',
     label: '返点账单',
     iconClass: 'i-ri-money-cny-circle-line',
     activeIconClass: 'i-ri-money-cny-circle-fill',
+    ownerOnly: true,
   },
 ]
 
@@ -66,37 +79,68 @@ type Props = {
   onClose: () => void
 }
 
-export default function CreatorSettingsModal({ show, defaultTab = 'account', onClose }: Props) {
-  const [activeTab, setActiveTab] = useState<CreatorSettingsTab>(defaultTab)
+export default function CreatorSettingsModal({
+  show,
+  defaultTab = 'account',
+  onClose,
+}: Props) {
+  const { isCurrentWorkspaceOwner } = useAppContext()
+  // Members see a reduced menu. Hiding instead of disabling keeps the UI
+  // clean — members never have anything to do on these tabs — and the
+  // backend also returns 403, so even a deep-link to an owner-only tab
+  // won't load data.
+  const visibleMenuItems = useMemo(
+    () =>
+      MENU_ITEMS.filter(item => !item.ownerOnly || isCurrentWorkspaceOwner),
+    [isCurrentWorkspaceOwner],
+  )
+  const fallbackTab: CreatorSettingsTab
+    = visibleMenuItems.find(m => m.key === defaultTab)?.key ?? 'account'
+  const [selectedTab, setSelectedTab]
+    = useState<CreatorSettingsTab>(fallbackTab)
 
-  useEffect(() => {
-    if (show)
-      setActiveTab(defaultTab)
-  }, [show, defaultTab])
-
-  const activeItem = MENU_ITEMS.find(m => m.key === activeTab)
+  // Derive the rendered tab instead of syncing through an effect: if the
+  // user picked a tab that later becomes hidden (e.g. role downgrade,
+  // modal reopened with a different defaultTab) we silently fall back.
+  // A member opening the modal via "账户设置" must not land on whatever
+  // the previous owner session last picked.
+  const activeTab = visibleMenuItems.find(m => m.key === selectedTab)
+    ? selectedTab
+    : fallbackTab
+  const activeItem = visibleMenuItems.find(m => m.key === activeTab)
 
   return (
     <MenuDialog show={show} onClose={onClose}>
       <div className="mx-auto flex h-screen max-w-[1048px]">
         {/* Left sidebar */}
-        <div className="flex w-[44px] flex-col border-r border-divider-burn pl-4 pr-6 sm:w-[224px]">
-          <div className="mb-8 mt-6 px-3 py-2 text-text-primary title-2xl-semi-bold">设置</div>
+        <div className="flex w-[44px] flex-col border-r border-divider-burn pr-6 pl-4 sm:w-[224px]">
+          <div className="mt-6 mb-8 px-3 py-2 title-2xl-semi-bold text-text-primary">
+            设置
+          </div>
           <div className="w-full">
-            <div className="mb-0.5 py-2 pb-1 pl-3 text-text-tertiary system-xs-medium-uppercase">工作区</div>
-            {MENU_ITEMS.map(item => (
+            <div className="mb-0.5 py-2 pb-1 pl-3 system-xs-medium-uppercase text-text-tertiary">
+              工作区
+            </div>
+            {visibleMenuItems.map(item => (
               <button
                 key={item.key}
                 type="button"
-                onClick={() => setActiveTab(item.key)}
+                onClick={() => setSelectedTab(item.key)}
                 className={cn(
                   'mb-0.5 flex h-[37px] w-full items-center rounded-lg p-1 pl-3 text-left',
                   activeTab === item.key
-                    ? 'bg-state-base-active text-components-menu-item-text-active system-sm-semibold'
-                    : 'text-components-menu-item-text system-sm-medium',
+                    ? 'bg-state-base-active system-sm-semibold text-components-menu-item-text-active'
+                    : 'system-sm-medium text-components-menu-item-text',
                 )}
               >
-                <span className={cn('mr-2 h-5 w-5', activeTab === item.key ? item.activeIconClass : item.iconClass)} />
+                <span
+                  className={cn(
+                    'mr-2 h-5 w-5',
+                    activeTab === item.key
+                      ? item.activeIconClass
+                      : item.iconClass,
+                  )}
+                />
                 <span className="hidden truncate sm:block">{item.label}</span>
               </button>
             ))}
@@ -105,19 +149,32 @@ export default function CreatorSettingsModal({ show, defaultTab = 'account', onC
 
         {/* Right content panel */}
         <div className="relative flex min-h-0 w-[824px]">
-          <div className="fixed right-6 top-6 z-[9999] flex flex-col items-center">
-            <Button variant="tertiary" size="large" className="px-2" aria-label="关闭" onClick={onClose}>
+          <div className="fixed top-6 right-6 z-[9999] flex flex-col items-center">
+            <Button
+              variant="tertiary"
+              size="large"
+              className="px-2"
+              aria-label="关闭"
+              onClick={onClose}
+            >
               <span className="i-ri-close-line h-5 w-5" />
             </Button>
-            <div className="mt-1 text-text-tertiary system-2xs-medium-uppercase">ESC</div>
+            <div className="mt-1 system-2xs-medium-uppercase text-text-tertiary">
+              ESC
+            </div>
           </div>
 
           <ScrollArea
             className="h-full min-h-0 flex-1 bg-components-panel-bg"
-            slotClassNames={{ viewport: 'overscroll-contain', content: 'min-h-full pb-4' }}
+            slotClassNames={{
+              viewport: 'overscroll-contain',
+              content: 'min-h-full pb-4',
+            }}
           >
-            <div className="sticky top-0 z-20 mx-8 mb-[18px] bg-components-panel-bg pb-2 pt-[27px]">
-              <div className="text-text-primary title-2xl-semi-bold">{activeItem?.label}</div>
+            <div className="sticky top-0 z-20 mx-8 mb-[18px] bg-components-panel-bg pt-[27px] pb-2">
+              <div className="title-2xl-semi-bold text-text-primary">
+                {activeItem?.label}
+              </div>
             </div>
 
             <div className="px-4 pt-2 sm:px-8">

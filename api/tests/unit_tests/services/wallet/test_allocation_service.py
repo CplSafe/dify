@@ -408,6 +408,7 @@ def test_deduct_for_workflow_run_locks_rows_in_tenant_then_user_order(
     with (
         patch.object(UserBillingService, "get_or_create_balance", return_value=user_balance) as mock_ub_cls,
         patch.object(UserBillingService, "is_tenant_owner", return_value=False),
+        patch.object(UserBillingService, "resolve_billing_tenant_id", return_value="t1"),
     ):
         UserBillingService.deduct_for_workflow_run(
             account_id="a1",

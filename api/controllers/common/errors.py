@@ -49,13 +49,16 @@ class NoFileUploadedError(BaseHTTPException):
 
 
 class InsufficientUserBudgetError(BaseHTTPException):
-    """The caller's personal wallet is empty and ``check_can_run`` rejected the run."""
+    """The caller's personal wallet is empty and ``check_can_run`` rejected the run.
+
+    Description is Chinese-only: the frontend has no error-code mapping — it
+    toasts ``response.description`` verbatim (see ``web/service/fetch.ts``
+    ``afterResponseErrorCode``). The platform UI is Chinese throughout, so
+    keeping the description in Chinese avoids an English flash for end users.
+    """
 
     error_code = "insufficient_user_budget"
-    description = (
-        "Your wallet balance is not enough to start this run. "
-        "Please ask your workspace owner to allocate funds."
-    )
+    description = "您的余额不足，无法启动本次运行。请联系工作区所有者为您分配额度。"
     code = 402  # Payment Required
 
 
@@ -63,10 +66,7 @@ class InsufficientTenantBudgetError(BaseHTTPException):
     """The workspace's allocated pool is exhausted and ``check_can_run`` rejected the run."""
 
     error_code = "insufficient_tenant_budget"
-    description = (
-        "The workspace allocated pool is exhausted. "
-        "Please ask the workspace owner to top up and re-allocate."
-    )
+    description = "工作区已分配的额度池已耗尽。请联系工作区所有者充值并重新分配额度。"
     code = 402  # Payment Required
 
 
@@ -81,11 +81,7 @@ class InsufficientOwnerBudgetError(BaseHTTPException):
     """
 
     error_code = "insufficient_owner_budget"
-    description = (
-        "Your workspace balance is not enough to start this run. "
-        "Please top up to continue. Funds already allocated to members "
-        "cannot be spent on owner workflows."
-    )
+    description = "工作区余额不足，无法启动本次运行。请先充值；已分配给成员的额度无法用于所有者自己的工作流。"
     code = 402  # Payment Required
 
 

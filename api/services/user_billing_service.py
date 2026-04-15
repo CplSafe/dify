@@ -120,6 +120,65 @@ class UserBillingService:
         return role == TenantAccountRole.OWNER.value
 
     @classmethod
+    def _has_tenant_membership(cls, account_id: str, tenant_id: str) -> bool:
+        """Return True when the account is joined to the tenant in any role.
+
+        Distinguishes "marketplace caller" (no join row at all — the app is
+        published by a workspace the caller isn't a member of) from a real
+        member (join row exists). Marketplace callers are billed against
+        *their own* home workspace, not the publisher's — see
+        ``resolve_billing_tenant_id``.
+        """
+        join = db.session.scalar(
+            select(TenantAccountJoin.role).where(
+                TenantAccountJoin.tenant_id == tenant_id,
+                TenantAccountJoin.account_id == account_id,
+            )
+        )
+        return join is not None
+
+    @classmethod
+    def _get_current_tenant_id(cls, account_id: str) -> str | None:
+        """Return the account's active tenant (``TenantAccountJoin.current=True``).
+
+        Used to resolve which workspace's wallet pays when a caller invokes
+        a marketplace app published by a workspace they don't belong to.
+        Returns ``None`` for accounts without any current tenant (edge
+        state during registration) — callers must treat that as "cannot
+        bill, reject the run".
+        """
+        return db.session.scalar(
+            select(TenantAccountJoin.tenant_id).where(
+                TenantAccountJoin.account_id == account_id,
+                TenantAccountJoin.current.is_(True),
+            )
+        )
+
+    @classmethod
+    def resolve_billing_tenant_id(cls, account_id: str, app_tenant_id: str) -> str | None:
+        """Return the tenant whose wallet should be billed for this run.
+
+        Product rule: the **caller's home workspace** always pays, never the
+        publisher's. Two cases:
+
+        1. Caller is a member of ``app_tenant_id`` (the app lives in their
+           own workspace or one they've been invited to): bill against
+           ``app_tenant_id`` directly — owner vs member logic then decides
+           single-wallet vs dual-wallet.
+        2. Caller is NOT a member (cross-tenant marketplace call): bill
+           against the caller's *current* tenant. Their role there decides
+           which wallet pays. Marketplace callers are almost always owners
+           of their own workspace, so this typically routes to the
+           single-wallet owner path against the caller's ``TenantBalance``.
+
+        Returns ``None`` when the caller has no current tenant — callers
+        should treat that as "no billable wallet, reject the run".
+        """
+        if cls._has_tenant_membership(account_id, app_tenant_id):
+            return app_tenant_id
+        return cls._get_current_tenant_id(account_id)
+
+    @classmethod
     def check_balance_positive(cls, account_id: str) -> bool:
         """Return True if the user's personal ``UserBalance`` is positive.
 
@@ -139,40 +198,52 @@ class UserBillingService:
     def check_can_run(cls, account_id: str, tenant_id: str) -> tuple[bool, str | None]:
         """Pre-flight check before starting a workflow run.
 
+        ``tenant_id`` is the *app's* tenant (``app_model.tenant_id``). The
+        method internally resolves which tenant actually pays via
+        ``resolve_billing_tenant_id`` — for a marketplace cross-tenant
+        call, this is the caller's home workspace, NOT the publisher's.
+        Product rule: the caller's workspace always bears the cost.
+
         Returns ``(can_run, error_code)``. ``error_code`` is ``None`` when the
         run may proceed, otherwise one of:
 
         - ``"INSUFFICIENT_USER_BUDGET"`` — the member's personal balance is
           not positive (member path only).
         - ``"INSUFFICIENT_OWNER_BUDGET"`` — the owner's spendable
-          ``TenantBalance.balance`` is exhausted (owner path only). Surfaces
-          a different HTTP error so the UI can prompt the owner to top up
-          instead of telling them to "ask the owner".
+          ``TenantBalance.balance`` is exhausted. Covers both (a) the owner
+          running a workflow in their own workspace and (b) a marketplace
+          caller who is the owner of *their* home workspace — in both
+          cases the tenant wallet is what pays.
         - ``"INSUFFICIENT_TENANT_BUDGET"`` — the workspace's allocated pool
           (``TenantBalance.locked``) is drained. Member-only signal: it
           means there's nothing left to bill against even if the member's
           personal wallet still looks positive.
 
-        Owner path (single wallet): owners spend workspace funds directly
-        from ``TenantBalance.balance``. They don't hold a ``UserBalance``,
-        so the user-budget check is skipped.
+        Paths (keyed by role in the **billing tenant**):
 
-        Member path (dual wallet): member must have personal budget AND
-        the allocated pool (``locked``) must still be positive — a drained
-        pool blocks every member even if their personal balance looks
-        positive on paper (it would drive the invariant deeper into red).
+        - **Owner**: single-wallet path, spend ``TenantBalance.balance``.
+        - **Member**: dual-wallet path, both ``UserBalance.balance`` AND
+          ``TenantBalance.locked`` must be positive.
 
         All checks are strict (> 0) because ``deduct_for_workflow_run`` is
         allowed to push wallets negative mid-run. Blocking here prevents
         starting *new* runs once a pool is empty.
         """
-        tenant_balance = TenantBalanceService.get_or_create(tenant_id)
+        billing_tenant_id = cls.resolve_billing_tenant_id(account_id, tenant_id)
+        if billing_tenant_id is None:
+            # Caller has no current tenant — no wallet to bill. Treat as
+            # "owner budget exhausted" so the UI prompts them to set up a
+            # workspace / top up, rather than a misleading user-budget toast.
+            return False, "INSUFFICIENT_OWNER_BUDGET"
 
-        if cls.is_tenant_owner(account_id, tenant_id):
+        tenant_balance = TenantBalanceService.get_or_create(billing_tenant_id)
+
+        if cls.is_tenant_owner(account_id, billing_tenant_id):
             if tenant_balance.balance <= Decimal(0):
                 return False, "INSUFFICIENT_OWNER_BUDGET"
             return True, None
 
+        # Non-owner member of the billing tenant: dual-wallet path.
         user_balance = cls.get_or_create_balance(account_id)
         if not user_balance.is_sufficient():
             return False, "INSUFFICIENT_USER_BUDGET"
@@ -222,20 +293,23 @@ class UserBillingService:
     ) -> BillingRecord | None:
         """Deduct cost of a workflow run from the caller's effective wallet.
 
-        Two branches:
+        ``tenant_id`` is the *app's* tenant. The billing tenant is resolved
+        via ``resolve_billing_tenant_id`` — for marketplace cross-tenant
+        calls this is the caller's home workspace, never the publisher's.
+
+        Two branches, keyed by the caller's role in the **billing tenant**:
 
         - **Owner** (single-wallet): decrement ``TenantBalance.balance``.
           Owners spend workspace funds directly; they don't hold a
-          ``UserBalance``. Only one ``BillingRecord`` is written
-          (``scope="tenant"``).
+          ``UserBalance``. One ``BillingRecord`` written (``scope="tenant"``).
         - **Member** (dual-wallet): decrement BOTH ``UserBalance.balance``
           AND ``TenantBalance.locked`` by the same amount, atomically,
           and write two ``BillingRecord`` rows (``scope="user"`` and
           ``scope="tenant"``) for independent ledger views.
 
         Returns the primary record (tenant-scope for owner, user-scope for
-        member), or ``None`` if ``total_tokens`` is zero or the computed
-        amount rounds to zero.
+        member), or ``None`` if ``total_tokens`` is zero, the computed
+        amount rounds to zero, or no billing tenant can be resolved.
 
         Balances are permitted to go negative: this is a deliberate
         product choice so workflows already in flight are not killed
@@ -251,6 +325,22 @@ class UserBillingService:
             return None
 
         description = f"Workflow run {workflow_run_id}: {total_tokens} tokens"
+
+        billing_tenant_id = cls.resolve_billing_tenant_id(account_id, tenant_id)
+        if billing_tenant_id is None:
+            # No resolvable home workspace for the caller — nothing to bill
+            # against. Log and drop the record; the pre-flight gate should
+            # have caught this, so reaching here means someone bypassed it.
+            logger.warning(
+                "Skipping workflow billing: no billing tenant for account=%s app_tenant=%s workflow=%s",
+                account_id,
+                tenant_id,
+                workflow_run_id,
+            )
+            return None
+
+        # Bill against the resolved tenant, not the app's publisher.
+        tenant_id = billing_tenant_id
 
         if cls.is_tenant_owner(account_id, tenant_id):
             # Owner path: single-wallet deduction against TenantBalance.balance.

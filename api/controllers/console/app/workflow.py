@@ -14,13 +14,12 @@ from sqlalchemy.orm import sessionmaker
 from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError, NotFound
 
 import services
+from controllers.common.errors import raise_workflow_budget_http_error
 from controllers.console import console_ns
 from controllers.console.app.error import (
     ConversationCompletedError,
     DraftWorkflowNotExist,
     DraftWorkflowNotSync,
-    InsufficientTenantBudgetError,
-    InsufficientUserBudgetError,
 )
 from controllers.console.app.workflow_run import workflow_run_node_execution_model
 from controllers.console.app.wraps import get_app_model
@@ -358,9 +357,9 @@ class AdvancedChatDraftWorkflowRunApi(Resource):
         except services.errors.conversation.ConversationCompletedError:
             raise ConversationCompletedError()
         except WorkflowBudgetExceeded as ex:
-            if ex.code == "INSUFFICIENT_USER_BUDGET":
-                raise InsufficientUserBudgetError()
-            raise InsufficientTenantBudgetError()
+            # Use the shared mapper so owner-specific errors surface correctly
+            # instead of collapsing OWNER/TENANT into the member-facing message.
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except ValueError as e:
@@ -730,9 +729,9 @@ class DraftWorkflowRunApi(Resource):
 
             return helper.compact_generate_response(response)
         except WorkflowBudgetExceeded as ex:
-            if ex.code == "INSUFFICIENT_USER_BUDGET":
-                raise InsufficientUserBudgetError()
-            raise InsufficientTenantBudgetError()
+            # Use the shared mapper so owner-specific errors surface correctly
+            # instead of collapsing OWNER/TENANT into the member-facing message.
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
 
@@ -1214,9 +1213,9 @@ class DraftWorkflowTriggerRunApi(Resource):
                 )
             )
         except WorkflowBudgetExceeded as ex:
-            if ex.code == "INSUFFICIENT_USER_BUDGET":
-                raise InsufficientUserBudgetError()
-            raise InsufficientTenantBudgetError()
+            # Use the shared mapper so owner-specific errors surface correctly
+            # instead of collapsing OWNER/TENANT into the member-facing message.
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except PluginInvokeError as e:
@@ -1366,9 +1365,9 @@ class DraftWorkflowTriggerRunAllApi(Resource):
             )
             return helper.compact_generate_response(response)
         except WorkflowBudgetExceeded as ex:
-            if ex.code == "INSUFFICIENT_USER_BUDGET":
-                raise InsufficientUserBudgetError()
-            raise InsufficientTenantBudgetError()
+            # Use the shared mapper so owner-specific errors surface correctly
+            # instead of collapsing OWNER/TENANT into the member-facing message.
+            raise_workflow_budget_http_error(ex.code)
         except InvokeRateLimitError as ex:
             raise InvokeRateLimitHttpError(ex.description)
         except Exception:

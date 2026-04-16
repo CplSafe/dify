@@ -1,6 +1,8 @@
 import logging
 
-from flask import request
+from decimal import Decimal
+
+from flask import make_response, request
 from flask_restx import Resource
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import sessionmaker
@@ -19,11 +21,17 @@ from controllers.console.auth.error import (
 from extensions.ext_database import db
 from libs.helper import EmailStr, extract_remote_ip
 from libs.password import valid_password
+from libs.token import (
+    set_access_token_to_cookie,
+    set_csrf_token_to_cookie,
+    set_refresh_token_to_cookie,
+)
 from models import Account
 from services.account_service import AccountService
 from services.billing_service import BillingService
 from services.errors.account import AccountNotFoundError, AccountRegisterError
 from services.invitation_service import InvitationService
+from services.wallet.tenant_balance_service import TenantBalanceService
 
 from ..error import AccountInFreezeError, EmailSendIpLimitError
 from ..wraps import email_password_login_enabled, email_register_enabled, setup_required
@@ -209,7 +217,24 @@ class EmailRegisterResetApi(Resource):
                     "Invite bind errored during registration account=%s", account.id
                 )
 
-        return {"result": "success", "data": token_pair.model_dump()}
+        # Grant signup bonus (¥50) to the new user's workspace.
+        try:
+            tenant_id = str(account.current_tenant_id)
+            SIGNUP_BONUS = Decimal("50")
+            TenantBalanceService.topup(tenant_id=tenant_id, amount=SIGNUP_BONUS)
+            db.session.commit()
+            logger.info("Signup bonus ¥%s granted to tenant=%s account=%s", SIGNUP_BONUS, tenant_id, account.id)
+        except Exception:
+            db.session.rollback()
+            logger.exception("Failed to grant signup bonus for account=%s", account.id)
+
+        # Set auth cookies so the browser is logged in immediately —
+        # no separate login step required after registration.
+        response = make_response({"result": "success"})
+        set_access_token_to_cookie(request, response, token_pair.access_token)
+        set_refresh_token_to_cookie(request, response, token_pair.refresh_token)
+        set_csrf_token_to_cookie(request, response, token_pair.csrf_token)
+        return response
 
     def _create_new_account(self, email: str, password: str) -> Account | None:
         # Create new account if allowed

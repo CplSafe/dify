@@ -62,9 +62,8 @@ const ChangePasswordForm = () => {
       return
     try {
       // Pass invite_code inside the register call so the backend can bind
-      // it transactionally. A separate POST /creator/invitations/bind would
-      // silently 401 — the fresh account has no auth cookie yet (the token
-      // pair only comes back in the JSON body of /email-register).
+      // it transactionally. The backend sets auth cookies in the response,
+      // so the user is auto-logged-in after registration.
       const rawInvite = searchParams.get('invite_code')
       const inviteCode = rawInvite ? decodeURIComponent(rawInvite) : undefined
       const res = await register({

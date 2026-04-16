@@ -3,92 +3,86 @@ from libs.exception import BaseHTTPException
 
 class AlreadySetupError(BaseHTTPException):
     error_code = "already_setup"
-    description = "Dify has been successfully installed. Please refresh the page or return to the dashboard homepage."
+    description = "系统已完成安装，请刷新页面或返回首页"
     code = 403
 
 
 class NotSetupError(BaseHTTPException):
     error_code = "not_setup"
-    description = (
-        "Dify has not been initialized and installed yet. "
-        "Please proceed with the initialization and installation process first."
-    )
+    description = "系统尚未初始化，请先完成初始化设置"
     code = 401
 
 
 class NotInitValidateError(BaseHTTPException):
     error_code = "not_init_validated"
-    description = "Init validation has not been completed yet. Please proceed with the init validation process first."
+    description = "初始化验证尚未完成，请先完成验证"
     code = 401
 
 
 class InitValidateFailedError(BaseHTTPException):
     error_code = "init_validate_failed"
-    description = "Init validation failed. Please check the password and try again."
+    description = "初始化验证失败，请检查密码后重试"
     code = 401
 
 
 class AccountNotLinkTenantError(BaseHTTPException):
     error_code = "account_not_link_tenant"
-    description = "Account not link tenant."
+    description = "账号未关联工作空间"
     code = 403
 
 
 class AlreadyActivateError(BaseHTTPException):
     error_code = "already_activate"
-    description = "Auth Token is invalid or account already activated, please check again."
+    description = "链接无效或账号已激活，请重新检查"
     code = 403
 
 
 class NotAllowedCreateWorkspace(BaseHTTPException):
     error_code = "not_allowed_create_workspace"
-    description = "Workspace not found, please contact system admin to invite you to join in a workspace."
+    description = "未找到工作空间，请联系管理员邀请您加入"
     code = 400
 
 
 class WorkspaceMembersLimitExceeded(BaseHTTPException):
     error_code = "limit_exceeded"
-    description = "Unable to add member because the maximum workspace's member limit was exceeded"
+    description = "无法添加成员，已超出工作空间成员数量上限"
     code = 400
 
 
 class WorkspacesLimitExceeded(BaseHTTPException):
     error_code = "limit_exceeded"
-    description = "Unable to create workspace because the maximum workspace limit was exceeded"
+    description = "无法创建工作空间，已超出工作空间数量上限"
     code = 400
 
 
 class AccountBannedError(BaseHTTPException):
     error_code = "account_banned"
-    description = "Account is banned."
+    description = "该账号已被禁用"
     code = 400
 
 
 class AccountNotFound(BaseHTTPException):
     error_code = "account_not_found"
-    description = "Account not found."
+    description = "未找到该账号"
     code = 400
 
 
 class EmailSendIpLimitError(BaseHTTPException):
     error_code = "email_send_ip_limit"
-    description = "Too many emails have been sent from this IP address recently. Please try again later."
+    description = "该 IP 发送邮件过于频繁，请稍后再试"
     code = 429
 
 
 class UnauthorizedAndForceLogout(BaseHTTPException):
     error_code = "unauthorized_and_force_logout"
-    description = "Unauthorized and force logout."
+    description = "登录状态已失效，请重新登录"
     code = 401
 
 
 class AccountInFreezeError(BaseHTTPException):
     error_code = "account_in_freeze"
     code = 400
-    description = (
-        "This email account has been deleted within the past 30 days"
-        "and is temporarily unavailable for new account registration."
-    )
+    description = "该邮箱账号在 30 天内已被注销，暂时无法重新注册"
 
 
 class EducationVerifyLimitError(BaseHTTPException):

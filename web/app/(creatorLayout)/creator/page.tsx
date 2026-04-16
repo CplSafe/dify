@@ -4,12 +4,13 @@
 import type { CreatorChatDraft } from '@/app/components/creator/chat-draft'
 import { RiArrowLeftLine, RiLoader4Line } from '@remixicon/react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from '@/app/components/base/ui/toast'
 import { sanitizeDraftFiles } from '@/app/components/creator/chat-draft'
 import CreatorHomeInput from '@/app/components/creator/home-input'
 import InstalledApp from '@/app/components/explore/installed-app'
 import { get, post } from '@/service/base'
+import { createCreatorTask, updateCreatorTask } from '@/service/creator-task'
 import { fetchInstalledAppList, fetchTrialAppParams } from '@/service/explore'
 import { cn } from '@/utils/classnames'
 
@@ -163,6 +164,41 @@ export default function CreatorPage() {
     [],
   )
 
+  const currentTaskIdRef = useRef<string | null>(null)
+
+  const handleMessageStart = useCallback(
+    async ({
+      installedAppId: iAppId,
+      conversationId,
+    }: {
+      installedAppId: string
+      conversationId: string | null
+    }) => {
+      try {
+        const task = await createCreatorTask({
+          app_id: targetAppId,
+          installed_app_id: iAppId,
+          conversation_id: conversationId ?? undefined,
+          title: targetAppId,
+        })
+        currentTaskIdRef.current = task.id
+      }
+      catch {
+        // Non-critical: task tracking failure should not block the chat flow
+      }
+    },
+    [targetAppId],
+  )
+
+  const handleResultCompleted = useCallback(async (_payload: unknown) => {
+    if (currentTaskIdRef.current) {
+      updateCreatorTask(currentTaskIdRef.current, {
+        status: 'completed',
+      }).catch(() => {})
+      currentTaskIdRef.current = null
+    }
+  }, [])
+
   const showWorkspace = workspaceOpen || !isHome
 
   const handleBack = useCallback(() => {
@@ -251,6 +287,8 @@ export default function CreatorPage() {
               initialDraft={initialDraft}
               forceFreshConversation={workspaceIsFreshConversation}
               onInitialDraftConsumed={() => setInitialDraft(null)}
+              onMessageStart={handleMessageStart}
+              onResultCompleted={handleResultCompleted}
             />
           </div>
         )}

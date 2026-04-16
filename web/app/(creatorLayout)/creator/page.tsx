@@ -58,6 +58,31 @@ export default function CreatorPage() {
   const isHome = !appId
   const targetAppId = appId || DEFAULT_CREATOR_HOME_APP_ID
 
+  // Sync component state when app_id search param changes (e.g. clicking a task
+  // in task-center while already on /creator). useState initializers only run on
+  // mount, so we need this effect to handle client-side navigation.
+  const prevAppIdRef = useRef(appId)
+  useEffect(() => {
+    if (prevAppIdRef.current === appId)
+      return
+    prevAppIdRef.current = appId
+
+    if (appId) {
+      setWorkspaceOpen(true)
+      setWorkspaceIsFreshConversation(false)
+      setWorkspaceSessionKey(crypto.randomUUID())
+      setInstalledAppId(null)
+      setInitialDraft(null)
+    }
+    else {
+      setWorkspaceOpen(false)
+      setWorkspaceIsFreshConversation(true)
+      setWorkspaceSessionKey(crypto.randomUUID())
+      setInstalledAppId(null)
+      setInitialDraft(null)
+    }
+  }, [appId])
+
   useEffect(() => {
     setLoadingApps(true)
     get<{ data: MarketplaceApp[] }>('/creator/marketplace/apps')

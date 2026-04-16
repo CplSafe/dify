@@ -42,6 +42,7 @@ type IResultProps = {
   onMessageStart?: (params: {
     installedAppId: string
     conversationId: string | null
+    appName?: string
   }) => void
   onResultCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
   visionConfig: VisionSettings

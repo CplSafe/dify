@@ -50,6 +50,7 @@ const ChatWrapper = ({
   onMessageStart?: (params: {
     installedAppId: string
     conversationId: string | null
+    appName?: string
   }) => void
 }) => {
   const { t } = useTranslation()
@@ -318,6 +319,7 @@ const ChatWrapper = ({
       onMessageStart?.({
         installedAppId: appId || '',
         conversationId: currentConversationId || null,
+        appName: appData?.site.title || undefined,
       })
 
       handleSend(getUrl('chat-messages', appSourceType, appId || ''), data, {

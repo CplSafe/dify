@@ -35,6 +35,7 @@ const InstalledApp = ({
   onMessageStart?: (params: {
     installedAppId: string
     conversationId: string | null
+    appName?: string
   }) => void
 }) => {
   const {

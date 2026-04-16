@@ -26,6 +26,7 @@ type ChatWithHistoryProps = {
   onMessageStart?: (params: {
     installedAppId: string
     conversationId: string | null
+    appName?: string
   }) => void
 }
 const ChatWithHistory: FC<ChatWithHistoryProps> = ({
@@ -144,6 +145,7 @@ type ChatWithHistoryWrapProps = {
   onMessageStart?: (params: {
     installedAppId: string
     conversationId: string | null
+    appName?: string
   }) => void
 }
 const ChatWithHistoryWrap: FC<ChatWithHistoryWrapProps> = ({

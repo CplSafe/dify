@@ -170,16 +170,18 @@ export default function CreatorPage() {
     async ({
       installedAppId: iAppId,
       conversationId,
+      appName,
     }: {
       installedAppId: string
       conversationId: string | null
+      appName?: string
     }) => {
       try {
         const task = await createCreatorTask({
           app_id: targetAppId,
           installed_app_id: iAppId,
           conversation_id: conversationId ?? undefined,
-          title: targetAppId,
+          title: appName || '创作任务',
         })
         currentTaskIdRef.current = task.id
       }

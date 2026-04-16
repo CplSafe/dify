@@ -42,6 +42,7 @@ type UseResultSenderOptions = {
   onMessageStart?: (params: {
     installedAppId: string
     conversationId: string | null
+    appName?: string
   }) => void
   onResultCompleted?: (payload: GeneratedResultPayload) => void | Promise<void>
   onRunStart: () => void
@@ -51,11 +52,6 @@ type UseResultSenderOptions = {
   t: Translate
   taskId?: number
   visionConfig: VisionSettings
-}
-
-const logRequestError = (notify: Notify, error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error)
-  notify({ type: 'error', message })
 }
 
 export const useResultSender = ({
@@ -126,14 +122,12 @@ export const useResultSender = ({
 
     let isEnd = false
     let isTimeout = false
-    let completionChunks: string[] = []
+    let accumulatedText = ''
     let tempMessageId = ''
 
-    const notifyTimeoutWarning = () => {
-      notify({
-        type: 'warning',
-        message: t('warningMessage.timeoutExceeded', { ns: 'appDebug' }),
-      })
+    const timeoutWarning = {
+      type: 'warning' as const,
+      message: t('warningMessage.timeoutExceeded', { ns: 'appDebug' }),
     }
 
     const finalizeRun = (success: boolean) => {
@@ -150,13 +144,12 @@ export const useResultSender = ({
       })
     }
 
-    void (async () => {
-      await sleep(TEXT_GENERATION_TIMEOUT_MS)
+    void sleep(TEXT_GENERATION_TIMEOUT_MS).then(() => {
       if (isEnd)
         return
       finalizeRun(false)
       isTimeout = true
-    })()
+    })
 
     if (isWorkflow) {
       const otherOptions = createWorkflowStreamHandlers({
@@ -184,7 +177,9 @@ export const useResultSender = ({
         (error) => {
           runState.setRespondingFalse()
           runState.resetRunState()
-          logRequestError(notify, error)
+          const message
+            = error instanceof Error ? error.message : String(error)
+          notify({ type: 'error', message })
         },
       )
       return true
@@ -195,15 +190,15 @@ export const useResultSender = ({
       {
         onData: (chunk, _isFirstMessage, { messageId, taskId: nextTaskId }) => {
           tempMessageId = messageId
-          if (nextTaskId && nextTaskId.trim() !== '')
+          if (nextTaskId?.trim())
             runState.setCurrentTaskId(prev => prev ?? nextTaskId)
 
-          completionChunks.push(chunk)
-          runState.setCompletionRes(completionChunks.join(''))
+          accumulatedText += chunk
+          runState.setCompletionRes(accumulatedText)
         },
         onCompleted: () => {
           if (isTimeout) {
-            notifyTimeoutWarning()
+            notify(timeoutWarning)
             return
           }
 
@@ -212,12 +207,12 @@ export const useResultSender = ({
           isEnd = true
         },
         onMessageReplace: (messageReplace) => {
-          completionChunks = [messageReplace.answer]
-          runState.setCompletionRes(completionChunks.join(''))
+          accumulatedText = messageReplace.answer
+          runState.setCompletionRes(accumulatedText)
         },
         onError: () => {
           if (isTimeout) {
-            notifyTimeoutWarning()
+            notify(timeoutWarning)
             return
           }
 
@@ -275,7 +270,5 @@ export const useResultSender = ({
     void handleSendRef.current()
   }, [controlRetry])
 
-  return {
-    handleSend,
-  }
+  return { handleSend }
 }

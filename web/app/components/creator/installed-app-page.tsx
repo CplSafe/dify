@@ -123,6 +123,7 @@ export default function CreatorInstalledApp({
     }: {
       installedAppId: string
       conversationId: string | null
+      appName?: string
     }) => {
       if (!installedApp)
         return

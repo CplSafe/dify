@@ -101,11 +101,14 @@ export default function CreatorWorksPage() {
   const renderPreview = (work: Work) => {
     if (work.file_key && work.file_type === 'image') {
       return (
-        <div className="flex h-40 items-center justify-center overflow-hidden bg-gray-50">
+        <div
+          className="relative w-full overflow-hidden bg-gray-50"
+          style={{ aspectRatio: '16/9' }}
+        >
           <img
             src={work.file_key}
             alt={work.title}
-            className="h-full w-full object-cover"
+            className="inset-0 absolute h-full w-full object-cover"
             onError={e => (e.currentTarget.style.display = 'none')}
           />
         </div>
@@ -114,11 +117,14 @@ export default function CreatorWorksPage() {
 
     if (work.file_key && work.file_type === 'video') {
       return (
-        <div className="flex h-40 items-center justify-center overflow-hidden bg-black">
+        <div
+          className="relative w-full overflow-hidden bg-black"
+          style={{ aspectRatio: '16/9' }}
+        >
           <video
             src={work.file_key}
-            className="h-full w-full object-contain"
-            muted
+            className="inset-0 absolute h-full w-full object-contain"
+            controls
             preload="metadata"
           />
         </div>
@@ -128,7 +134,10 @@ export default function CreatorWorksPage() {
     const iconClass
       = work.file_type === 'image' ? 'i-ri-image-line' : 'i-ri-video-line'
     return (
-      <div className="flex h-40 items-center justify-center bg-gradient-to-br from-primary-50 to-purple-50">
+      <div
+        className="relative flex w-full items-center justify-center bg-gradient-to-br from-primary-50 to-purple-50"
+        style={{ aspectRatio: '16/9' }}
+      >
         <span className={`${iconClass} h-16 w-16 text-primary-200`} />
       </div>
     )

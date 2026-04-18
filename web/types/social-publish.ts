@@ -75,17 +75,54 @@ export type SocialPublishTask = TaskError & {
   updated_at: string
 }
 
-export type CreateTaskRequest = {
-  account_id: string
-  work_id: string
+export type SocialPublishPlatformPayload = {
+  /**
+   * Free-text venue / city. Backend caps at 80 chars and silently
+   *  drops it for platforms whose uploader has no location field
+   *  (currently ks).
+   */
+  location?: string
+}
+
+type TaskContent = {
   title: string
   tags?: string[]
   desc?: string
 }
 
+export type CreateTaskRequest = TaskContent & {
+  account_id: string
+  work_id: string
+  /**
+   * P4: per-platform extras (e.g. `{location: 'Shanghai'}`). Keys
+   *  outside the per-platform allowlist are dropped server-side.
+   */
+  platform_payload?: SocialPublishPlatformPayload
+}
+
 export type CreateTaskResponse = {
   task_id: string
   status: SocialPublishTaskStatus
+}
+
+export type BatchCreateTaskTarget = {
+  account_id: string
+  platform_payload?: SocialPublishPlatformPayload
+}
+
+export type BatchCreateTaskRequest = TaskContent & {
+  work_id: string
+  targets: BatchCreateTaskTarget[]
+}
+
+export type BatchCreateResultItem = TaskError & {
+  account_id: string
+  success: boolean
+  task_id: string | null
+}
+
+export type BatchCreateTaskResponse = {
+  results: BatchCreateResultItem[]
 }
 
 export type TaskStatusResponse = {

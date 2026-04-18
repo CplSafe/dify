@@ -1,6 +1,8 @@
 import type {
   AuthStartResponse,
   AuthStatusResponse,
+  BatchCreateTaskRequest,
+  BatchCreateTaskResponse,
   CreateTaskRequest,
   CreateTaskResponse,
   SocialPublishAccount,
@@ -88,6 +90,11 @@ export const deleteSocialPublishAccount = (accountId: string) =>
 
 export const createSocialPublishTask = (body: CreateTaskRequest) =>
   withErrorNormalization(post<CreateTaskResponse>(TASKS_BASE, { body }))
+
+export const createSocialPublishTasksBatch = (body: BatchCreateTaskRequest) =>
+  withErrorNormalization(
+    post<BatchCreateTaskResponse>(`${TASKS_BASE}/batch`, { body }),
+  )
 
 export const fetchSocialPublishTask = (taskId: string) =>
   withErrorNormalization(

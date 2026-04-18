@@ -2,12 +2,16 @@
 /* eslint-disable react/set-state-in-effect -- close-reset pattern mirrors auth-qr-modal.tsx */
 
 import type {
+  BatchCreateResultItem,
+  BatchCreateTaskTarget,
   CreateTaskRequest,
   SocialPublishAccount,
+  SocialPublishPlatform,
+  SocialPublishPlatformPayload,
   SocialPublishTask,
   SocialPublishTaskStatus,
 } from '@/types/social-publish'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Button from '@/app/components/base/button'
 import Input from '@/app/components/base/input'
@@ -20,6 +24,7 @@ import {
 } from '@/app/components/base/ui/dialog'
 import {
   createSocialPublishTask,
+  createSocialPublishTasksBatch,
   fetchSocialPublishAccounts,
   fetchSocialPublishTask,
 } from '@/service/social-publish'
@@ -29,6 +34,16 @@ const TERMINAL_STATUSES: SocialPublishTaskStatus[] = ['success', 'failed']
 const TITLE_MAX = 200
 const DESC_MAX = 2_000
 const TAGS_MAX = 10
+const LOCATION_MAX = 80
+const BATCH_MAX = 10
+
+// Account-creation set drives platform-tab visibility. Stays in sync with
+// SUPPORTED_PLATFORMS_P1 on the backend (P4 = douyin + xhs; ks coming
+// once upstream cookie_gen lands).
+const SUPPORTED_PLATFORMS: SocialPublishPlatform[] = ['douyin', 'xhs']
+// Subset of platforms whose uploader actually consumes a location field.
+// Platforms outside this set hide the location input in the drawer.
+const LOCATION_PLATFORMS = new Set<SocialPublishPlatform>(['douyin', 'xhs'])
 
 type Props = {
   open: boolean
@@ -36,11 +51,21 @@ type Props = {
   /** Pre-fill the title field — typically the work's existing title. */
   defaultTitle?: string
   onOpenChange: (open: boolean) => void
-  /** Fired when a task reaches `success`; lets the parent invalidate caches. */
+  /**
+   * Fired when at least one target reached `success`; lets the parent
+   *  invalidate caches. Receives the first successful task — callers that
+   *  need every result should poll the list endpoint.
+   */
   onPublishSuccess?: (task: SocialPublishTask) => void
 }
 
-type Phase = 'form' | 'submitting' | 'tracking' | 'done' | 'error'
+type Phase = 'form' | 'submitting' | 'tracking' | 'done' | 'partial' | 'error'
+
+type AccountsByPlatform = Record<SocialPublishPlatform, SocialPublishAccount[]>
+
+function emptyAccountsByPlatform(): AccountsByPlatform {
+  return { douyin: [], xhs: [], ks: [] }
+}
 
 function parseTags(raw: string): string[] {
   return raw
@@ -48,6 +73,18 @@ function parseTags(raw: string): string[] {
     .map(t => t.trim())
     .filter(Boolean)
     .slice(0, TAGS_MAX)
+}
+
+function buildPlatformPayload(
+  platform: SocialPublishPlatform,
+  location: string,
+): SocialPublishPlatformPayload | undefined {
+  if (!LOCATION_PLATFORMS.has(platform))
+    return undefined
+  const trimmed = location.trim().slice(0, LOCATION_MAX)
+  if (!trimmed)
+    return undefined
+  return { location: trimmed }
 }
 
 export function PublishDrawer({
@@ -59,9 +96,16 @@ export function PublishDrawer({
 }: Props) {
   const { t } = useTranslation('socialPublish')
 
-  const [accounts, setAccounts] = useState<SocialPublishAccount[]>([])
+  const [accountsByPlatform, setAccountsByPlatform]
+    = useState<AccountsByPlatform>(emptyAccountsByPlatform)
   const [accountsLoading, setAccountsLoading] = useState(false)
-  const [accountId, setAccountId] = useState<string>('')
+  // Selected account ids — multi-select. Includes accounts from any
+  // platform; per-account location lives in `locationByAccount`.
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
+  const [locationByAccount, setLocationByAccount] = useState<
+    Record<string, string>
+  >({})
+
   const [title, setTitle] = useState(defaultTitle ?? '')
   const [tagsRaw, setTagsRaw] = useState('')
   const [desc, setDesc] = useState('')
@@ -69,6 +113,9 @@ export function PublishDrawer({
   const [phase, setPhase] = useState<Phase>('form')
   const [task, setTask] = useState<SocialPublishTask | null>(null)
   const [errorCode, setErrorCode] = useState<string | null>(null)
+  // Per-target results from the batch endpoint, surfaced in the partial /
+  // done states so the user can see which accounts went through.
+  const [batchResults, setBatchResults] = useState<BatchCreateResultItem[]>([])
 
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const generationRef = useRef(0)
@@ -89,25 +136,38 @@ export function PublishDrawer({
     [t],
   )
 
-  // Load active accounts when the drawer opens.
+  // ---------- accounts ----------
+
+  // Load active accounts for every supported platform when the drawer
+  // opens. The previous implementation only fetched douyin — now we need
+  // every platform so the user can publish across them.
   useEffect(() => {
     if (!open)
       return
     let cancelled = false
     setAccountsLoading(true)
-    fetchSocialPublishAccounts('douyin')
-      .then((res) => {
+    Promise.all(
+      SUPPORTED_PLATFORMS.map(p =>
+        fetchSocialPublishAccounts(p)
+          .then(res => ({ platform: p, accounts: res.data ?? [] }))
+          .catch(() => ({
+            platform: p,
+            accounts: [] as SocialPublishAccount[],
+          })),
+      ),
+    )
+      .then((results) => {
         if (cancelled)
           return
-        const active = (res.data ?? []).filter(a => a.status === 'active')
-        setAccounts(active)
-        if (active.length === 1)
-          setAccountId(active[0].id)
-      })
-      .catch(() => {
-        if (cancelled)
-          return
-        setAccounts([])
+        const next = emptyAccountsByPlatform()
+        for (const { platform, accounts } of results)
+          next[platform] = accounts.filter(a => a.status === 'active')
+        setAccountsByPlatform(next)
+        // Auto-select when there's exactly one active account across all
+        // supported platforms — keeps the single-account UX from P2.
+        const total = SUPPORTED_PLATFORMS.flatMap(p => next[p])
+        if (total.length === 1)
+          setSelectedAccountIds([total[0].id])
       })
       .finally(() => {
         if (!cancelled)
@@ -118,7 +178,34 @@ export function PublishDrawer({
     }
   }, [open])
 
-  // Reset form / poller on close.
+  const accountsFlat = useMemo(
+    () =>
+      SUPPORTED_PLATFORMS.flatMap(p =>
+        accountsByPlatform[p].map(a => ({ platform: p, account: a })),
+      ),
+    [accountsByPlatform],
+  )
+  const accountById = useMemo(() => {
+    const map = new Map<
+      string,
+      { platform: SocialPublishPlatform, account: SocialPublishAccount }
+    >()
+    for (const entry of accountsFlat) map.set(entry.account.id, entry)
+    return map
+  }, [accountsFlat])
+
+  const toggleAccount = useCallback((accountId: string) => {
+    setSelectedAccountIds((current) => {
+      if (current.includes(accountId))
+        return current.filter(id => id !== accountId)
+      if (current.length >= BATCH_MAX)
+        return current
+      return [...current, accountId]
+    })
+  }, [])
+
+  // ---------- reset ----------
+
   const resetRef = useRef<() => void>(() => {})
   resetRef.current = () => {
     generationRef.current += 1
@@ -126,16 +213,20 @@ export function PublishDrawer({
     setPhase('form')
     setTask(null)
     setErrorCode(null)
+    setBatchResults([])
     setTitle(defaultTitle ?? '')
     setTagsRaw('')
     setDesc('')
-    setAccountId('')
+    setSelectedAccountIds([])
+    setLocationByAccount({})
   }
   useEffect(() => {
     if (!open)
       resetRef.current()
     return () => clearPoll()
   }, [open, clearPoll])
+
+  // ---------- poll ----------
 
   const pollOnce = useCallback(
     async (taskId: string, gen: number) => {
@@ -172,6 +263,8 @@ export function PublishDrawer({
     [clearPoll, onPublishSuccess],
   )
 
+  // ---------- submit ----------
+
   const submit = useCallback(async () => {
     const trimmedTitle = title.trim()
     if (!trimmedTitle) {
@@ -179,41 +272,130 @@ export function PublishDrawer({
       setPhase('error')
       return
     }
+    if (selectedAccountIds.length === 0)
+      return
     generationRef.current += 1
     const gen = generationRef.current
     clearPoll()
     setPhase('submitting')
     setErrorCode(null)
+    setBatchResults([])
 
-    const body: CreateTaskRequest = {
-      account_id: accountId,
-      work_id: workId,
-      title: trimmedTitle,
-      tags: parseTags(tagsRaw),
-      desc: desc.trim() || undefined,
-    }
-    try {
-      const res = await createSocialPublishTask(body)
-      if (gen !== generationRef.current)
+    const tags = parseTags(tagsRaw)
+    const trimmedDesc = desc.trim() || undefined
+
+    if (selectedAccountIds.length === 1) {
+      // Single-target path keeps the per-task poll behaviour from P2 so
+      // the user sees real-time queued → running → success transitions.
+      const accountId = selectedAccountIds[0]
+      const entry = accountById.get(accountId)
+      if (!entry) {
+        setPhase('error')
+        setErrorCode('account_not_found')
         return
-      setPhase('tracking')
-      // Synthesise a minimal task row until the first poll lands.
-      setTask({
-        id: res.task_id,
+      }
+      const body: CreateTaskRequest = {
         account_id: accountId,
         work_id: workId,
-        platform: 'douyin',
-        status: res.status,
-        result_url: null,
-        error_code: null,
-        error_message: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      pollTimerRef.current = setTimeout(
-        () => pollOnce(res.task_id, gen),
-        POLL_INTERVAL_MS,
+        title: trimmedTitle,
+        tags,
+        desc: trimmedDesc,
+        platform_payload: buildPlatformPayload(
+          entry.platform,
+          locationByAccount[accountId] ?? '',
+        ),
+      }
+      try {
+        const res = await createSocialPublishTask(body)
+        if (gen !== generationRef.current)
+          return
+        setPhase('tracking')
+        setTask({
+          id: res.task_id,
+          account_id: accountId,
+          work_id: workId,
+          platform: entry.platform,
+          status: res.status,
+          result_url: null,
+          error_code: null,
+          error_message: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        pollTimerRef.current = setTimeout(
+          () => pollOnce(res.task_id, gen),
+          POLL_INTERVAL_MS,
+        )
+      }
+      catch (e) {
+        if (gen !== generationRef.current)
+          return
+        const code = (e as { code?: string })?.code ?? 'social_publish_error'
+        setErrorCode(code)
+        setPhase('error')
+      }
+      return
+    }
+
+    // Multi-target path uses the batch endpoint. Every target dispatches
+    // independently server-side so a single failure doesn't block the
+    // others — surfaces a per-row table after the call completes.
+    const targets: BatchCreateTaskTarget[] = []
+    for (const id of selectedAccountIds) {
+      const entry = accountById.get(id)
+      if (!entry)
+        continue
+      const platformPayload = buildPlatformPayload(
+        entry.platform,
+        locationByAccount[id] ?? '',
       )
+      // Omit `platform_payload` entirely when no extras apply so the
+      // request body stays minimal and matches the optional-field shape
+      // the backend expects.
+      targets.push(
+        platformPayload
+          ? { account_id: id, platform_payload: platformPayload }
+          : { account_id: id },
+      )
+    }
+    try {
+      const res = await createSocialPublishTasksBatch({
+        work_id: workId,
+        title: trimmedTitle,
+        tags,
+        desc: trimmedDesc,
+        targets,
+      })
+      if (gen !== generationRef.current)
+        return
+      setBatchResults(res.results)
+      const allSucceeded = res.results.every(r => r.success)
+      const allFailed = res.results.every(r => !r.success)
+      if (allFailed) {
+        setPhase('error')
+        setErrorCode(res.results[0]?.error_code ?? 'social_publish_error')
+        return
+      }
+      setPhase(allSucceeded ? 'done' : 'partial')
+      // Fire onPublishSuccess with the first task that did go through so
+      // the parent invalidates its cache. Per-row polling lives in the
+      // task list page — keeping the drawer simple.
+      const firstSuccess = res.results.find(r => r.success && r.task_id)
+      if (firstSuccess) {
+        const entry = accountById.get(firstSuccess.account_id)
+        onPublishSuccess?.({
+          id: firstSuccess.task_id!,
+          account_id: firstSuccess.account_id,
+          work_id: workId,
+          platform: entry?.platform ?? 'douyin',
+          status: 'queued',
+          result_url: null,
+          error_code: null,
+          error_message: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+      }
     }
     catch (e) {
       if (gen !== generationRef.current)
@@ -222,48 +404,112 @@ export function PublishDrawer({
       setErrorCode(code)
       setPhase('error')
     }
-  }, [accountId, clearPoll, desc, pollOnce, tagsRaw, title, workId])
+  }, [
+    accountById,
+    clearPoll,
+    desc,
+    locationByAccount,
+    onPublishSuccess,
+    pollOnce,
+    selectedAccountIds,
+    tagsRaw,
+    title,
+    workId,
+  ])
 
   const submitDisabled
     = phase === 'submitting'
       || phase === 'tracking'
-      || !accountId
+      || selectedAccountIds.length === 0
       || !title.trim()
+
+  // ---------- view ----------
+
+  const noActiveAccounts = !accountsLoading && accountsFlat.length === 0
+
+  const accountSelector = (
+    <div className="flex flex-col gap-2">
+      <label className="text-sm font-medium text-text-secondary">
+        {t('publish.accounts')}
+      </label>
+      {accountsLoading
+        ? (
+            <div className="flex items-center gap-2 text-sm text-text-tertiary">
+              <Spinner loading className="h-3 w-3" />
+              ...
+            </div>
+          )
+        : noActiveAccounts
+          ? (
+              <p className="text-sm text-amber-700">{t('publish.noActiveAccount')}</p>
+            )
+          : (
+              <div className="flex flex-wrap gap-2">
+                {accountsFlat.map(({ platform, account }) => {
+                  const selected = selectedAccountIds.includes(account.id)
+                  return (
+                    <button
+                      key={account.id}
+                      type="button"
+                      onClick={() => toggleAccount(account.id)}
+                      aria-pressed={selected}
+                      data-testid={`account-chip-${account.id}`}
+                      className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                        selected
+                          ? 'border-primary-500 bg-primary-50 text-primary-700'
+                          : 'border-divider-subtle bg-components-input-bg-normal text-text-secondary hover:border-divider-deep'
+                      }`}
+                    >
+                      <span className="font-medium">
+                        {t(`platforms.${platform}`)}
+                      </span>
+                      <span>{account.display_name ?? account.id}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+      {selectedAccountIds.length >= BATCH_MAX && (
+        <p className="text-xs text-amber-700">
+          {t('publish.batchCapHint', { max: BATCH_MAX })}
+        </p>
+      )}
+    </div>
+  )
+
+  const perAccountLocationFields = selectedAccountIds
+    .map((id) => {
+      const entry = accountById.get(id)
+      if (!entry || !LOCATION_PLATFORMS.has(entry.platform))
+        return null
+      const value = locationByAccount[id] ?? ''
+      return (
+        <div className="flex flex-col gap-1" key={id}>
+          <label className="text-xs font-medium text-text-secondary">
+            {t('publish.locationFor', {
+              platform: t(`platforms.${entry.platform}`),
+              name: entry.account.display_name ?? entry.account.id,
+            })}
+          </label>
+          <Input
+            value={value}
+            onChange={e =>
+              setLocationByAccount(prev => ({
+                ...prev,
+                [id]: e.target.value.slice(0, LOCATION_MAX),
+              }))}
+            placeholder={t('publish.locationPlaceholder')}
+            maxLength={LOCATION_MAX}
+            data-testid={`location-input-${id}`}
+          />
+        </div>
+      )
+    })
+    .filter(Boolean)
 
   const formBody = (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-text-secondary">
-          {t('publish.account')}
-        </label>
-        {accountsLoading
-          ? (
-              <div className="flex items-center gap-2 text-sm text-text-tertiary">
-                <Spinner loading className="h-3 w-3" />
-                ...
-              </div>
-            )
-          : accounts.length === 0
-            ? (
-                <p className="text-sm text-amber-700">
-                  {t('publish.noActiveAccount')}
-                </p>
-              )
-            : (
-                <select
-                  value={accountId}
-                  onChange={e => setAccountId(e.target.value)}
-                  className="rounded-md border border-divider-subtle bg-components-input-bg-normal px-3 py-2 text-sm text-text-primary"
-                >
-                  <option value="">{t('publish.accountPlaceholder')}</option>
-                  {accounts.map(a => (
-                    <option key={a.id} value={a.id}>
-                      {a.display_name ?? a.id}
-                    </option>
-                  ))}
-                </select>
-              )}
-      </div>
+      {accountSelector}
 
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-text-secondary">
@@ -303,6 +549,15 @@ export function PublishDrawer({
         />
       </div>
 
+      {perAccountLocationFields.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-md border border-divider-subtle bg-components-input-bg-normal/40 p-3">
+          <p className="text-xs font-medium text-text-secondary">
+            {t('publish.locationGroup')}
+          </p>
+          {perAccountLocationFields}
+        </div>
+      )}
+
       {phase === 'error' && errorCode && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           {localizeError(errorCode)}
@@ -341,9 +596,38 @@ export function PublishDrawer({
     </div>
   )
 
+  const partialBody = (
+    <div className="flex flex-col gap-3 py-2">
+      <p className="text-sm text-amber-700">{t('publish.partial')}</p>
+      <ul className="flex flex-col gap-1 text-xs">
+        {batchResults.map((r) => {
+          const entry = accountById.get(r.account_id)
+          const label
+            = entry?.account.display_name ?? entry?.account.id ?? r.account_id
+          return (
+            <li
+              key={r.account_id}
+              className={`flex items-center justify-between rounded-md border px-2 py-1.5 ${
+                r.success
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-amber-200 bg-amber-50 text-amber-800'
+              }`}
+              data-testid={`batch-result-${r.account_id}`}
+            >
+              <span>{label}</span>
+              <span>
+                {r.success ? t('publish.success') : localizeError(r.error_code)}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[520px] max-w-[calc(100vw-2rem)]">
+      <DialogContent className="w-[560px] max-w-[calc(100vw-2rem)]">
         <DialogTitle className="text-base font-semibold text-text-primary">
           {t('publish.title')}
         </DialogTitle>
@@ -353,13 +637,15 @@ export function PublishDrawer({
 
         <div className="mt-5">
           {phase === 'tracking' && trackingBody}
-          {phase === 'done' && doneBody}
+          {phase === 'done'
+            && (batchResults.length > 0 ? partialBody : doneBody)}
+          {phase === 'partial' && partialBody}
           {(phase === 'form' || phase === 'submitting' || phase === 'error')
             && formBody}
         </div>
 
         <div className="mt-6 flex justify-end gap-2">
-          {phase === 'done'
+          {phase === 'done' || phase === 'partial'
             ? (
                 <Button variant="primary" onClick={() => onOpenChange(false)}>
                   {t('accountList.deleteConfirm.cancel')}

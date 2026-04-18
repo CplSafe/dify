@@ -96,57 +96,63 @@ export function AuthQrModal({
     [t],
   )
 
-  const beginPolling = useCallback(async (gen: number) => {
-    if (gen !== generationRef.current)
-      return
-    const sid = sessionIdRef.current
-    if (!sid)
-      return
-    if (Date.now() - startedAtRef.current > MAX_POLL_DURATION_MS) {
-      setServerStatus('expired')
-      clearTimers()
-      return
-    }
-    try {
-      const res = await fetchSocialPublishAuthStatus(sid)
+  const beginPolling = useCallback(
+    async (gen: number) => {
       if (gen !== generationRef.current)
         return
-      setServerStatus(res.status)
-      if (res.status === 'success') {
-        clearTimers()
-        setPhase('success')
-        successTimerRef.current = setTimeout(() => {
-          if (gen === generationRef.current)
-            onSuccess()
-        }, SUCCESS_DISPLAY_MS)
+      const sid = sessionIdRef.current
+      if (!sid)
         return
-      }
-      if (res.status === 'expired' || res.status === 'failed') {
+      if (Date.now() - startedAtRef.current > MAX_POLL_DURATION_MS) {
+        setServerStatus('expired')
         clearTimers()
         return
       }
-    }
-    catch (e) {
+      try {
+        const res = await fetchSocialPublishAuthStatus(sid)
+        if (gen !== generationRef.current)
+          return
+        setServerStatus(res.status)
+        if (res.status === 'success') {
+          clearTimers()
+          setPhase('success')
+          successTimerRef.current = setTimeout(() => {
+            if (gen === generationRef.current)
+              onSuccess()
+          }, SUCCESS_DISPLAY_MS)
+          return
+        }
+        if (res.status === 'expired' || res.status === 'failed') {
+          clearTimers()
+          return
+        }
+      }
+      catch (e) {
+        if (gen !== generationRef.current)
+          return
+        const code = (e as { code?: string })?.code
+        // Hard-stop on these terminal codes; otherwise keep polling — transient
+        // network blips shouldn't kill the modal.
+        if (
+          code === 'session_expired'
+          || code === 'tenant_mismatch'
+          || code === 'feature_disabled'
+        ) {
+          setErrorMsg(localizeError(code))
+          setPhase('error')
+          clearTimers()
+          return
+        }
+      }
       if (gen !== generationRef.current)
         return
-      const code = (e as { code?: string })?.code
-      // Hard-stop on these terminal codes; otherwise keep polling — transient
-      // network blips shouldn't kill the modal.
-      if (
-        code === 'session_expired'
-        || code === 'tenant_mismatch'
-        || code === 'feature_disabled'
-      ) {
-        setErrorMsg(localizeError(code))
-        setPhase('error')
-        clearTimers()
-        return
-      }
-    }
-    if (gen !== generationRef.current)
-      return
-    pollTimerRef.current = setTimeout(() => beginPolling(gen), POLL_INTERVAL_MS)
-  }, [clearTimers, localizeError, onSuccess])
+      pollTimerRef.current = setTimeout(
+        () => beginPolling(gen),
+        POLL_INTERVAL_MS,
+      )
+    },
+    [clearTimers, localizeError, onSuccess],
+  )
 
   const start = useCallback(async () => {
     // Cancel any prior in-flight start/poll cycle: bump the generation, drop
@@ -193,7 +199,10 @@ export function AuthQrModal({
         })
       }, 1_000)
 
-      pollTimerRef.current = setTimeout(() => beginPolling(gen), POLL_INTERVAL_MS)
+      pollTimerRef.current = setTimeout(
+        () => beginPolling(gen),
+        POLL_INTERVAL_MS,
+      )
     }
     catch (e) {
       if (gen !== generationRef.current)
@@ -207,13 +216,23 @@ export function AuthQrModal({
   // Restart whenever the modal opens AND whenever the target accountId
   // changes mid-open (re-auth flow can switch the underlying row). Closing
   // bumps the generation so any pending callbacks no-op.
+  //
+  // We deliberately exclude `start` and `clearTimers` from the deps array
+  // and access them through refs instead. Otherwise a parent re-render
+  // that hands us a fresh `onSuccess` (or any callback that ripples into
+  // `start`'s identity) would re-run this effect, cancel the live polling
+  // timer via the cleanup, and we'd never make it past the first 2s tick.
+  const startRef = useRef(start)
+  const clearTimersRef = useRef(clearTimers)
+  startRef.current = start
+  clearTimersRef.current = clearTimers
   useEffect(() => {
     if (open) {
-      start()
+      startRef.current()
     }
     else {
       generationRef.current += 1
-      clearTimers()
+      clearTimersRef.current()
       setPhase('idle')
       setSession(null)
       setServerStatus('waiting')
@@ -222,9 +241,9 @@ export function AuthQrModal({
     }
     return () => {
       generationRef.current += 1
-      clearTimers()
+      clearTimersRef.current()
     }
-  }, [open, accountId, clearTimers, start])
+  }, [open, accountId])
 
   const showHint = (() => {
     if (phase === 'error')
@@ -292,7 +311,11 @@ export function AuthQrModal({
 
           <div className="mt-2 flex gap-2">
             {canRefresh && (
-              <Button variant="secondary" onClick={start} disabled={refreshDisabled}>
+              <Button
+                variant="secondary"
+                onClick={start}
+                disabled={refreshDisabled}
+              >
                 <RiRefreshLine className="mr-1 h-4 w-4" />
                 {t('auth.refresh')}
               </Button>

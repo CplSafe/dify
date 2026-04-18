@@ -27,12 +27,32 @@ type License = {
   expired_at: string | null
 }
 
+type PluginInstallationPermission = {
+  plugin_installation_scope: InstallationScope
+  restrict_to_marketplace_only: boolean
+}
+
+type Branding = {
+  enabled: boolean
+  login_page_logo: string
+  workspace_logo: string
+  favicon: string
+  application_title: string
+}
+
+type WebappAuth = {
+  enabled: boolean
+  allow_sso: boolean
+  sso_config: {
+    protocol: SSOProtocol | ''
+  }
+  allow_email_code_login: boolean
+  allow_email_password_login: boolean
+}
+
 export type SystemFeatures = {
   trial_models: ModelProviderQuotaGetPaid[]
-  plugin_installation_permission: {
-    plugin_installation_scope: InstallationScope
-    restrict_to_marketplace_only: boolean
-  }
+  plugin_installation_permission: PluginInstallationPermission
   sso_enforced_for_signin: boolean
   sso_enforced_for_signin_protocol: SSOProtocol | ''
   sso_enforced_for_web: boolean
@@ -42,28 +62,16 @@ export type SystemFeatures = {
   enable_email_code_login: boolean
   enable_email_password_login: boolean
   enable_social_oauth_login: boolean
+  enable_sms_code_login: boolean
   is_allow_create_workspace: boolean
   is_allow_register: boolean
   is_email_setup: boolean
   license: License
-  branding: {
-    enabled: boolean
-    login_page_logo: string
-    workspace_logo: string
-    favicon: string
-    application_title: string
-  }
-  webapp_auth: {
-    enabled: boolean
-    allow_sso: boolean
-    sso_config: {
-      protocol: SSOProtocol | ''
-    }
-    allow_email_code_login: boolean
-    allow_email_password_login: boolean
-  }
+  branding: Branding
+  webapp_auth: WebappAuth
   enable_trial_app: boolean
   enable_explore_banner: boolean
+  social_publish_enabled: boolean
 }
 
 export const defaultSystemFeatures: SystemFeatures = {
@@ -81,6 +89,7 @@ export const defaultSystemFeatures: SystemFeatures = {
   enable_email_code_login: false,
   enable_email_password_login: false,
   enable_social_oauth_login: false,
+  enable_sms_code_login: false,
   is_allow_create_workspace: false,
   is_allow_register: false,
   is_email_setup: false,
@@ -106,4 +115,5 @@ export const defaultSystemFeatures: SystemFeatures = {
   },
   enable_trial_app: false,
   enable_explore_banner: false,
+  social_publish_enabled: false,
 }

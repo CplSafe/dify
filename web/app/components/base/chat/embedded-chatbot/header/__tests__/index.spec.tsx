@@ -16,9 +16,12 @@ vi.mock('@/context/global-public-context', () => ({
   useGlobalPublicStore: vi.fn(),
 }))
 
-vi.mock('@/app/components/base/chat/embedded-chatbot/inputs-form/view-form-dropdown', () => ({
-  default: () => <div data-testid="view-form-dropdown" />,
-}))
+vi.mock(
+  '@/app/components/base/chat/embedded-chatbot/inputs-form/view-form-dropdown',
+  () => ({
+    default: () => <div data-testid="view-form-dropdown" />,
+  }),
+)
 
 type GlobalPublicStoreMock = {
   systemFeatures: SystemFeatures
@@ -85,38 +88,59 @@ describe('EmbeddedChatbot Header', () => {
     },
     enable_trial_app: false,
     enable_explore_banner: false,
+    enable_sms_code_login: false,
+    social_publish_enabled: false,
   }
 
   const setupIframe = () => {
     const mockPostMessage = vi.fn()
     const mockTop = { postMessage: mockPostMessage }
     Object.defineProperty(window, 'self', { value: {}, configurable: true })
-    Object.defineProperty(window, 'top', { value: mockTop, configurable: true })
-    Object.defineProperty(window, 'parent', { value: mockTop, configurable: true })
+    Object.defineProperty(window, 'top', {
+      value: mockTop,
+      configurable: true,
+    })
+    Object.defineProperty(window, 'parent', {
+      value: mockTop,
+      configurable: true,
+    })
     return mockPostMessage
   }
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(useEmbeddedChatbotContext).mockReturnValue(defaultContext as EmbeddedChatbotContextValue)
-    vi.mocked(useGlobalPublicStore).mockImplementation((selector: (s: GlobalPublicStoreMock) => unknown) => selector({
-      systemFeatures: defaultSystemFeatures,
-      setSystemFeatures: vi.fn(),
-    }))
+    vi.mocked(useEmbeddedChatbotContext).mockReturnValue(
+      defaultContext as EmbeddedChatbotContextValue,
+    )
+    vi.mocked(useGlobalPublicStore).mockImplementation(
+      (selector: (s: GlobalPublicStoreMock) => unknown) =>
+        selector({
+          systemFeatures: defaultSystemFeatures,
+          setSystemFeatures: vi.fn(),
+        }),
+    )
 
-    Object.defineProperty(window, 'self', { value: window, configurable: true })
+    Object.defineProperty(window, 'self', {
+      value: window,
+      configurable: true,
+    })
     Object.defineProperty(window, 'top', { value: window, configurable: true })
   })
 
-  const dispatchChatbotConfigMessage = async (origin: string, payload: { isToggledByButton: boolean, isDraggable: boolean }) => {
+  const dispatchChatbotConfigMessage = async (
+    origin: string,
+    payload: { isToggledByButton: boolean, isDraggable: boolean },
+  ) => {
     await act(async () => {
-      window.dispatchEvent(new MessageEvent('message', {
-        origin,
-        data: {
-          type: 'dify-chatbot-config',
-          payload,
-        },
-      }))
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin,
+          data: {
+            type: 'dify-chatbot-config',
+            payload,
+          },
+        }),
+      )
     })
   }
 
@@ -147,16 +171,19 @@ describe('EmbeddedChatbot Header', () => {
     })
 
     it('should render workspace logo when branding is enabled and logo exists', () => {
-      vi.mocked(useGlobalPublicStore).mockImplementation((selector: (s: GlobalPublicStoreMock) => unknown) => selector({
-        systemFeatures: {
-          ...defaultSystemFeatures,
-          branding: {
-            ...defaultSystemFeatures.branding,
-            workspace_logo: 'https://example.com/workspace.png',
-          },
-        },
-        setSystemFeatures: vi.fn(),
-      }))
+      vi.mocked(useGlobalPublicStore).mockImplementation(
+        (selector: (s: GlobalPublicStoreMock) => unknown) =>
+          selector({
+            systemFeatures: {
+              ...defaultSystemFeatures,
+              branding: {
+                ...defaultSystemFeatures.branding,
+                workspace_logo: 'https://example.com/workspace.png',
+              },
+            },
+            setSystemFeatures: vi.fn(),
+          }),
+      )
 
       render(<Header title="Test Chatbot" />)
 
@@ -165,32 +192,38 @@ describe('EmbeddedChatbot Header', () => {
     })
 
     it('should render Dify logo by default when branding enabled is true but no logo provided', () => {
-      vi.mocked(useGlobalPublicStore).mockImplementation((selector: (s: GlobalPublicStoreMock) => unknown) => selector({
-        systemFeatures: {
-          ...defaultSystemFeatures,
-          branding: {
-            ...defaultSystemFeatures.branding,
-            enabled: true,
-            workspace_logo: '',
-          },
-        },
-        setSystemFeatures: vi.fn(),
-      }))
+      vi.mocked(useGlobalPublicStore).mockImplementation(
+        (selector: (s: GlobalPublicStoreMock) => unknown) =>
+          selector({
+            systemFeatures: {
+              ...defaultSystemFeatures,
+              branding: {
+                ...defaultSystemFeatures.branding,
+                enabled: true,
+                workspace_logo: '',
+              },
+            },
+            setSystemFeatures: vi.fn(),
+          }),
+      )
       render(<Header title="Test Chatbot" />)
       expect(screen.getByAltText('Dify logo')).toBeInTheDocument()
     })
 
     it('should render Dify logo when branding is disabled', () => {
-      vi.mocked(useGlobalPublicStore).mockImplementation((selector: (s: GlobalPublicStoreMock) => unknown) => selector({
-        systemFeatures: {
-          ...defaultSystemFeatures,
-          branding: {
-            ...defaultSystemFeatures.branding,
-            enabled: false,
-          },
-        },
-        setSystemFeatures: vi.fn(),
-      }))
+      vi.mocked(useGlobalPublicStore).mockImplementation(
+        (selector: (s: GlobalPublicStoreMock) => unknown) =>
+          selector({
+            systemFeatures: {
+              ...defaultSystemFeatures,
+              branding: {
+                ...defaultSystemFeatures.branding,
+                enabled: false,
+              },
+            },
+            setSystemFeatures: vi.fn(),
+          }),
+      )
       render(<Header title="Test Chatbot" />)
       expect(screen.getByAltText('Dify logo')).toBeInTheDocument()
     })
@@ -213,7 +246,9 @@ describe('EmbeddedChatbot Header', () => {
     })
 
     it('should render divider only when currentConversationId is present', () => {
-      vi.mocked(useEmbeddedChatbotContext).mockReturnValue({ ...defaultContext } as EmbeddedChatbotContextValue)
+      vi.mocked(useEmbeddedChatbotContext).mockReturnValue({
+        ...defaultContext,
+      } as EmbeddedChatbotContextValue)
       const { unmount } = render(<Header title="Test Chatbot" />)
       expect(screen.getByTestId('divider')).toBeInTheDocument()
       unmount()
@@ -235,7 +270,13 @@ describe('EmbeddedChatbot Header', () => {
     it('should call onCreateNewChat when reset button is clicked', async () => {
       const user = userEvent.setup()
       const onCreateNewChat = vi.fn()
-      render(<Header title="Test Chatbot" allowResetChat={true} onCreateNewChat={onCreateNewChat} />)
+      render(
+        <Header
+          title="Test Chatbot"
+          allowResetChat={true}
+          onCreateNewChat={onCreateNewChat}
+        />,
+      )
 
       await user.click(screen.getByTestId('reset-chat-button'))
       expect(onCreateNewChat).toHaveBeenCalled()
@@ -262,7 +303,9 @@ describe('EmbeddedChatbot Header', () => {
 
       render(<Header title="Test Chatbot" />)
 
-      expect(screen.queryByTestId('view-form-dropdown')).not.toBeInTheDocument()
+      expect(
+        screen.queryByTestId('view-form-dropdown'),
+      ).not.toBeInTheDocument()
     })
 
     it('should NOT render ViewFormDropdown when currentConversationId is missing', () => {
@@ -274,7 +317,9 @@ describe('EmbeddedChatbot Header', () => {
 
       render(<Header title="Test Chatbot" />)
 
-      expect(screen.queryByTestId('view-form-dropdown')).not.toBeInTheDocument()
+      expect(
+        screen.queryByTestId('view-form-dropdown'),
+      ).not.toBeInTheDocument()
     })
   })
 
@@ -286,7 +331,13 @@ describe('EmbeddedChatbot Header', () => {
     })
 
     it('should render customer icon in mobile header', () => {
-      render(<Header title="Mobile Chatbot" isMobile customerIcon={<div data-testid="custom-icon" />} />)
+      render(
+        <Header
+          title="Mobile Chatbot"
+          isMobile
+          customerIcon={<div data-testid="custom-icon" />}
+        />,
+      )
 
       expect(screen.getByTestId('custom-icon')).toBeInTheDocument()
     })
@@ -294,7 +345,9 @@ describe('EmbeddedChatbot Header', () => {
     it('should render mobile reset button when allowed', () => {
       render(<Header title="Mobile Chatbot" isMobile allowResetChat />)
 
-      expect(screen.getByTestId('mobile-reset-chat-button')).toBeInTheDocument()
+      expect(
+        screen.getByTestId('mobile-reset-chat-button'),
+      ).toBeInTheDocument()
     })
 
     it('should NOT render mobile reset button when currentConversationId is missing', () => {
@@ -304,7 +357,9 @@ describe('EmbeddedChatbot Header', () => {
       } as EmbeddedChatbotContextValue)
       render(<Header title="Mobile Chatbot" isMobile allowResetChat />)
 
-      expect(screen.queryByTestId('mobile-reset-chat-button')).not.toBeInTheDocument()
+      expect(
+        screen.queryByTestId('mobile-reset-chat-button'),
+      ).not.toBeInTheDocument()
     })
 
     it('should render ViewFormDropdown in mobile when conditions are met', () => {
@@ -321,7 +376,10 @@ describe('EmbeddedChatbot Header', () => {
       const mockPostMessage = setupIframe()
       render(<Header title="Mobile Chatbot" isMobile />)
 
-      await dispatchChatbotConfigMessage('https://parent.com', { isToggledByButton: true, isDraggable: false })
+      await dispatchChatbotConfigMessage('https://parent.com', {
+        isToggledByButton: true,
+        isDraggable: false,
+      })
 
       const expandBtn = await screen.findByTestId('mobile-expand-button')
       expect(expandBtn).toBeInTheDocument()
@@ -350,7 +408,10 @@ describe('EmbeddedChatbot Header', () => {
       const mockPostMessage = setupIframe()
       render(<Header title="Iframe" />)
 
-      await dispatchChatbotConfigMessage('https://parent.com', { isToggledByButton: true, isDraggable: false })
+      await dispatchChatbotConfigMessage('https://parent.com', {
+        isToggledByButton: true,
+        isDraggable: false,
+      })
 
       const expandBtn = await screen.findByTestId('expand-button')
       expect(expandBtn).toBeInTheDocument()
@@ -361,14 +422,19 @@ describe('EmbeddedChatbot Header', () => {
         { type: 'dify-chatbot-expand-change' },
         'https://parent.com',
       )
-      expect(expandBtn.querySelector('.i-ri-collapse-diagonal-2-line')).toBeInTheDocument()
+      expect(
+        expandBtn.querySelector('.i-ri-collapse-diagonal-2-line'),
+      ).toBeInTheDocument()
     })
 
     it('should NOT show expand button if isDraggable is true', async () => {
       setupIframe()
       render(<Header title="Iframe" />)
 
-      await dispatchChatbotConfigMessage('https://parent.com', { isToggledByButton: true, isDraggable: true })
+      await dispatchChatbotConfigMessage('https://parent.com', {
+        isToggledByButton: true,
+        isDraggable: true,
+      })
 
       await waitFor(() => {
         expect(screen.queryByTestId('expand-button')).not.toBeInTheDocument()
@@ -379,11 +445,17 @@ describe('EmbeddedChatbot Header', () => {
       setupIframe()
       render(<Header title="Iframe" />)
 
-      await dispatchChatbotConfigMessage('https://secure.com', { isToggledByButton: true, isDraggable: false })
+      await dispatchChatbotConfigMessage('https://secure.com', {
+        isToggledByButton: true,
+        isDraggable: false,
+      })
 
       await screen.findByTestId('expand-button')
 
-      await dispatchChatbotConfigMessage('https://malicious.com', { isToggledByButton: false, isDraggable: false })
+      await dispatchChatbotConfigMessage('https://malicious.com', {
+        isToggledByButton: false,
+        isDraggable: false,
+      })
 
       // Should still be visible (not hidden by the malicious message)
       expect(screen.getByTestId('expand-button')).toBeInTheDocument()
@@ -394,13 +466,18 @@ describe('EmbeddedChatbot Header', () => {
       render(<Header title="Iframe" />)
 
       await act(async () => {
-        window.dispatchEvent(new MessageEvent('message', {
-          origin: 'https://first.com',
-          data: { type: 'other-type' },
-        }))
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            origin: 'https://first.com',
+            data: { type: 'other-type' },
+          }),
+        )
       })
 
-      await dispatchChatbotConfigMessage('https://second.com', { isToggledByButton: true, isDraggable: false })
+      await dispatchChatbotConfigMessage('https://second.com', {
+        isToggledByButton: true,
+        isDraggable: false,
+      })
 
       // Should lock to second.com
       const expandBtn = await screen.findByTestId('expand-button')
@@ -421,7 +498,10 @@ describe('EmbeddedChatbot Header', () => {
   describe('Edge Cases', () => {
     it('should handle document.referrer for targetOrigin', () => {
       const mockPostMessage = setupIframe()
-      Object.defineProperty(document, 'referrer', { value: 'https://referrer.com', configurable: true })
+      Object.defineProperty(document, 'referrer', {
+        value: 'https://referrer.com',
+        configurable: true,
+      })
       render(<Header title="Referrer" />)
 
       expect(mockPostMessage).toHaveBeenCalledWith(

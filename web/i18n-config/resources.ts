@@ -25,6 +25,7 @@ import type plugin from '../i18n/en-US/plugin.json'
 import type register from '../i18n/en-US/register.json'
 import type runLog from '../i18n/en-US/run-log.json'
 import type share from '../i18n/en-US/share.json'
+import type socialPublish from '../i18n/en-US/social-publish.json'
 import type time from '../i18n/en-US/time.json'
 import type tools from '../i18n/en-US/tools.json'
 import type workflow from '../i18n/en-US/workflow.json'
@@ -58,6 +59,7 @@ export type Resources = {
   register: typeof register
   runLog: typeof runLog
   share: typeof share
+  socialPublish: typeof socialPublish
   time: typeof time
   tools: typeof tools
   workflow: typeof workflow
@@ -91,11 +93,12 @@ export const namespaces = [
   'register',
   'runLog',
   'share',
+  'socialPublish',
   'time',
   'tools',
   'workflow',
 ] as const satisfies ReadonlyArray<keyof Resources>
-export type Namespace = typeof namespaces[number]
+export type Namespace = (typeof namespaces)[number]
 
 export const namespacesInFileName = namespaces.map(ns => kebabCase(ns))
-export type NamespaceInFileName = typeof namespacesInFileName[number]
+export type NamespaceInFileName = (typeof namespacesInFileName)[number]

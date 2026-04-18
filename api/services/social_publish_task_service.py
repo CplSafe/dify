@@ -58,10 +58,13 @@ from services.social_publish_tier import TierResolver
 
 logger = logging.getLogger(__name__)
 
-# Publish-dispatch allowlist. P4 expands beyond douyin; the runner on the
-# sau side enforces the same set, but this guard catches typos / stale
-# rows server-side before we burn an HTTP round-trip.
-SUPPORTED_PLATFORMS_P2 = ("douyin", "xhs", "ks")
+# Publish-dispatch allowlist. P5: KS dropped entirely — upstream
+# social-auto-upload never shipped a ks_cookie_gen, so the auth flow
+# can't complete and the publish flow would fast-fail at cookie load.
+# The SocialPublishPlatform.KS enum value stays in the model layer so
+# old DB rows (if any) can still be read; the cleanup migration
+# 2026_04_19_xxxx-remove_ks_social_publish_data deletes them.
+SUPPORTED_PLATFORMS_P2 = ("douyin", "xhs")
 TITLE_MAX_LEN = 200
 DESC_MAX_LEN = 2000
 TAGS_MAX_COUNT = 10
@@ -73,7 +76,6 @@ LOCATION_MAX_LEN = 80
 _PLATFORM_PAYLOAD_KEYS: dict[str, frozenset[str]] = {
     "douyin": frozenset({"location"}),
     "xhs": frozenset({"location"}),
-    "ks": frozenset(),
 }
 
 # Single-flight Redis lock TTL — covers the worst-case time between the
@@ -379,7 +381,7 @@ class SocialPublishTaskService:
                     created_by=created_by,
                     request=single,
                 )
-            except Exception as exc:  # noqa: BLE001 — surface per-target
+            except Exception as exc:
                 results.append(
                     BatchCreateResultItem(
                         account_id=target.account_id,

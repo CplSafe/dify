@@ -852,34 +852,28 @@ class TestPlatformPayload:
         # the sau worker's apply_platform_extras can pick it up.
         assert sent_payload["platform_payload"] == {"location": "Shanghai"}
 
-    def test_ks_drops_platform_payload(
-        self, service, account_repo, task_repo, sau, db_session, storage_load
+    def test_ks_account_rejected_at_platform_allowlist(
+        self, service, account_repo
     ):
-        account_repo.get_by_id_and_tenant.return_value = _account(platform="ks")
-        _make_work_session(db_session)
-        task_repo.has_active_for_account.return_value = False
-        task_repo.create.return_value = _task()
-        task_repo.attach_sau_task_id.return_value = _task(
-            status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-1"
-        )
-        sau.post_video.return_value = SauPublishResponse(sau_task_id="cel-1")
+        # P5: ks dropped from SUPPORTED_PLATFORMS_P2. Old DB rows that
+        # somehow still carry platform='ks' (the cleanup migration
+        # should have removed them) must be rejected with the typed
+        # PlatformUnsupportedError, not silently downgraded.
+        from services.errors.social_publish import PlatformUnsupportedError
 
-        service.create_task(
-            tenant_id="tenant-a",
-            created_by="u",
-            request=CreateTaskRequest(
-                account_id="acc-1",
-                work_id="work-1",
-                title="hi",
-                tags=None,
-                desc=None,
-                # KS uploader has no location support; runner should
-                # silently drop, not 400.
-                platform_payload={"location": "Shanghai"},
-            ),
-        )
-        sent_payload = sau.post_video.call_args.kwargs["payload"]
-        assert "platform_payload" not in sent_payload
+        account_repo.get_by_id_and_tenant.return_value = _account(platform="ks")
+        with pytest.raises(PlatformUnsupportedError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-1",
+                    work_id="work-1",
+                    title="hi",
+                    tags=None,
+                    desc=None,
+                ),
+            )
 
     def test_unknown_keys_are_silently_dropped(
         self, service, account_repo, task_repo, sau, db_session, storage_load

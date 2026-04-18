@@ -65,7 +65,14 @@ def _build_service() -> SocialPublishService:
 
     session_maker = sessionmaker(bind=db.engine, expire_on_commit=False)
     repo = DifyAPIRepositoryFactory.create_social_publish_account_repository(session_maker=session_maker)
-    return SocialPublishService(repository=repo, sau_client=get_sau_client())
+    try:
+        sau_client = get_sau_client()
+    except RuntimeError as exc:
+        # ``get_sau_client`` raises RuntimeError on misconfig (token < 16
+        # chars, etc.). Surface as a typed domain error so the controller
+        # maps it to 503 instead of 500.
+        raise FeatureDisabledError(str(exc)) from exc
+    return SocialPublishService(repository=repo, sau_client=sau_client)
 
 
 def _to_http_error(exc: Exception) -> Exception:

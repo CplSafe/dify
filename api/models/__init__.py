@@ -95,9 +95,12 @@ from .provider import (
     TenantPreferredModelProvider,
 )
 from .social_publish import (
+    ACTIVE_TASK_STATUSES,
     SocialPublishAccount,
     SocialPublishAccountStatus,
     SocialPublishPlatform,
+    SocialPublishTask,
+    SocialPublishTaskStatus,
 )
 from .source import DataSourceApiKeyAuthBinding, DataSourceOauthBinding
 from .task import CeleryTask, CeleryTaskSet
@@ -133,6 +136,7 @@ from .workflow import (
 )
 
 __all__ = [
+    "ACTIVE_TASK_STATUSES",
     "APIBasedExtension",
     "APIBasedExtensionPoint",
     "Account",
@@ -214,6 +218,8 @@ __all__ = [
     "SocialPublishAccount",
     "SocialPublishAccountStatus",
     "SocialPublishPlatform",
+    "SocialPublishTask",
+    "SocialPublishTaskStatus",
     "Tag",
     "TagBinding",
     "Tenant",

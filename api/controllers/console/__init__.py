@@ -195,8 +195,9 @@ from .explore import (
     trial,
 )
 
-# Import social-publish controllers (P1: account management)
+# Import social-publish controllers (P1: account management; P2: publish tasks)
 from .social_publish import accounts as social_publish_accounts
+from .social_publish import tasks as social_publish_tasks
 
 # Import tag controllers
 from .tag import tags
@@ -287,6 +288,7 @@ __all__ = [
     "site",
     "sms_login",
     "social_publish_accounts",
+    "social_publish_tasks",
     "spec",
     "statistic",
     "tags",

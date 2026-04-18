@@ -106,6 +106,67 @@ class TestEndToEndAgainstMock:
         )
         assert recheck.valid is False
 
+    def test_post_video_then_poll_until_success(self, client):
+        # Use one of the synthetic accounts the mock minted via the auth
+        # flow above. We re-mint here so the test is independent.
+        session_id = str(uuid.uuid4())
+        tenant_id = "e2e-publish"
+        client.start_login(
+            tenant_id=tenant_id, platform="douyin", session_id=session_id
+        )
+        login = _wait_for_status(client, session_id, "success")
+        assert login.sau_account_id is not None
+
+        publish = client.post_video(
+            tenant_id=tenant_id,
+            platform="douyin",
+            sau_account_id=login.sau_account_id,
+            video_bytes=b"FAKE_VIDEO_BYTES",
+            video_filename="x.mp4",
+            payload={"title": "hello e2e", "tags": ["a"], "desc": "d"},
+            timeout_seconds=10.0,
+        )
+        assert publish.sau_task_id
+
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            status = client.get_task(sau_task_id=publish.sau_task_id)
+            if status.state == "SUCCESS":
+                assert status.result is not None
+                assert status.result.get("success") is True
+                assert status.result.get("current_url")
+                return
+            time.sleep(0.5)
+        raise AssertionError("publish never reached SUCCESS")
+
+    def test_post_video_with_mock_fail_sentinel_surfaces_failure(self, client):
+        session_id = str(uuid.uuid4())
+        tenant_id = "e2e-publish-fail"
+        client.start_login(
+            tenant_id=tenant_id, platform="douyin", session_id=session_id
+        )
+        login = _wait_for_status(client, session_id, "success")
+        assert login.sau_account_id is not None
+
+        publish = client.post_video(
+            tenant_id=tenant_id,
+            platform="douyin",
+            sau_account_id=login.sau_account_id,
+            video_bytes=b"FAKE",
+            video_filename="x.mp4",
+            payload={"title": "MOCK_FAIL forced"},
+            timeout_seconds=10.0,
+        )
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            status = client.get_task(sau_task_id=publish.sau_task_id)
+            if status.state == "SUCCESS" and status.result is not None:
+                assert status.result.get("success") is False
+                assert status.result.get("status") == "upload_failed"
+                return
+            time.sleep(0.5)
+        raise AssertionError("MOCK_FAIL publish never returned a result")
+
     def test_unreachable_url_surfaces_as_sau_unreachable(self):
         # Use a TEST-NET-1 address (RFC 5737, never routable) to force a
         # connection-level failure and assert the transport-error mapping.

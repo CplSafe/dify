@@ -10,6 +10,7 @@ of the codebase consumes the typed DTOs returned here.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from dataclasses import dataclass
@@ -64,6 +65,23 @@ class SauLoginStatusResponse:
 class SauCheckResponse:
     valid: bool
     reason: str | None
+
+
+@dataclass(frozen=True)
+class SauPublishResponse:
+    """Acknowledgement of a /postVideo enqueue."""
+
+    sau_task_id: str
+
+
+@dataclass(frozen=True)
+class SauTaskStatusResponse:
+    """Snapshot of a sau Celery task seen via /tasks/{id}."""
+
+    sau_task_id: str
+    state: str
+    result: dict[str, Any] | None
+    error: str | None
 
 
 # ---------- Client ----------
@@ -185,6 +203,50 @@ class SauClient:
             "POST",
             f"/accounts/{sau_account_id}/delete",
             params={"tenant_id": tenant_id, "platform": platform},
+        )
+
+    def post_video(
+        self,
+        *,
+        tenant_id: str,
+        platform: Platform,
+        sau_account_id: str,
+        video_bytes: bytes,
+        video_filename: str,
+        payload: dict[str, Any],
+        timeout_seconds: float | None = None,
+    ) -> SauPublishResponse:
+        """Upload the video bytes and enqueue a publish task.
+
+        ``timeout_seconds`` overrides the client default for this single
+        call (publish multipart uploads need a much longer ceiling than the
+        short metadata calls).
+        """
+        # Sau parses ``data`` from the multipart form as JSON to keep all
+        # the publish metadata in a single typed envelope.
+        files = {"video": (video_filename, video_bytes, "video/mp4")}
+        body = {
+            "tenant_id": tenant_id,
+            "platform": platform,
+            "sau_account_id": sau_account_id,
+            **payload,
+        }
+        kwargs: dict[str, Any] = {
+            "files": files,
+            "data": {"data": json.dumps(body, ensure_ascii=False)},
+        }
+        if timeout_seconds is not None:
+            kwargs["timeout"] = httpx.Timeout(timeout_seconds)
+        data = self._request("POST", "/postVideo", **kwargs)
+        return SauPublishResponse(sau_task_id=str(data["sau_task_id"]))
+
+    def get_task(self, *, sau_task_id: str) -> SauTaskStatusResponse:
+        data = self._request("GET", f"/tasks/{sau_task_id}")
+        return SauTaskStatusResponse(
+            sau_task_id=str(data.get("sau_task_id", sau_task_id)),
+            state=str(data.get("state", "PENDING")),
+            result=data.get("result") if isinstance(data.get("result"), dict) else None,
+            error=data.get("error"),
         )
 
     # -------- internals --------

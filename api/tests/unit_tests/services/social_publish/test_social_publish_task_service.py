@@ -1,0 +1,528 @@
+"""Service-level tests for SocialPublishTaskService.
+
+Mocks the repos + sau_client + storage. Tenant isolation is enforced
+through the account-resolution path; we never trust a request-supplied
+account_id without round-tripping through ``get_by_id_and_tenant``.
+"""
+
+from typing import Any
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from models.social_publish import (
+    SocialPublishAccount,
+    SocialPublishAccountStatus,
+    SocialPublishTask,
+    SocialPublishTaskStatus,
+)
+from services.errors.social_publish import (
+    AccountExpiredError,
+    AccountNotFoundError,
+    SauUnreachableError,
+    TaskAlreadyInFlightError,
+    TaskInvalidPayloadError,
+    TaskNotFoundError,
+    VideoNotFoundError,
+    VideoTooLargeError,
+    WorkNotFoundError,
+)
+from services.sau_client import (
+    SauPublishResponse,
+    SauTaskStatusResponse,
+)
+from services.social_publish_task_service import (
+    CreateTaskRequest,
+    SocialPublishTaskService,
+)
+
+# ---------- fixtures ----------
+
+
+@pytest.fixture
+def task_repo() -> MagicMock:
+    return MagicMock()
+
+
+@pytest.fixture
+def account_repo() -> MagicMock:
+    return MagicMock()
+
+
+@pytest.fixture
+def sau() -> MagicMock:
+    return MagicMock()
+
+
+@pytest.fixture
+def service(task_repo, account_repo, sau) -> SocialPublishTaskService:
+    return SocialPublishTaskService(
+        task_repository=task_repo,
+        account_repository=account_repo,
+        sau_client=sau,
+    )
+
+
+def _account(
+    *,
+    id: str = "acc-1",
+    tenant_id: str = "tenant-a",
+    status: str = SocialPublishAccountStatus.ACTIVE.value,
+    platform: str = "douyin",
+    sau_account_id: str = "sau-1",
+) -> MagicMock:
+    a = MagicMock(spec=SocialPublishAccount)
+    a.id = id
+    a.tenant_id = tenant_id
+    a.status = status
+    a.platform = platform
+    a.sau_account_id = sau_account_id
+    return a
+
+
+def _task(
+    *,
+    id: str = "task-1",
+    tenant_id: str = "tenant-a",
+    account_id: str = "acc-1",
+    status: str = SocialPublishTaskStatus.PENDING.value,
+    sau_task_id: str | None = None,
+    result_url: str | None = None,
+    error_code: str | None = None,
+    error_message: str | None = None,
+) -> MagicMock:
+    t = MagicMock(spec=SocialPublishTask)
+    t.id = id
+    t.tenant_id = tenant_id
+    t.account_id = account_id
+    t.platform = "douyin"
+    t.status = status
+    t.sau_task_id = sau_task_id
+    t.result_url = result_url
+    t.error_code = error_code
+    t.error_message = error_message
+    t.work_id = None
+    t.is_terminal = lambda: status in ("success", "failed")
+    t.to_dict = lambda: {
+        "id": t.id,
+        "account_id": t.account_id,
+        "platform": t.platform,
+        "status": t.status,
+        "result_url": t.result_url,
+        "error_code": t.error_code,
+        "error_message": t.error_message,
+        "created_at": "2026-04-18T00:00:00",
+        "updated_at": "2026-04-18T00:00:00",
+    }
+    return t
+
+
+@pytest.fixture
+def storage_load() -> Any:
+    """Patch ext_storage.storage.load_once to a tiny in-memory dict."""
+    with patch("services.social_publish_task_service.storage") as st:
+        st.load_once = MagicMock(return_value=b"VIDEO BYTES")
+        yield st
+
+
+@pytest.fixture(autouse=True)
+def redis_client_mock() -> Any:
+    """Patch redis_client so the single-flight Redis lock always succeeds.
+
+    ``autouse`` keeps every test independent of the real redis_client
+    singleton. Tests that want to assert on lock behaviour can drop
+    `nx=True`-returns-True via ``rc.set.return_value = False`` inline.
+    """
+    with patch("services.social_publish_task_service.redis_client") as rc:
+        rc.set = MagicMock(return_value=True)
+        rc.delete = MagicMock(return_value=1)
+        yield rc
+
+
+@pytest.fixture
+def db_session() -> Any:
+    """Patch the db.session so the work-resolve path can be exercised
+    without a real DB."""
+    with patch("services.social_publish_task_service.db") as db:
+        yield db
+
+
+def _make_work_session(db_session, *, work_id: str = "work-1", tenant_id: str = "tenant-a"):
+    work = MagicMock()
+    work.id = work_id
+    work.tenant_id = tenant_id
+    work.file_key = "creator_works/x.mp4"
+    db_session.session.execute.return_value.scalar_one_or_none.return_value = work
+    return work
+
+
+# ---------- create_task ----------
+
+
+class TestCreateTask:
+    def test_rejects_when_account_missing(self, service, account_repo):
+        account_repo.get_by_id_and_tenant.return_value = None
+        with pytest.raises(AccountNotFoundError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-x",
+                    work_id="work-1",
+                    title="hi",
+                    tags=[],
+                    desc=None,
+                ),
+            )
+
+    def test_rejects_when_account_expired(self, service, account_repo):
+        account_repo.get_by_id_and_tenant.return_value = _account(
+            status=SocialPublishAccountStatus.EXPIRED.value
+        )
+        with pytest.raises(AccountExpiredError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-1",
+                    work_id="work-1",
+                    title="hi",
+                    tags=None,
+                    desc=None,
+                ),
+            )
+
+    def test_rejects_blank_title(self, service, account_repo, db_session, storage_load):
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        with pytest.raises(TaskInvalidPayloadError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-1",
+                    work_id="work-1",
+                    title="   ",
+                    tags=None,
+                    desc=None,
+                ),
+            )
+
+    def test_rejects_too_many_tags(self, service, account_repo, db_session, storage_load):
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        with pytest.raises(TaskInvalidPayloadError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-1",
+                    work_id="work-1",
+                    title="hi",
+                    tags=[f"t{i}" for i in range(11)],
+                    desc=None,
+                ),
+            )
+
+    def test_rejects_when_in_flight_task_exists(
+        self, service, account_repo, task_repo, db_session, storage_load
+    ):
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = True
+        with pytest.raises(TaskAlreadyInFlightError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-1",
+                    work_id="work-1",
+                    title="hi",
+                    tags=None,
+                    desc=None,
+                ),
+            )
+
+    def test_rejects_video_too_large(
+        self, service, account_repo, task_repo, db_session, storage_load
+    ):
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        # Force the loader to return a giant byte string.
+        storage_load.load_once.return_value = b"X" * (200 * 1024 * 1024)
+        with pytest.raises(VideoTooLargeError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-1",
+                    work_id="work-1",
+                    title="hi",
+                    tags=None,
+                    desc=None,
+                ),
+            )
+
+    def test_rejects_when_work_missing(
+        self, service, account_repo, db_session, storage_load
+    ):
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        db_session.session.execute.return_value.scalar_one_or_none.return_value = None
+        with pytest.raises(WorkNotFoundError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-1",
+                    work_id="work-1",
+                    title="hi",
+                    tags=None,
+                    desc=None,
+                ),
+            )
+
+    def test_rejects_when_work_has_no_file_key(
+        self, service, account_repo, task_repo, db_session, storage_load
+    ):
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        work = _make_work_session(db_session)
+        work.file_key = None
+        task_repo.has_active_for_account.return_value = False
+        with pytest.raises(VideoNotFoundError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-1",
+                    work_id="work-1",
+                    title="hi",
+                    tags=None,
+                    desc=None,
+                ),
+            )
+
+    def test_happy_path_creates_row_then_attaches_sau_id(
+        self, service, account_repo, task_repo, sau, db_session, storage_load
+    ):
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        created = _task()
+        task_repo.create.return_value = created
+        attached = _task(status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-1")
+        task_repo.attach_sau_task_id.return_value = attached
+        sau.post_video.return_value = SauPublishResponse(sau_task_id="cel-1")
+
+        result = service.create_task(
+            tenant_id="tenant-a",
+            created_by="u",
+            request=CreateTaskRequest(
+                account_id="acc-1",
+                work_id="work-1",
+                title="hi",
+                tags=["#美食 ", "  日常"],
+                desc="desc",
+            ),
+        )
+        assert result.status == SocialPublishTaskStatus.QUEUED.value
+        # Tags get the leading # stripped + whitespace cleaned.
+        sent_payload = sau.post_video.call_args.kwargs["payload"]
+        assert sent_payload["tags"] == ["美食", "日常"]
+        assert sent_payload["title"] == "hi"
+        assert sau.post_video.call_args.kwargs["sau_account_id"] == "sau-1"
+        # Account id flows from the resolved account, not the request.
+        task_repo.create.assert_called_once()
+
+    def test_marks_task_failed_when_sau_dispatch_fails(
+        self, service, account_repo, task_repo, sau, db_session, storage_load
+    ):
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        created = _task()
+        task_repo.create.return_value = created
+        sau.post_video.side_effect = SauUnreachableError("down")
+
+        with pytest.raises(SauUnreachableError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-1",
+                    work_id="work-1",
+                    title="hi",
+                    tags=None,
+                    desc=None,
+                ),
+            )
+
+        # The row was created and then immediately marked failed so the
+        # single-flight gate releases.
+        task_repo.update_terminal.assert_called_once()
+        kw = task_repo.update_terminal.call_args.kwargs
+        assert kw["status"] == SocialPublishTaskStatus.FAILED.value
+        assert kw["error_code"] == "sau_unreachable"
+
+    def test_redis_lock_blocks_concurrent_dispatch(
+        self,
+        service,
+        account_repo,
+        task_repo,
+        sau,
+        db_session,
+        storage_load,
+        redis_client_mock,
+    ):
+        # Simulate redis SET NX returning False — another request already
+        # holds the lock for this (tenant, account).
+        redis_client_mock.set.return_value = False
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        _make_work_session(db_session)
+
+        with pytest.raises(TaskAlreadyInFlightError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-1",
+                    work_id="work-1",
+                    title="hi",
+                    tags=None,
+                    desc=None,
+                ),
+            )
+        # Lock-blocked path must NOT touch the DB or sau.
+        task_repo.create.assert_not_called()
+        sau.post_video.assert_not_called()
+        # Lock release must NOT happen (otherwise we'd let the OTHER holder
+        # think they can proceed) — only the holder releases.
+        redis_client_mock.delete.assert_not_called()
+
+
+# ---------- get_task_status ----------
+
+
+class TestGetTaskStatus:
+    def test_raises_for_unknown_task(self, service, task_repo):
+        task_repo.get_by_id_and_tenant.return_value = None
+        with pytest.raises(TaskNotFoundError):
+            service.get_task_status(task_id="t", tenant_id="tenant-a")
+
+    def test_returns_terminal_without_polling_sau(self, service, task_repo, sau):
+        task_repo.get_by_id_and_tenant.return_value = _task(
+            status=SocialPublishTaskStatus.SUCCESS.value,
+            sau_task_id="cel-1",
+            result_url="https://x",
+        )
+        snap = service.get_task_status(task_id="t", tenant_id="tenant-a")
+        sau.get_task.assert_not_called()
+        assert snap.task["status"] == SocialPublishTaskStatus.SUCCESS.value
+        assert snap.result["url"] == "https://x"
+
+    def test_polls_sau_for_pending_task_and_writes_running_state(
+        self, service, task_repo, sau
+    ):
+        running = _task(
+            status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-1"
+        )
+        task_repo.get_by_id_and_tenant.return_value = running
+        sau.get_task.return_value = SauTaskStatusResponse(
+            sau_task_id="cel-1", state="STARTED", result=None, error=None
+        )
+        task_repo.update_status_to_running.return_value = _task(
+            status=SocialPublishTaskStatus.RUNNING.value, sau_task_id="cel-1"
+        )
+
+        service.get_task_status(task_id="t", tenant_id="tenant-a")
+        task_repo.update_status_to_running.assert_called_once()
+
+    def test_marks_terminal_success_with_result_url(self, service, task_repo, sau):
+        task_repo.get_by_id_and_tenant.return_value = _task(
+            status=SocialPublishTaskStatus.RUNNING.value, sau_task_id="cel-1"
+        )
+        sau.get_task.return_value = SauTaskStatusResponse(
+            sau_task_id="cel-1",
+            state="SUCCESS",
+            result={"success": True, "current_url": "https://x"},
+            error=None,
+        )
+        task_repo.update_terminal.return_value = _task(
+            status=SocialPublishTaskStatus.SUCCESS.value,
+            sau_task_id="cel-1",
+            result_url="https://x",
+        )
+        snap = service.get_task_status(task_id="t", tenant_id="tenant-a")
+        assert task_repo.update_terminal.call_args.kwargs["status"] == "success"
+        assert snap.result["url"] == "https://x"
+
+    def test_marks_failed_and_expires_account_on_cookie_invalid(
+        self, service, task_repo, account_repo, sau
+    ):
+        task_repo.get_by_id_and_tenant.return_value = _task(
+            status=SocialPublishTaskStatus.RUNNING.value, sau_task_id="cel-1"
+        )
+        sau.get_task.return_value = SauTaskStatusResponse(
+            sau_task_id="cel-1",
+            state="SUCCESS",
+            result={"success": False, "status": "cookie_invalid", "message": "bad"},
+            error=None,
+        )
+        task_repo.update_terminal.return_value = _task(
+            status=SocialPublishTaskStatus.FAILED.value, error_code="cookie_invalid"
+        )
+        service.get_task_status(task_id="t", tenant_id="tenant-a")
+
+        # Account row gets flipped to expired so the FE shows re-auth.
+        account_repo.update_status.assert_called_once()
+        assert (
+            account_repo.update_status.call_args.kwargs["status"]
+            == SocialPublishAccountStatus.EXPIRED.value
+        )
+
+    def test_celery_success_with_missing_envelope_does_not_fake_success(
+        self, service, task_repo, sau
+    ):
+        # Codex Q6: a Celery SUCCESS state with `result=None` (or missing
+        # the `success` key) MUST NOT be reported as a publish success.
+        task_repo.get_by_id_and_tenant.return_value = _task(
+            status=SocialPublishTaskStatus.RUNNING.value, sau_task_id="cel-1"
+        )
+        sau.get_task.return_value = SauTaskStatusResponse(
+            sau_task_id="cel-1", state="SUCCESS", result=None, error=None
+        )
+        task_repo.update_terminal.return_value = _task(
+            status=SocialPublishTaskStatus.FAILED.value, error_code="upload_failed"
+        )
+        service.get_task_status(task_id="t", tenant_id="tenant-a")
+        kw = task_repo.update_terminal.call_args.kwargs
+        assert kw["status"] == SocialPublishTaskStatus.FAILED.value
+        # Classified via the upstream-status fallback (which is empty
+        # string here → upload_failed).
+        assert kw["error_code"] == "upload_failed"
+
+    def test_marks_failed_when_celery_state_is_failure(
+        self, service, task_repo, sau
+    ):
+        task_repo.get_by_id_and_tenant.return_value = _task(
+            status=SocialPublishTaskStatus.RUNNING.value, sau_task_id="cel-1"
+        )
+        sau.get_task.return_value = SauTaskStatusResponse(
+            sau_task_id="cel-1", state="FAILURE", result=None, error="boom"
+        )
+        task_repo.update_terminal.return_value = _task(
+            status=SocialPublishTaskStatus.FAILED.value, error_code="worker_crashed"
+        )
+        service.get_task_status(task_id="t", tenant_id="tenant-a")
+        kw = task_repo.update_terminal.call_args.kwargs
+        assert kw["error_code"] == "worker_crashed"
+
+    def test_skips_state_change_on_sau_unreachable(
+        self, service, task_repo, sau
+    ):
+        task_repo.get_by_id_and_tenant.return_value = _task(
+            status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-1"
+        )
+        sau.get_task.side_effect = SauUnreachableError("network blip")
+        # Must not raise — caller should keep polling.
+        snap = service.get_task_status(task_id="t", tenant_id="tenant-a")
+        assert snap.task["status"] == SocialPublishTaskStatus.QUEUED.value
+        task_repo.update_terminal.assert_not_called()

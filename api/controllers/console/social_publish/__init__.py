@@ -1,3 +1,3 @@
-from . import accounts
+from . import accounts, tasks
 
-__all__ = ["accounts"]
+__all__ = ["accounts", "tasks"]

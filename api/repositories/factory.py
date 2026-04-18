@@ -13,6 +13,7 @@ from libs.module_loading import import_string
 from repositories.api_workflow_node_execution_repository import DifyAPIWorkflowNodeExecutionRepository
 from repositories.api_workflow_run_repository import APIWorkflowRunRepository
 from repositories.social_publish_account_repository import SocialPublishAccountRepository
+from repositories.social_publish_task_repository import SocialPublishTaskRepository
 
 
 class DifyAPIRepositoryFactory(DifyCoreRepositoryFactory):
@@ -53,6 +54,20 @@ class DifyAPIRepositoryFactory(DifyCoreRepositoryFactory):
         except (ImportError, Exception) as e:
             raise RepositoryImportError(
                 f"Failed to create DifyAPIWorkflowNodeExecutionRepository from '{class_path}': {e}"
+            ) from e
+
+    @classmethod
+    def create_social_publish_task_repository(
+        cls, session_maker: sessionmaker[Session]
+    ) -> SocialPublishTaskRepository:
+        """Create a SocialPublishTaskRepository instance based on configuration."""
+        class_path = dify_config.API_SOCIAL_PUBLISH_TASK_REPOSITORY
+        try:
+            repository_class = import_string(class_path)
+            return repository_class(session_maker=session_maker)
+        except (ImportError, Exception) as e:
+            raise RepositoryImportError(
+                f"Failed to create SocialPublishTaskRepository from '{class_path}': {e}"
             ) from e
 
     @classmethod

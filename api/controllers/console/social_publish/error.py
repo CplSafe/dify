@@ -54,3 +54,42 @@ class SauApiHTTPError(BaseHTTPException):
     error_code = "sau_api_error"
     description = "发布服务返回错误"
     code = 502
+
+
+# ---------- P2: publish flow ----------
+
+
+class TaskNotFoundHTTPError(BaseHTTPException):
+    error_code = "task_not_found"
+    description = "发布任务不存在"
+    code = 404
+
+
+class TaskInvalidPayloadHTTPError(BaseHTTPException):
+    error_code = "task_invalid_payload"
+    description = "发布参数不合法，请检查标题/话题/简介"
+    code = 400
+
+
+class TaskAlreadyInFlightHTTPError(BaseHTTPException):
+    error_code = "task_already_in_flight"
+    description = "该账号当前已有发布任务，请等待结束后再试"
+    code = 409
+
+
+class WorkNotFoundHTTPError(BaseHTTPException):
+    error_code = "work_not_found"
+    description = "作品不存在"
+    code = 404
+
+
+class VideoNotFoundHTTPError(BaseHTTPException):
+    error_code = "video_not_found"
+    description = "视频文件不存在或已过期"
+    code = 404
+
+
+class VideoTooLargeHTTPError(BaseHTTPException):
+    error_code = "video_too_large"
+    description = "视频文件过大，请联系管理员或将其压缩后重试"
+    code = 413

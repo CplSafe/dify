@@ -928,6 +928,29 @@ class RepositoryConfig(BaseSettings):
         ),
     )
 
+    API_SOCIAL_PUBLISH_TASK_REPOSITORY: str = Field(
+        description="Service-layer repository implementation for SocialPublishTask operations. "
+        "Specify as a module path",
+        default=(
+            "repositories.sqlalchemy_social_publish_task_repository."
+            "DifyAPISQLAlchemySocialPublishTaskRepository"
+        ),
+    )
+
+    SAU_PUBLISH_HTTP_TIMEOUT_SECONDS: float = Field(
+        description="Per-request HTTP timeout for the publish endpoint specifically. "
+        "Larger than SAU_HTTP_TIMEOUT_SECONDS because we upload the video bytes "
+        "as multipart/form-data on this call.",
+        default=120.0,
+    )
+
+    SOCIAL_PUBLISH_MAX_VIDEO_BYTES: int = Field(
+        description="Hard cap on video size accepted by the publish flow (bytes). "
+        "Larger uploads should go through the P3 presigned-URL optimisation "
+        "rather than passing the bytes through the api process.",
+        default=100 * 1024 * 1024,  # 100MB
+    )
+
     SAU_BASE_URL: str = Field(
         description="Base URL of the sau (social-auto-upload) service.",
         default="http://sau-api:8001",

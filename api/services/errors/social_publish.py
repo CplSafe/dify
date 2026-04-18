@@ -60,3 +60,41 @@ class SauApiError(SocialPublishError):
         super().__init__(f"sau {status_code}: {body[:200]}")
         self.status_code = status_code
         self.body = body
+
+
+# ---------- P2: publish flow ----------
+
+
+class TaskNotFoundError(SocialPublishError):
+    code = "task_not_found"
+
+
+class TaskInvalidPayloadError(SocialPublishError):
+    """Surfaced when title is missing / over the length cap, tags overshoot
+    the platform limit, etc. The HTTP layer maps this to 400."""
+
+    code = "task_invalid_payload"
+
+
+class WorkNotFoundError(SocialPublishError):
+    code = "work_not_found"
+
+
+class TaskAlreadyInFlightError(SocialPublishError):
+    """Same account already has a non-terminal publish task. The HTTP layer
+    maps this to 409 so the FE can show a clear "wait or cancel" message."""
+
+    code = "task_already_in_flight"
+
+
+class VideoTooLargeError(SocialPublishError):
+    """Video exceeds SOCIAL_PUBLISH_MAX_VIDEO_BYTES — multipart upload would
+    overload the api process. P3 will route large files via presigned URL."""
+
+    code = "video_too_large"
+
+
+class VideoNotFoundError(SocialPublishError):
+    """Couldn't load CreatorWork.file_key bytes from storage."""
+
+    code = "video_not_found"

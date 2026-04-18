@@ -1,9 +1,6 @@
 export type SocialPublishPlatform = 'douyin' | 'xhs' | 'ks'
 
-export type SocialPublishAccountStatus
-  = | 'pending_auth'
-    | 'active'
-    | 'expired'
+export type SocialPublishAccountStatus = 'pending_auth' | 'active' | 'expired'
 
 export type SocialPublishAccount = {
   id: string
@@ -44,3 +41,54 @@ export type SocialPublishErrorCode
     | 'sau_unreachable'
     | 'sau_api_error'
     | 'social_publish_error'
+    | 'task_not_found'
+    | 'task_invalid_payload'
+    | 'task_already_in_flight'
+    | 'work_not_found'
+    | 'video_not_found'
+    | 'video_too_large'
+    | 'cookie_invalid'
+    | 'upload_timeout'
+    | 'upload_failed'
+    | 'worker_crashed'
+
+export type SocialPublishTaskStatus
+  = | 'pending'
+    | 'queued'
+    | 'running'
+    | 'success'
+    | 'failed'
+
+type TaskError = {
+  error_code: SocialPublishErrorCode | string | null
+  error_message: string | null
+}
+
+export type SocialPublishTask = TaskError & {
+  id: string
+  account_id: string
+  work_id: string | null
+  platform: SocialPublishPlatform
+  status: SocialPublishTaskStatus
+  result_url: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type CreateTaskRequest = {
+  account_id: string
+  work_id: string
+  title: string
+  tags?: string[]
+  desc?: string
+}
+
+export type CreateTaskResponse = {
+  task_id: string
+  status: SocialPublishTaskStatus
+}
+
+export type TaskStatusResponse = {
+  task: SocialPublishTask
+  result: TaskError & { url: string | null }
+}

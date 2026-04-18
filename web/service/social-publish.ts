@@ -1,13 +1,19 @@
 import type {
   AuthStartResponse,
   AuthStatusResponse,
+  CreateTaskRequest,
+  CreateTaskResponse,
   SocialPublishAccount,
   SocialPublishErrorCode,
   SocialPublishPlatform,
+  SocialPublishTask,
+  SocialPublishTaskStatus,
+  TaskStatusResponse,
 } from '@/types/social-publish'
 import { del, get, post } from './base'
 
 const ACCOUNTS_BASE = '/social-publish/accounts'
+const TASKS_BASE = '/social-publish/tasks'
 
 /**
  * Domain-shaped error thrown after parsing the backend's `{code, message,
@@ -77,3 +83,33 @@ export const deleteSocialPublishAccount = (accountId: string) =>
       `${ACCOUNTS_BASE}/${encodeURIComponent(accountId)}`,
     ),
   )
+
+// ---------- P2: publish tasks ----------
+
+export const createSocialPublishTask = (body: CreateTaskRequest) =>
+  withErrorNormalization(post<CreateTaskResponse>(TASKS_BASE, { body }))
+
+export const fetchSocialPublishTask = (taskId: string) =>
+  withErrorNormalization(
+    get<TaskStatusResponse>(`${TASKS_BASE}/${encodeURIComponent(taskId)}`),
+  )
+
+export const listSocialPublishTasks = (filters?: {
+  account_id?: string
+  status?: SocialPublishTaskStatus
+  limit?: number
+}) => {
+  const params = new URLSearchParams()
+  if (filters?.account_id)
+    params.set('account_id', filters.account_id)
+  if (filters?.status)
+    params.set('status', filters.status)
+  if (filters?.limit !== undefined)
+    params.set('limit', String(filters.limit))
+  const query = params.toString()
+  return withErrorNormalization(
+    get<{ data: SocialPublishTask[] }>(
+      query ? `${TASKS_BASE}?${query}` : TASKS_BASE,
+    ),
+  )
+}

@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { PublishDrawer } from '@/app/components/creator/social-publish/publish-drawer'
+import { useGlobalPublicStore } from '@/context/global-public-context'
 import { del, get, post } from '@/service/base'
 
 type Work = {
@@ -32,6 +34,10 @@ export default function CreatorWorksPage() {
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [drawerWork, setDrawerWork] = useState<Work | null>(null)
+  const socialPublishEnabled = useGlobalPublicStore(
+    s => s.systemFeatures.social_publish_enabled,
+  )
 
   const loadWorksRef = useRef(() => {})
   loadWorksRef.current = () => {
@@ -153,107 +159,126 @@ export default function CreatorWorksPage() {
       </div>
 
       <div className="flex-1 p-8">
-        {loading
-          ? (
-              <div className="flex h-48 items-center justify-center text-text-quaternary">
-                加载中...
-              </div>
-            )
-          : works.length === 0
-            ? (
-                <div className="flex h-48 flex-col items-center justify-center text-text-quaternary">
-                  <span className="mb-3 i-ri-video-line h-12 w-12 opacity-30" />
-                  <p>还没有创作内容</p>
-                  <p className="mt-1 text-sm">
-                    在首页使用 AI 工作流生成内容后，作品将显示在这里
-                  </p>
-                </div>
-              )
-            : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {works.map(work => (
-                    <div
-                      key={work.id}
-                      className="flex flex-col overflow-hidden rounded-2xl border border-divider-subtle bg-background-default"
-                    >
-                      {renderPreview(work)}
+        {/* eslint-disable-next-line style/multiline-ternary */}
+        {loading ? (
+          <div className="flex h-48 items-center justify-center text-text-quaternary">
+            加载中...
+          </div>
+        ) // eslint-disable-next-line style/multiline-ternary
+          : works.length === 0 ? (
+            <div className="flex h-48 flex-col items-center justify-center text-text-quaternary">
+              <span className="mb-3 i-ri-video-line h-12 w-12 opacity-30" />
+              <p>还没有创作内容</p>
+              <p className="mt-1 text-sm">
+                在首页使用 AI 工作流生成内容后，作品将显示在这里
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {works.map(work => (
+                <div
+                  key={work.id}
+                  className="flex flex-col overflow-hidden rounded-2xl border border-divider-subtle bg-background-default"
+                >
+                  {renderPreview(work)}
 
-                      <div className="flex flex-1 flex-col p-4">
-                        <div className="mb-2 flex items-start justify-between">
-                          <h3 className="line-clamp-1 flex-1 font-medium text-text-primary">
-                            {work.title}
-                          </h3>
-                          <span
-                            className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${shareStatusColor[work.share_status] || 'bg-gray-100 text-gray-600'}`}
-                          >
-                            {shareStatusLabel[work.share_status] || work.share_status}
-                          </span>
-                        </div>
-
-                        <div className="mb-4 flex items-center gap-1 text-xs text-text-quaternary">
-                          <span className="i-ri-time-line h-3 w-3" />
-                          <span>{formatDate(work.created_at)}</span>
-                        </div>
-
-                        {work.share_status === 'draft'
-                          ? (
-                              <div className="mt-auto flex gap-2">
-                                <button
-                                  onClick={() => handlePublish(work.id, 'tiktok')}
-                                  disabled={publishing === work.id}
-                                  className="flex-1 rounded-lg bg-black py-2 text-xs font-medium text-white transition-colors hover:bg-gray-800 disabled:opacity-50"
-                                >
-                                  {publishing === work.id ? '发布中...' : '发布至抖音'}
-                                </button>
-                                <button
-                                  onClick={() => handlePublish(work.id, 'xhs')}
-                                  disabled={publishing === work.id}
-                                  className="flex-1 rounded-lg bg-red-500 py-2 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50"
-                                >
-                                  发布至小红书
-                                </button>
-                              </div>
-                            )
-                          : (
-                              <div className="mt-auto flex items-center gap-2 text-sm text-green-600">
-                                <span className="i-ri-check-line h-4 w-4" />
-                                <span>已发布</span>
-                              </div>
-                            )}
-
-                        {deletingId === work.id
-                          ? (
-                              <div className="mt-2 flex items-center justify-center gap-2 rounded-lg bg-red-50 py-1.5 text-xs">
-                                <span className="text-red-600">确认删除？</span>
-                                <button
-                                  onClick={() => confirmDelete(work.id)}
-                                  className="rounded bg-red-500 px-2 py-0.5 text-white hover:bg-red-600"
-                                >
-                                  确认
-                                </button>
-                                <button
-                                  onClick={() => setDeletingId(null)}
-                                  className="rounded bg-gray-200 px-2 py-0.5 text-gray-600 hover:bg-gray-300"
-                                >
-                                  取消
-                                </button>
-                              </div>
-                            )
-                          : (
-                              <button
-                                onClick={() => handleDelete(work.id)}
-                                className="mt-2 flex items-center justify-center gap-1 rounded-lg py-1.5 text-xs text-text-quaternary transition-colors hover:bg-state-destructive-hover hover:text-red-600"
-                              >
-                                <span className="i-ri-delete-bin-6-line h-3 w-3" />
-                                <span>删除</span>
-                              </button>
-                            )}
-                      </div>
+                  <div className="flex flex-1 flex-col p-4">
+                    <div className="mb-2 flex items-start justify-between">
+                      <h3 className="line-clamp-1 flex-1 font-medium text-text-primary">
+                        {work.title}
+                      </h3>
+                      <span
+                        className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${shareStatusColor[work.share_status] || 'bg-gray-100 text-gray-600'}`}
+                      >
+                        {shareStatusLabel[work.share_status] || work.share_status}
+                      </span>
                     </div>
-                  ))}
+
+                    <div className="mb-4 flex items-center gap-1 text-xs text-text-quaternary">
+                      <span className="i-ri-time-line h-3 w-3" />
+                      <span>{formatDate(work.created_at)}</span>
+                    </div>
+
+                    {/* eslint-disable-next-line style/multiline-ternary */}
+                    {work.share_status === 'draft' ? (
+                      <div className="mt-auto flex gap-2">
+                        <button
+                          onClick={() => {
+                          // Route through the social-publish drawer when the
+                          // sau integration is enabled; fall back to the
+                          // legacy share_status flip otherwise.
+                            if (socialPublishEnabled)
+                              setDrawerWork(work)
+                            else handlePublish(work.id, 'tiktok')
+                          }}
+                          disabled={publishing === work.id}
+                          className="flex-1 rounded-lg bg-black py-2 text-xs font-medium text-white transition-colors hover:bg-gray-800 disabled:opacity-50"
+                        >
+                          {publishing === work.id ? '发布中...' : '发布至抖音'}
+                        </button>
+                        <button
+                          onClick={() => handlePublish(work.id, 'xhs')}
+                          disabled={publishing === work.id}
+                          className="flex-1 rounded-lg bg-red-500 py-2 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+                        >
+                          发布至小红书
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="mt-auto flex items-center gap-2 text-sm text-green-600">
+                        <span className="i-ri-check-line h-4 w-4" />
+                        <span>已发布</span>
+                      </div>
+                    )}
+
+                    {deletingId === work.id
+                      ? (
+                          <div className="mt-2 flex items-center justify-center gap-2 rounded-lg bg-red-50 py-1.5 text-xs">
+                            <span className="text-red-600">确认删除？</span>
+                            <button
+                              onClick={() => confirmDelete(work.id)}
+                              className="rounded bg-red-500 px-2 py-0.5 text-white hover:bg-red-600"
+                            >
+                              确认
+                            </button>
+                            <button
+                              onClick={() => setDeletingId(null)}
+                              className="rounded bg-gray-200 px-2 py-0.5 text-gray-600 hover:bg-gray-300"
+                            >
+                              取消
+                            </button>
+                          </div>
+                        )
+                      : (
+                          <button
+                            onClick={() => handleDelete(work.id)}
+                            className="mt-2 flex items-center justify-center gap-1 rounded-lg py-1.5 text-xs text-text-quaternary transition-colors hover:bg-state-destructive-hover hover:text-red-600"
+                          >
+                            <span className="i-ri-delete-bin-6-line h-3 w-3" />
+                            <span>删除</span>
+                          </button>
+                        )}
+                  </div>
                 </div>
-              )}
+              ))}
+            </div>
+          )}
       </div>
+
+      <PublishDrawer
+        open={drawerWork !== null}
+        workId={drawerWork?.id ?? ''}
+        defaultTitle={drawerWork?.title}
+        onOpenChange={(open) => {
+          if (!open)
+            setDrawerWork(null)
+        }}
+        onPublishSuccess={() => {
+          // Reload after a successful sau publish so the share_status
+          // badge updates if we ever wire it through.
+          reload()
+        }}
+      />
     </div>
   )
 }

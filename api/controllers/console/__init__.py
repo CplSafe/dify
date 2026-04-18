@@ -24,6 +24,7 @@ _CREATOR_ALLOWED_PREFIXES = (
     "/console/api/files/upload",
     "/console/api/trial-apps/",
     "/console/api/creator/",
+    "/console/api/social-publish/",
     "/console/api/installed-apps",
     "/console/api/workflow/",
     "/console/api/form/human_input/",
@@ -31,6 +32,7 @@ _CREATOR_ALLOWED_PREFIXES = (
     "/console/api/logout",
     "/console/api/refresh-token",
     "/console/api/email-register",
+    "/console/api/sms-login",
     "/console/api/forgot-password",
     "/console/api/system-features",
     "/console/api/features",
@@ -153,6 +155,7 @@ from .auth import (
     login,
     oauth,
     oauth_server,
+    sms_login,
 )
 
 # Import billing controllers
@@ -191,6 +194,9 @@ from .explore import (
     saved_message,
     trial,
 )
+
+# Import social-publish controllers (P1: account management)
+from .social_publish import accounts as social_publish_accounts
 
 # Import tag controllers
 from .tag import tags
@@ -279,6 +285,8 @@ __all__ = [
     "saved_message",
     "setup",
     "site",
+    "sms_login",
+    "social_publish_accounts",
     "spec",
     "statistic",
     "tags",

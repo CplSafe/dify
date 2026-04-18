@@ -164,6 +164,7 @@ class SystemFeatureModel(BaseModel):
     enable_email_code_login: bool = False
     enable_email_password_login: bool = True
     enable_social_oauth_login: bool = False
+    enable_sms_code_login: bool = False
     is_allow_register: bool = False
     is_allow_create_workspace: bool = False
     is_email_setup: bool = False
@@ -176,6 +177,10 @@ class SystemFeatureModel(BaseModel):
     trial_models: list[str] = []
     enable_trial_app: bool = False
     enable_explore_banner: bool = False
+    # Master switch for the social publish-center (sau integration). Off by
+    # default; the controllers also short-circuit on the same flag, so the
+    # frontend can hide nav entries before the user even attempts a request.
+    social_publish_enabled: bool = False
 
 
 class FeatureService:
@@ -244,12 +249,18 @@ class FeatureService:
         system_features.enable_email_code_login = dify_config.ENABLE_EMAIL_CODE_LOGIN
         system_features.enable_email_password_login = dify_config.ENABLE_EMAIL_PASSWORD_LOGIN
         system_features.enable_social_oauth_login = dify_config.ENABLE_SOCIAL_OAUTH_LOGIN
+        system_features.enable_sms_code_login = dify_config.ENABLE_SMS_CODE_LOGIN
         system_features.is_allow_register = dify_config.ALLOW_REGISTER
         system_features.is_allow_create_workspace = dify_config.ALLOW_CREATE_WORKSPACE
         system_features.is_email_setup = dify_config.MAIL_TYPE is not None and dify_config.MAIL_TYPE != ""
         system_features.trial_models = cls._fulfill_trial_models_from_env()
         system_features.enable_trial_app = dify_config.ENABLE_TRIAL_APP
         system_features.enable_explore_banner = dify_config.ENABLE_EXPLORE_BANNER
+        # Treat a missing token as an automatic disable so misconfigured
+        # deployments fail closed rather than surfacing a half-broken UI.
+        system_features.social_publish_enabled = bool(
+            dify_config.SOCIAL_PUBLISH_ENABLED and dify_config.SAU_INTERNAL_TOKEN
+        )
 
     @classmethod
     def _fulfill_trial_models_from_env(cls) -> list[str]:

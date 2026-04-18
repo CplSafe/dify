@@ -94,6 +94,11 @@ from .provider import (
     TenantDefaultModel,
     TenantPreferredModelProvider,
 )
+from .social_publish import (
+    SocialPublishAccount,
+    SocialPublishAccountStatus,
+    SocialPublishPlatform,
+)
 from .source import DataSourceApiKeyAuthBinding, DataSourceOauthBinding
 from .task import CeleryTask, CeleryTaskSet
 from .tools import (
@@ -206,6 +211,9 @@ __all__ = [
     "RecommendedApp",
     "SavedMessage",
     "Site",
+    "SocialPublishAccount",
+    "SocialPublishAccountStatus",
+    "SocialPublishPlatform",
     "Tag",
     "TagBinding",
     "Tenant",

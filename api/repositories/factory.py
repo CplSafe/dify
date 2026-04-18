@@ -12,6 +12,7 @@ from core.repositories import DifyCoreRepositoryFactory, RepositoryImportError
 from libs.module_loading import import_string
 from repositories.api_workflow_node_execution_repository import DifyAPIWorkflowNodeExecutionRepository
 from repositories.api_workflow_run_repository import APIWorkflowRunRepository
+from repositories.social_publish_account_repository import SocialPublishAccountRepository
 
 
 class DifyAPIRepositoryFactory(DifyCoreRepositoryFactory):
@@ -52,6 +53,34 @@ class DifyAPIRepositoryFactory(DifyCoreRepositoryFactory):
         except (ImportError, Exception) as e:
             raise RepositoryImportError(
                 f"Failed to create DifyAPIWorkflowNodeExecutionRepository from '{class_path}': {e}"
+            ) from e
+
+    @classmethod
+    def create_social_publish_account_repository(
+        cls, session_maker: sessionmaker[Session]
+    ) -> SocialPublishAccountRepository:
+        """Create a SocialPublishAccountRepository instance based on configuration.
+
+        This repository is designed for service-layer operations against the
+        ``social_publish_accounts`` table and uses dependency injection with a
+        sessionmaker for testability.
+
+        Args:
+            session_maker: SQLAlchemy sessionmaker to inject for database session management.
+
+        Returns:
+            Configured SocialPublishAccountRepository instance.
+
+        Raises:
+            RepositoryImportError: If the configured repository cannot be imported or instantiated.
+        """
+        class_path = dify_config.API_SOCIAL_PUBLISH_ACCOUNT_REPOSITORY
+        try:
+            repository_class = import_string(class_path)
+            return repository_class(session_maker=session_maker)
+        except (ImportError, Exception) as e:
+            raise RepositoryImportError(
+                f"Failed to create SocialPublishAccountRepository from '{class_path}': {e}"
             ) from e
 
     @classmethod

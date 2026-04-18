@@ -919,6 +919,48 @@ class RepositoryConfig(BaseSettings):
         default="repositories.sqlalchemy_api_workflow_run_repository.DifyAPISQLAlchemyWorkflowRunRepository",
     )
 
+    API_SOCIAL_PUBLISH_ACCOUNT_REPOSITORY: str = Field(
+        description="Service-layer repository implementation for SocialPublishAccount operations. "
+        "Specify as a module path",
+        default=(
+            "repositories.sqlalchemy_social_publish_account_repository."
+            "DifyAPISQLAlchemySocialPublishAccountRepository"
+        ),
+    )
+
+    SAU_BASE_URL: str = Field(
+        description="Base URL of the sau (social-auto-upload) service.",
+        default="http://sau-api:8001",
+    )
+
+    SAU_INTERNAL_TOKEN: str = Field(
+        description="Shared secret used as the X-Sau-Token header to authenticate "
+        "Dify api -> sau requests. Must match SAU_INTERNAL_TOKEN on the sau side. "
+        "Empty disables the publish-center.",
+        default="",
+    )
+
+    SAU_HTTP_TIMEOUT_SECONDS: float = Field(
+        description="Per-request timeout for the sau HTTP client.",
+        default=10.0,
+    )
+
+    SAU_HTTP_MAX_RETRIES: int = Field(
+        description="Number of retries for network errors / 5xx responses on sau requests.",
+        default=2,
+    )
+
+    SAU_HTTP_POOL_SIZE: int = Field(
+        description="Max concurrent connections in the sau HTTP client pool.",
+        default=20,
+    )
+
+    SOCIAL_PUBLISH_ENABLED: bool = Field(
+        description="Master switch for the publish-center. Off by default; "
+        "operators flip it on once sau is reachable.",
+        default=False,
+    )
+
 
 class AuthConfig(BaseSettings):
     """
@@ -1406,8 +1448,16 @@ class LoginConfig(BaseSettings):
         description="whether to enable github/google oauth login",
         default=False,
     )
+    ENABLE_SMS_CODE_LOGIN: bool = Field(
+        description="whether to enable SMS code login (phone number + verification code)",
+        default=False,
+    )
     EMAIL_CODE_LOGIN_TOKEN_EXPIRY_MINUTES: PositiveInt = Field(
         description="expiry time in minutes for email code login token",
+        default=5,
+    )
+    SMS_CODE_LOGIN_TOKEN_EXPIRY_MINUTES: PositiveInt = Field(
+        description="expiry time in minutes for SMS code login token",
         default=5,
     )
     ALLOW_REGISTER: bool = Field(
@@ -1417,6 +1467,28 @@ class LoginConfig(BaseSettings):
     ALLOW_CREATE_WORKSPACE: bool = Field(
         description="whether to enable create workspace",
         default=False,
+    )
+
+    # Aliyun SMS configuration
+    ALIYUN_SMS_ACCESS_KEY_ID: str = Field(
+        description="Aliyun SMS access key ID",
+        default="",
+    )
+    ALIYUN_SMS_ACCESS_KEY_SECRET: str = Field(
+        description="Aliyun SMS access key secret",
+        default="",
+    )
+    ALIYUN_SMS_SIGN_NAME: str = Field(
+        description="Aliyun SMS sign name (签名名称)",
+        default="",
+    )
+    ALIYUN_SMS_TEMPLATE_CODE: str = Field(
+        description="Aliyun SMS template code for verification (模板CODE)",
+        default="",
+    )
+    ALIYUN_SMS_INVITE_TEMPLATE_CODE: str = Field(
+        description="Aliyun SMS template code for member invitation",
+        default="",
     )
 
 

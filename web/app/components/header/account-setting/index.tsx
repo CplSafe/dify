@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 import SearchInput from '@/app/components/base/search-input'
 import { ScrollArea } from '@/app/components/base/ui/scroll-area'
 import BillingPage from '@/app/components/billing/billing-page'
-import { SocialPublishAccountList } from '@/app/components/creator/social-publish/account-list'
 import CustomPage from '@/app/components/custom/custom-page'
 import { ACCOUNT_SETTING_TAB } from '@/app/components/header/account-setting/constants'
 import MenuDialog from '@/app/components/header/account-setting/menu-dialog'
@@ -69,12 +68,6 @@ export default function AccountSetting({
         name: t('settings.members', { ns: 'common' }),
         icon: <span className={cn('i-ri-group-2-line', iconClassName)} />,
         activeIcon: <span className={cn('i-ri-group-2-fill', iconClassName)} />,
-      },
-      {
-        key: ACCOUNT_SETTING_TAB.SOCIAL_PUBLISH,
-        name: t('settings.socialPublishAccounts', { ns: 'common' }),
-        icon: <span className={cn('i-ri-share-line', iconClassName)} />,
-        activeIcon: <span className={cn('i-ri-share-fill', iconClassName)} />,
       },
     ]
 
@@ -292,9 +285,6 @@ export default function AccountSetting({
                 <ModelProviderPage searchText={searchValue} />
               )}
               {activeMenu === ACCOUNT_SETTING_TAB.MEMBERS && <MembersPage />}
-              {activeMenu === ACCOUNT_SETTING_TAB.SOCIAL_PUBLISH && (
-                <SocialPublishAccountList />
-              )}
               {activeMenu === ACCOUNT_SETTING_TAB.BILLING && <BillingPage />}
               {activeMenu === ACCOUNT_SETTING_TAB.DATA_SOURCE && (
                 <DataSourcePage />

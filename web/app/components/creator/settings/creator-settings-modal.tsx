@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import Button from '@/app/components/base/button'
 import { ScrollArea } from '@/app/components/base/ui/scroll-area'
+import { SocialPublishAccountList } from '@/app/components/creator/social-publish/account-list'
 import MenuDialog from '@/app/components/header/account-setting/menu-dialog'
 import { useAppContext } from '@/context/app-context'
 import { cn } from '@/utils/classnames'
@@ -15,6 +16,7 @@ import RebateTab from './tabs/rebate-tab'
 
 export type CreatorSettingsTab
   = | 'account'
+    | 'social-publish'
     | 'members'
     | 'balance'
     | 'api-key'
@@ -40,6 +42,12 @@ const MENU_ITEMS: MenuItem[] = [
     label: '账户设置',
     iconClass: 'i-ri-account-circle-line',
     activeIconClass: 'i-ri-account-circle-fill',
+  },
+  {
+    key: 'social-publish',
+    label: '账号绑定',
+    iconClass: 'i-ri-share-line',
+    activeIconClass: 'i-ri-share-fill',
   },
   {
     key: 'members',
@@ -186,6 +194,7 @@ export default function CreatorSettingsModal({
 
             <div className="px-4 pt-2 sm:px-8">
               {activeTab === 'account' && <AccountTab />}
+              {activeTab === 'social-publish' && <SocialPublishAccountList />}
               {activeTab === 'members' && <MembersTab />}
               {activeTab === 'balance' && <BalanceTab />}
               {activeTab === 'api-key' && <ApiKeyTab />}

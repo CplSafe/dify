@@ -3,7 +3,6 @@ export const ACCOUNT_SETTING_MODAL_ACTION = 'showSettings'
 export const ACCOUNT_SETTING_TAB = {
   PROVIDER: 'provider',
   MEMBERS: 'members',
-  SOCIAL_PUBLISH: 'social-publish',
   BILLING: 'billing',
   DATA_SOURCE: 'data-source',
   API_BASED_EXTENSION: 'api-based-extension',
@@ -19,10 +18,10 @@ export type AccountSettingTab
 
 export const DEFAULT_ACCOUNT_SETTING_TAB = ACCOUNT_SETTING_TAB.MEMBERS
 
+const ACCOUNT_SETTING_TAB_VALUES: readonly string[]
+  = Object.values(ACCOUNT_SETTING_TAB)
+
 export const isValidAccountSettingTab = (
   tab: string | null,
-): tab is AccountSettingTab => {
-  if (!tab)
-    return false
-  return Object.values(ACCOUNT_SETTING_TAB).includes(tab as AccountSettingTab)
-}
+): tab is AccountSettingTab =>
+  tab !== null && ACCOUNT_SETTING_TAB_VALUES.includes(tab)

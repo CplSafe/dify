@@ -98,3 +98,13 @@ class VideoNotFoundError(SocialPublishError):
     """Couldn't load CreatorWork.file_key bytes from storage."""
 
     code = "video_not_found"
+
+
+# ---------- P3: tier / queue ----------
+
+
+class TaskQuotaExceededError(SocialPublishError):
+    """Tenant has hit its tier-derived max-pending quota. The HTTP layer
+    maps this to 429 so the FE can surface a "wait or upgrade" message."""
+
+    code = "task_quota_exceeded"

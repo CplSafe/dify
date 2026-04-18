@@ -55,11 +55,29 @@ def sau() -> MagicMock:
 
 
 @pytest.fixture
-def service(task_repo, account_repo, sau) -> SocialPublishTaskService:
+def tier_resolver() -> MagicMock:
+    """Default tier mock — every test gets a "mid" tier with plenty of
+    headroom. Tests that exercise the quota / priority flows can assign
+    ``tier_resolver.get_tier.return_value = TenantTier(...)`` inline."""
+    from services.social_publish_tier import TenantTier
+
+    resolver = MagicMock()
+    resolver.get_tier.return_value = TenantTier(
+        name="mid", concurrent=5, priority=5, max_pending=100
+    )
+    return resolver
+
+
+@pytest.fixture
+def service(task_repo, account_repo, sau, tier_resolver) -> SocialPublishTaskService:
+    # ``count_active_for_tenant`` defaults to 0 so the per-tenant quota
+    # check never trips unless the test explicitly raises it.
+    task_repo.count_active_for_tenant.return_value = 0
     return SocialPublishTaskService(
         task_repository=task_repo,
         account_repository=account_repo,
         sau_client=sau,
+        tier_resolver=tier_resolver,
     )
 
 
@@ -119,23 +137,38 @@ def _task(
 
 @pytest.fixture
 def storage_load() -> Any:
-    """Patch ext_storage.storage.load_once to a tiny in-memory dict."""
+    """Patch ext_storage.storage so the multipart path is taken by default.
+
+    Tests that want to exercise the presigned-URL path can override
+    ``st.supports_presigned_url.return_value`` and ``st.get_size`` /
+    ``st.generate_presigned_url`` inline.
+    """
     with patch("services.social_publish_task_service.storage") as st:
         st.load_once = MagicMock(return_value=b"VIDEO BYTES")
+        st.supports_presigned_url = MagicMock(return_value=False)
+        st.get_size = MagicMock(return_value=None)
+        st.generate_presigned_url = MagicMock(return_value="https://signed/url")
         yield st
 
 
 @pytest.fixture(autouse=True)
 def redis_client_mock() -> Any:
-    """Patch redis_client so the single-flight Redis lock always succeeds.
+    """Patch redis_client so the single-flight lock + tenant quota
+    counter both pass through under unit tests.
 
-    ``autouse`` keeps every test independent of the real redis_client
-    singleton. Tests that want to assert on lock behaviour can drop
-    `nx=True`-returns-True via ``rc.set.return_value = False`` inline.
+    Tests that want to assert on the gates can re-bind:
+        rc.set.return_value = False                      # blocks single-flight
+        rc.register_script.return_value = lambda **kw: 0  # blocks quota
     """
     with patch("services.social_publish_task_service.redis_client") as rc:
         rc.set = MagicMock(return_value=True)
         rc.delete = MagicMock(return_value=1)
+        rc.decr = MagicMock(return_value=0)
+        # The Lua script object Redis returns is callable via
+        # ``script(keys=..., args=...)``. By default we let acquires
+        # succeed; tests override per-case.
+        script_runner = MagicMock(return_value=1)
+        rc.register_script = MagicMock(return_value=script_runner)
         yield rc
 
 
@@ -396,6 +429,263 @@ class TestCreateTask:
         # Lock release must NOT happen (otherwise we'd let the OTHER holder
         # think they can proceed) — only the holder releases.
         redis_client_mock.delete.assert_not_called()
+
+
+# ---------- P3: tier / quota / priority ----------
+
+
+class TestVideoTransport:
+    def test_uses_presigned_url_when_supported_and_above_threshold(
+        self,
+        service,
+        account_repo,
+        task_repo,
+        sau,
+        db_session,
+        storage_load,
+    ):
+        from services.sau_client import SauPublishResponse
+
+        # Storage backend supports presigning AND the work file is "large".
+        # The threshold default is 5MB; report 10MB so we land on the URL path.
+        storage_load.supports_presigned_url.return_value = True
+        storage_load.get_size.return_value = 10 * 1024 * 1024
+        storage_load.generate_presigned_url.return_value = "https://s3.example/video?sig=x"
+
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        task_repo.create.return_value = _task()
+        task_repo.attach_sau_task_id.return_value = _task(
+            status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-1"
+        )
+        sau.post_video.return_value = SauPublishResponse(sau_task_id="cel-1")
+
+        service.create_task(
+            tenant_id="tenant-a",
+            created_by="u",
+            request=CreateTaskRequest(
+                account_id="acc-1",
+                work_id="work-1",
+                title="hi",
+                tags=None,
+                desc=None,
+            ),
+        )
+
+        # post_video got the URL, NOT the bytes.
+        kw = sau.post_video.call_args.kwargs
+        assert kw["video_url"] == "https://s3.example/video?sig=x"
+        assert kw["video_bytes"] is None
+        # And we never read the bytes through storage.load_once on this path.
+        storage_load.load_once.assert_not_called()
+
+    def test_falls_back_to_multipart_when_file_below_threshold(
+        self,
+        service,
+        account_repo,
+        task_repo,
+        sau,
+        db_session,
+        storage_load,
+    ):
+        from services.sau_client import SauPublishResponse
+
+        # Backend supports presigning, but the file is tiny (1MB) so we
+        # skip the round-trip overhead and use multipart.
+        storage_load.supports_presigned_url.return_value = True
+        storage_load.get_size.return_value = 1 * 1024 * 1024
+
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        task_repo.create.return_value = _task()
+        task_repo.attach_sau_task_id.return_value = _task(
+            status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-1"
+        )
+        sau.post_video.return_value = SauPublishResponse(sau_task_id="cel-1")
+
+        service.create_task(
+            tenant_id="tenant-a",
+            created_by="u",
+            request=CreateTaskRequest(
+                account_id="acc-1",
+                work_id="work-1",
+                title="hi",
+                tags=None,
+                desc=None,
+            ),
+        )
+
+        kw = sau.post_video.call_args.kwargs
+        assert kw["video_bytes"] == b"VIDEO BYTES"
+        assert kw["video_url"] is None
+        # And we never minted a useless presigned URL.
+        storage_load.generate_presigned_url.assert_not_called()
+
+    def test_falls_back_to_multipart_when_size_unknown(
+        self,
+        service,
+        account_repo,
+        task_repo,
+        sau,
+        db_session,
+        storage_load,
+    ):
+        from services.sau_client import SauPublishResponse
+
+        # Backend supports presigning but get_size returned None (e.g. the
+        # head-object call timed out). Don't gamble on the size — fall back.
+        storage_load.supports_presigned_url.return_value = True
+        storage_load.get_size.return_value = None
+
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        task_repo.create.return_value = _task()
+        task_repo.attach_sau_task_id.return_value = _task(
+            status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-1"
+        )
+        sau.post_video.return_value = SauPublishResponse(sau_task_id="cel-1")
+
+        service.create_task(
+            tenant_id="tenant-a",
+            created_by="u",
+            request=CreateTaskRequest(
+                account_id="acc-1",
+                work_id="work-1",
+                title="hi",
+                tags=None,
+                desc=None,
+            ),
+        )
+
+        kw = sau.post_video.call_args.kwargs
+        assert kw["video_bytes"] == b"VIDEO BYTES"
+        assert kw["video_url"] is None
+
+
+class TestTierGating:
+    def test_rejects_when_tenant_quota_exceeded(
+        self,
+        service,
+        account_repo,
+        task_repo,
+        tier_resolver,
+        db_session,
+        storage_load,
+        redis_client_mock,
+    ):
+        from services.errors.social_publish import TaskQuotaExceededError
+        from services.social_publish_tier import TenantTier
+
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        # Tenant is on the "low" tier (max 50 in-flight). Force the
+        # atomic Lua quota acquire to refuse — same shape as the real
+        # script returning 0 when n > limit.
+        tier_resolver.get_tier.return_value = TenantTier(
+            name="low", concurrent=2, priority=1, max_pending=50
+        )
+        redis_client_mock.register_script.return_value = MagicMock(return_value=0)
+        task_repo.count_active_for_tenant.return_value = 50
+
+        with pytest.raises(TaskQuotaExceededError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-1",
+                    work_id="work-1",
+                    title="hi",
+                    tags=None,
+                    desc=None,
+                ),
+            )
+
+        # The quota check must happen BEFORE the single-flight Redis lock,
+        # the work resolve and the sau call — so none of those should run.
+        task_repo.has_active_for_account.assert_not_called()
+
+    def test_quota_release_on_dispatch_failure(
+        self,
+        service,
+        account_repo,
+        task_repo,
+        sau,
+        tier_resolver,
+        db_session,
+        storage_load,
+        redis_client_mock,
+    ):
+        """A failed dispatch must DECR the quota counter so a single
+        glitch doesn't permanently consume one of the tenant's slots
+        until the 10-min TTL kicks in."""
+        from services.errors.social_publish import SauUnreachableError
+
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        task_repo.create.return_value = _task()
+        sau.post_video.side_effect = SauUnreachableError("network")
+
+        with pytest.raises(SauUnreachableError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-1",
+                    work_id="work-1",
+                    title="hi",
+                    tags=None,
+                    desc=None,
+                ),
+            )
+
+        # The quota counter MUST have been decremented in the finally
+        # block (we asserted post_video failed, so dispatch failed, so
+        # ownership stays with this method and finally releases).
+        redis_client_mock.decr.assert_called_once()
+
+    def test_high_tier_priority_propagates_to_post_video(
+        self,
+        service,
+        account_repo,
+        task_repo,
+        sau,
+        tier_resolver,
+        db_session,
+        storage_load,
+    ):
+        from services.social_publish_tier import TenantTier
+
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        task_repo.create.return_value = _task()
+        task_repo.attach_sau_task_id.return_value = _task(
+            status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-hi"
+        )
+        tier_resolver.get_tier.return_value = TenantTier(
+            name="high", concurrent=10, priority=9, max_pending=200
+        )
+        from services.sau_client import SauPublishResponse
+
+        sau.post_video.return_value = SauPublishResponse(sau_task_id="cel-hi")
+
+        service.create_task(
+            tenant_id="tenant-a",
+            created_by="u",
+            request=CreateTaskRequest(
+                account_id="acc-1",
+                work_id="work-1",
+                title="hi",
+                tags=None,
+                desc=None,
+            ),
+        )
+
+        # priority kw-arg was forwarded from tier.priority.
+        assert sau.post_video.call_args.kwargs["priority"] == 9
 
 
 # ---------- get_task_status ----------

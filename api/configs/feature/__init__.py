@@ -945,10 +945,39 @@ class RepositoryConfig(BaseSettings):
     )
 
     SOCIAL_PUBLISH_MAX_VIDEO_BYTES: int = Field(
-        description="Hard cap on video size accepted by the publish flow (bytes). "
-        "Larger uploads should go through the P3 presigned-URL optimisation "
-        "rather than passing the bytes through the api process.",
+        description="Hard cap on video size accepted by the multipart publish "
+        "path (bytes). The presigned-URL path bypasses this cap and is "
+        "preferred when the storage backend supports it.",
         default=100 * 1024 * 1024,  # 100MB
+    )
+
+    SOCIAL_PUBLISH_TIER_CACHE_TTL_SECONDS: int = Field(
+        description="How long the per-tenant tier resolution stays cached in "
+        "Redis. Trades a bit of staleness (a top-up doesn't promote the "
+        "tenant to a higher tier instantly) for keeping the BillingRecord "
+        "aggregate off every publish dispatch.",
+        default=300,
+    )
+
+    SOCIAL_PUBLISH_PREFER_PRESIGNED: bool = Field(
+        description="When True (default), the publish flow uses presigned URLs "
+        "for video files when the storage backend supports them and the file "
+        "exceeds SOCIAL_PUBLISH_PRESIGNED_THRESHOLD_BYTES. Falls back to "
+        "multipart otherwise.",
+        default=True,
+    )
+
+    SOCIAL_PUBLISH_PRESIGNED_THRESHOLD_BYTES: int = Field(
+        description="Files smaller than this are still uploaded as multipart "
+        "even when presigned URLs are available — the round-trip overhead "
+        "of a separate sau download isn't worth it for tiny clips.",
+        default=5 * 1024 * 1024,  # 5MB
+    )
+
+    SOCIAL_PUBLISH_PRESIGNED_TTL_SECONDS: int = Field(
+        description="Validity window of the presigned URL handed to sau. Long "
+        "enough to cover queue + worker download time on a busy day.",
+        default=3600,
     )
 
     SAU_BASE_URL: str = Field(

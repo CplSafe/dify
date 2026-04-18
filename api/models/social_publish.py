@@ -170,6 +170,10 @@ class SocialPublishTask(TypeBase):
         sa.Index("social_publish_task_tenant_created_idx", "tenant_id", "created_at"),
         sa.Index("social_publish_task_account_idx", "account_id"),
         sa.Index("social_publish_task_status_idx", "status"),
+        # P3 quota check is `WHERE tenant_id = ? AND status IN (...)` —
+        # the (tenant_id, status) composite covers it directly so the
+        # planner doesn't have to scan the whole tenant slice.
+        sa.Index("social_publish_task_tenant_status_idx", "tenant_id", "status"),
         # Partial index — sau_task_id is nullable until /postVideo dispatch
         # succeeds; we never query by NULL.
         sa.Index(

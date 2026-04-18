@@ -85,3 +85,25 @@ class AwsS3Storage(BaseStorage):
 
     def delete(self, filename: str):
         self.client.delete_object(Bucket=self.bucket_name, Key=filename)
+
+    def supports_presigned_url(self) -> bool:
+        return True
+
+    def generate_presigned_url(self, filename: str, expires_in: int = 3600) -> str:
+        return self.client.generate_presigned_url(
+            ClientMethod="get_object",
+            Params={"Bucket": self.bucket_name, "Key": filename},
+            ExpiresIn=expires_in,
+        )
+
+    def get_size(self, filename: str) -> int | None:
+        try:
+            head = self.client.head_object(Bucket=self.bucket_name, Key=filename)
+        except Exception:
+            # Don't blow up the publish flow on a HEAD failure — fall
+            # back to multipart. Log so misconfigured buckets / region
+            # mismatches don't masquerade as "size unavailable".
+            logger.exception("S3 head_object failed for key=%s", filename)
+            return None
+        size = head.get("ContentLength")
+        return int(size) if size is not None else None

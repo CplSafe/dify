@@ -49,6 +49,12 @@ class SocialPublishTaskRepository(Protocol):
         """
         ...
 
+    def count_active_for_tenant(self, tenant_id: str) -> int:
+        """Count tasks in ``ACTIVE_TASK_STATUSES`` for the tenant. Used by
+        the P3 max-pending quota check so a single workspace can't fill the
+        whole queue at the expense of other tenants."""
+        ...
+
     def attach_sau_task_id(
         self,
         *,

@@ -93,3 +93,12 @@ class VideoTooLargeHTTPError(BaseHTTPException):
     error_code = "video_too_large"
     description = "视频文件过大，请联系管理员或将其压缩后重试"
     code = 413
+
+
+# ---------- P3: tier / queue ----------
+
+
+class TaskQuotaExceededHTTPError(BaseHTTPException):
+    error_code = "task_quota_exceeded"
+    description = "当前空间未结束的发布任务已达上限，请等待结束后再试"
+    code = 429

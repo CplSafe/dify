@@ -211,30 +211,49 @@ class SauClient:
         tenant_id: str,
         platform: Platform,
         sau_account_id: str,
-        video_bytes: bytes,
-        video_filename: str,
         payload: dict[str, Any],
+        priority: int = 5,
+        tier_concurrent: int | None = None,
+        video_bytes: bytes | None = None,
+        video_filename: str | None = None,
+        video_url: str | None = None,
         timeout_seconds: float | None = None,
     ) -> SauPublishResponse:
-        """Upload the video bytes and enqueue a publish task.
+        """Enqueue a publish task on sau with the supplied video.
 
+        Exactly one of ``video_bytes`` (multipart) or ``video_url``
+        (presigned download URL the worker fetches itself) must be set.
         ``timeout_seconds`` overrides the client default for this single
-        call (publish multipart uploads need a much longer ceiling than the
-        short metadata calls).
+        call (multipart uploads need a much longer ceiling than the short
+        metadata calls). ``tier_concurrent`` is forwarded to the worker
+        so the per-tenant concurrency gate uses the right cap (P3).
         """
-        # Sau parses ``data`` from the multipart form as JSON to keep all
-        # the publish metadata in a single typed envelope.
-        files = {"video": (video_filename, video_bytes, "video/mp4")}
-        body = {
+        if (video_bytes is None) == (video_url is None):
+            raise ValueError(
+                "post_video requires exactly one of video_bytes or video_url"
+            )
+        if not 0 <= int(priority) <= 9:
+            raise ValueError("priority must be in [0, 9]")
+
+        body: dict[str, Any] = {
             "tenant_id": tenant_id,
             "platform": platform,
             "sau_account_id": sau_account_id,
+            "priority": int(priority),
             **payload,
         }
+        if video_url is not None:
+            body["video_url"] = video_url
+        if tier_concurrent is not None:
+            body["tier_concurrent"] = int(tier_concurrent)
+
         kwargs: dict[str, Any] = {
-            "files": files,
             "data": {"data": json.dumps(body, ensure_ascii=False)},
         }
+        if video_bytes is not None:
+            kwargs["files"] = {
+                "video": (video_filename or "video.mp4", video_bytes, "video/mp4"),
+            }
         if timeout_seconds is not None:
             kwargs["timeout"] = httpx.Timeout(timeout_seconds)
         data = self._request("POST", "/postVideo", **kwargs)

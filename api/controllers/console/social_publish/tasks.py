@@ -28,6 +28,7 @@ from controllers.console.social_publish.error import (
     TaskAlreadyInFlightHTTPError,
     TaskInvalidPayloadHTTPError,
     TaskNotFoundHTTPError,
+    TaskQuotaExceededHTTPError,
     VideoNotFoundHTTPError,
     VideoTooLargeHTTPError,
     WorkNotFoundHTTPError,
@@ -46,6 +47,7 @@ from services.errors.social_publish import (
     TaskAlreadyInFlightError,
     TaskInvalidPayloadError,
     TaskNotFoundError,
+    TaskQuotaExceededError,
     VideoNotFoundError,
     VideoTooLargeError,
     WorkNotFoundError,
@@ -95,6 +97,8 @@ def _to_http_error(exc: Exception) -> Exception:
         return TaskInvalidPayloadHTTPError()
     if isinstance(exc, TaskAlreadyInFlightError):
         return TaskAlreadyInFlightHTTPError()
+    if isinstance(exc, TaskQuotaExceededError):
+        return TaskQuotaExceededHTTPError()
     if isinstance(exc, TaskNotFoundError):
         return TaskNotFoundHTTPError()
     if isinstance(exc, VideoTooLargeError):

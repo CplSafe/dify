@@ -9,7 +9,7 @@ new publishes.
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import exists, select, update
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from models.social_publish import (
@@ -89,6 +89,14 @@ class DifyAPISQLAlchemySocialPublishTaskRepository(SocialPublishTaskRepository):
                 )
             )
             return bool(session.execute(stmt).scalar())
+
+    def count_active_for_tenant(self, tenant_id: str) -> int:
+        with self._session_maker() as session:
+            stmt = select(func.count()).select_from(SocialPublishTask).where(
+                SocialPublishTask.tenant_id == tenant_id,
+                SocialPublishTask.status.in_(ACTIVE_TASK_STATUSES),
+            )
+            return int(session.execute(stmt).scalar() or 0)
 
     def attach_sau_task_id(
         self,

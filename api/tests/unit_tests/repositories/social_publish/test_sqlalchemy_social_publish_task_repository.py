@@ -153,6 +153,24 @@ class TestActivePerAccount:
             is False
         )
 
+    def test_count_active_for_tenant_excludes_terminal_and_other_tenants(
+        self, repository, tenant_a, tenant_b, account, actor
+    ):
+        _create(repository, tenant_id=tenant_a, account_id=account, actor=actor)
+        a2 = _create(repository, tenant_id=tenant_a, account_id=account, actor=actor)
+        repository.update_terminal(
+            task_id=a2.id,
+            tenant_id=tenant_a,
+            status=SocialPublishTaskStatus.SUCCESS.value,
+        )
+        _create(repository, tenant_id=tenant_a, account_id=account, actor=actor)
+        # Other tenant must NOT contribute to tenant_a's count.
+        _create(repository, tenant_id=tenant_b, account_id=account, actor=actor)
+
+        assert repository.count_active_for_tenant(tenant_a) == 2
+        assert repository.count_active_for_tenant(tenant_b) == 1
+        assert repository.count_active_for_tenant("never-existed") == 0
+
 
 class TestStateMachine:
     def test_attach_then_running_then_terminal(

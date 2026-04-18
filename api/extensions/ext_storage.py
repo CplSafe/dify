@@ -122,6 +122,15 @@ class Storage:
     def scan(self, path: str, files: bool = True, directories: bool = False) -> list[str]:
         return self.storage_runner.scan(path, files=files, directories=directories)
 
+    def supports_presigned_url(self) -> bool:
+        return self.storage_runner.supports_presigned_url()
+
+    def generate_presigned_url(self, filename: str, expires_in: int = 3600) -> str:
+        return self.storage_runner.generate_presigned_url(filename, expires_in)
+
+    def get_size(self, filename: str) -> int | None:
+        return self.storage_runner.get_size(filename)
+
 
 storage = Storage()
 

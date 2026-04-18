@@ -1,3 +1,4 @@
+import logging
 import posixpath
 from collections.abc import Generator
 
@@ -5,6 +6,8 @@ import oss2 as aliyun_s3
 
 from configs import dify_config
 from extensions.storage.base_storage import BaseStorage
+
+logger = logging.getLogger(__name__)
 
 
 class AliyunOssStorage(BaseStorage):
@@ -52,6 +55,28 @@ class AliyunOssStorage(BaseStorage):
 
     def delete(self, filename: str):
         self.client.delete_object(self.__wrapper_folder_filename(filename))
+
+    def supports_presigned_url(self) -> bool:
+        return True
+
+    def generate_presigned_url(self, filename: str, expires_in: int = 3600) -> str:
+        # Aliyun's signing helper expects seconds; ``slash_safe=True`` so
+        # nested keys (creator_works/...) survive without double-encoding.
+        return self.client.sign_url(
+            "GET",
+            self.__wrapper_folder_filename(filename),
+            int(expires_in),
+            slash_safe=True,
+        )
+
+    def get_size(self, filename: str) -> int | None:
+        try:
+            head = self.client.head_object(self.__wrapper_folder_filename(filename))
+        except Exception:
+            logger.exception("OSS head_object failed for key=%s", filename)
+            return None
+        size = getattr(head, "content_length", None)
+        return int(size) if size is not None else None
 
     def __wrapper_folder_filename(self, filename: str) -> str:
         return posixpath.join(self.folder, filename) if self.folder else filename

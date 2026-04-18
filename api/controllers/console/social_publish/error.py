@@ -80,13 +80,20 @@ class TaskAlreadyInFlightHTTPError(BaseHTTPException):
 class WorkNotFoundHTTPError(BaseHTTPException):
     error_code = "work_not_found"
     description = "作品不存在"
-    code = 404
+    # 422 (not 404) — work_id is supplied in the request body, not the
+    # URL path. Returning 404 confuses Flask into appending "did you mean
+    # ..." routing hints to the response body.
+    code = 422
 
 
 class VideoNotFoundHTTPError(BaseHTTPException):
     error_code = "video_not_found"
     description = "视频文件不存在或已过期"
-    code = 404
+    # 422 (not 404) — the URL /social-publish/tasks exists; what's missing
+    # is a resource referenced in the request body (work_id / its video).
+    # 404 would let Flask append "did you mean ..." routing hints to the
+    # response body, which is misleading for client devs.
+    code = 422
 
 
 class VideoTooLargeHTTPError(BaseHTTPException):

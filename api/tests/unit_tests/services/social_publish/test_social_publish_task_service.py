@@ -334,6 +334,41 @@ class TestCreateTask:
                 ),
             )
 
+    def test_external_https_file_key_forwarded_as_video_url(
+        self, service, account_repo, task_repo, sau, db_session, storage_load
+    ):
+        # P5.5 fix: works whose video lives in an external OSS store its
+        # full https URL in file_key. The publish flow must hand that URL
+        # straight to sau as video_url instead of trying to load it via
+        # dify's local storage backend (which would 500).
+        account_repo.get_by_id_and_tenant.return_value = _account()
+        work = _make_work_session(db_session)
+        work.file_key = "https://s3oss-yy.example.com/yygov/videos/abc.mp4"
+        task_repo.has_active_for_account.return_value = False
+        task_repo.create.return_value = _task()
+        task_repo.attach_sau_task_id.return_value = _task(
+            status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-1"
+        )
+        sau.post_video.return_value = SauPublishResponse(sau_task_id="cel-1")
+
+        service.create_task(
+            tenant_id="tenant-a",
+            created_by="u",
+            request=CreateTaskRequest(
+                account_id="acc-1",
+                work_id="work-1",
+                title="hi",
+                tags=None,
+                desc=None,
+            ),
+        )
+        # External URL forwarded straight to sau; no multipart bytes
+        # were loaded from dify's storage backend.
+        kw = sau.post_video.call_args.kwargs
+        assert kw["video_url"] == "https://s3oss-yy.example.com/yygov/videos/abc.mp4"
+        assert kw["video_bytes"] is None
+        storage_load.load_once.assert_not_called()
+
     def test_happy_path_creates_row_then_attaches_sau_id(
         self, service, account_repo, task_repo, sau, db_session, storage_load
     ):

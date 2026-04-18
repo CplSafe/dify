@@ -531,17 +531,31 @@ class SocialPublishTaskService:
         Decision tree:
         1. work missing file_key → ``VideoNotFoundError`` (consistent with
            the P2 behaviour).
-        2. presigning disabled (``SOCIAL_PUBLISH_PREFER_PRESIGNED=False``)
+        2. file_key already a fully-qualified http(s) URL → forward it as
+           ``video_url`` so the sau worker downloads it directly. Covers
+           works whose video lives in an external OSS that's reachable from
+           sau but NOT registered in dify's storage backend.
+        3. presigning disabled (``SOCIAL_PUBLISH_PREFER_PRESIGNED=False``)
            OR backend doesn't support it → multipart.
-        3. backend supports it AND we can cheaply read the size AND the
+        4. backend supports it AND we can cheaply read the size AND the
            file is bigger than ``SOCIAL_PUBLISH_PRESIGNED_THRESHOLD_BYTES``
            → presigned URL (bypasses the multipart byte cap).
-        4. backend supports it but the size is unknown / small → multipart
+        5. backend supports it but the size is unknown / small → multipart
            (the round-trip overhead of a separate sau download isn't worth
            it for tiny clips).
         """
         if work is None or not work.file_key:
             raise VideoNotFoundError("work has no file_key")
+
+        # P5.5 fix: works created via "save to publish center" can carry
+        # an external https URL in file_key (the field name is historical;
+        # creator_works.file_key has always been a free-form pointer, not
+        # strictly an object-storage key). When that's the case, hand the
+        # URL straight to sau — it has its own httpx-based downloader.
+        if work.file_key.startswith(("http://", "https://")):
+            return _VideoTransport(
+                video_bytes=None, video_filename=None, video_url=work.file_key
+            )
 
         threshold = int(dify_config.SOCIAL_PUBLISH_PRESIGNED_THRESHOLD_BYTES)
         if dify_config.SOCIAL_PUBLISH_PREFER_PRESIGNED and storage.supports_presigned_url():

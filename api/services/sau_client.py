@@ -81,26 +81,40 @@ class SauClient:
         max_retries: int,
         pool_size: int,
         retry_backoff_seconds: float = 0.2,
+        transport: httpx.BaseTransport | None = None,
     ) -> None:
         if not token or len(token) < 16:
             raise RuntimeError("SAU_INTERNAL_TOKEN must be set and >= 16 chars")
         self._base_url = base_url.rstrip("/")
         self._max_retries = max(0, int(max_retries))
         self._retry_backoff_seconds = retry_backoff_seconds
-        self._client = get_pooled_http_client(
-            "sau:default",
-            lambda: httpx.Client(
+        # ``transport`` is a unit-test seam: pass an httpx.MockTransport from
+        # tests to assert wire-level behaviour without going through the
+        # global pool.
+        if transport is not None:
+            self._client = httpx.Client(
+                transport=transport,
                 timeout=httpx.Timeout(timeout_seconds),
-                limits=httpx.Limits(
-                    max_connections=pool_size,
-                    max_keepalive_connections=pool_size,
-                ),
                 headers={
                     "X-Sau-Token": token,
                     "User-Agent": "dify-api/sau-client",
                 },
-            ),
-        )
+            )
+        else:
+            self._client = get_pooled_http_client(
+                "sau:default",
+                lambda: httpx.Client(
+                    timeout=httpx.Timeout(timeout_seconds),
+                    limits=httpx.Limits(
+                        max_connections=pool_size,
+                        max_keepalive_connections=pool_size,
+                    ),
+                    headers={
+                        "X-Sau-Token": token,
+                        "User-Agent": "dify-api/sau-client",
+                    },
+                ),
+            )
 
     # -------- public API --------
 

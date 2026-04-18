@@ -45,7 +45,14 @@ AUTH_SESSION_TTL_SECONDS = 200  # 180s wait + 20s buffer for the last poll
 QR_VALID_SECONDS = 180
 
 AuthStatus = Literal["waiting", "scanned", "success", "expired", "failed"]
-SUPPORTED_PLATFORMS_P1 = (SocialPublishPlatform.DOUYIN.value,)
+# Account-creation allowlist. P4 opens up xhs alongside douyin; ks doesn't
+# yet have an upstream cookie_gen so scan-to-auth would fail — sau will
+# surface that as a typed 400, but we keep ks off the account-creation
+# path here so the FE never sees the half-functional state.
+SUPPORTED_PLATFORMS_P1 = (
+    SocialPublishPlatform.DOUYIN.value,
+    SocialPublishPlatform.XHS.value,
+)
 
 
 # ---------- DTOs ----------

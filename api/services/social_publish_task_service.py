@@ -58,10 +58,23 @@ from services.social_publish_tier import TierResolver
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_PLATFORMS_P2 = ("douyin",)
+# Publish-dispatch allowlist. P4 expands beyond douyin; the runner on the
+# sau side enforces the same set, but this guard catches typos / stale
+# rows server-side before we burn an HTTP round-trip.
+SUPPORTED_PLATFORMS_P2 = ("douyin", "xhs", "ks")
 TITLE_MAX_LEN = 200
 DESC_MAX_LEN = 2000
 TAGS_MAX_COUNT = 10
+LOCATION_MAX_LEN = 80
+# Per-platform allowlist of platform_payload keys. Anything outside this
+# set is dropped during validation rather than blindly forwarded — keeps
+# the FE from injecting fields the sau worker doesn't know about, and
+# avoids accidentally leaking internal flags into upstream uploaders.
+_PLATFORM_PAYLOAD_KEYS: dict[str, frozenset[str]] = {
+    "douyin": frozenset({"location"}),
+    "xhs": frozenset({"location"}),
+    "ks": frozenset(),
+}
 
 # Single-flight Redis lock TTL — covers the worst-case time between the
 # initial check and the persisted attach_sau_task_id. The downstream
@@ -109,6 +122,32 @@ class CreateTaskRequest:
     title: str
     tags: list[str] | None
     desc: str | None
+    # P4: per-platform extras (e.g. ``{"location": "Shanghai"}`` for
+    # douyin/xhs). Keys outside the per-platform allowlist are silently
+    # dropped during validation. ``None`` is equivalent to ``{}``.
+    platform_payload: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class BatchCreateTaskRequest:
+    """Per-account spec for ``create_tasks_batch``.
+
+    The shared content (title/tags/desc/work_id) is identical to
+    ``CreateTaskRequest``; ``account_id`` and ``platform_payload`` vary
+    per-platform so the FE can e.g. publish the same video to a douyin
+    account with one location and an xhs account with another."""
+
+    account_id: str
+    platform_payload: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class BatchCreateResultItem:
+    account_id: str
+    success: bool
+    task_id: str | None
+    error_code: str | None
+    error_message: str | None
 
 
 @dataclass(frozen=True)
@@ -199,7 +238,7 @@ class SocialPublishTaskService:
         # terminal (see ``get_task_status``).
         quota_slot_held = True
         try:
-            payload = self._validate_payload(request)
+            payload = self._validate_payload(request, platform=account.platform)
             work = self._resolve_work(tenant_id=tenant_id, work_id=request.work_id)
             transport = self._resolve_video_transport(work)
 
@@ -283,6 +322,85 @@ class SocialPublishTaskService:
             if quota_slot_held:
                 self._release_quota_slot(tenant_id)
 
+    # ----- batch -----
+
+    def create_tasks_batch(
+        self,
+        *,
+        tenant_id: str,
+        created_by: str,
+        work_id: str | None,
+        title: str,
+        tags: list[str] | None,
+        desc: str | None,
+        targets: list[BatchCreateTaskRequest],
+    ) -> list[BatchCreateResultItem]:
+        """Dispatch the same content to multiple accounts in one call.
+
+        Each target is dispatched independently — a failure on account A
+        doesn't abort accounts B, C, etc. The caller gets a per-target
+        result so the FE can render which targets succeeded and which
+        need a retry. Single-flight, quota and tier gates run per-target
+        the same way as ``create_task`` so behaviour stays identical.
+        """
+        if not targets:
+            raise TaskInvalidPayloadError("at least one target account is required")
+        if len(targets) > 10:
+            # Soft cap so a single batch can't burn through a tenant's
+            # quota in one shot. The DB already enforces the per-tenant
+            # ceiling but failing fast at the API edge is friendlier.
+            raise TaskInvalidPayloadError("batch dispatch is capped at 10 targets")
+        seen_account_ids: set[str] = set()
+        results: list[BatchCreateResultItem] = []
+        for target in targets:
+            if target.account_id in seen_account_ids:
+                results.append(
+                    BatchCreateResultItem(
+                        account_id=target.account_id,
+                        success=False,
+                        task_id=None,
+                        error_code="duplicate_target",
+                        error_message="account_id appears more than once in batch",
+                    )
+                )
+                continue
+            seen_account_ids.add(target.account_id)
+            single = CreateTaskRequest(
+                account_id=target.account_id,
+                work_id=work_id,
+                title=title,
+                tags=tags,
+                desc=desc,
+                platform_payload=target.platform_payload,
+            )
+            try:
+                task = self.create_task(
+                    tenant_id=tenant_id,
+                    created_by=created_by,
+                    request=single,
+                )
+            except Exception as exc:  # noqa: BLE001 — surface per-target
+                results.append(
+                    BatchCreateResultItem(
+                        account_id=target.account_id,
+                        success=False,
+                        task_id=None,
+                        error_code=getattr(exc, "code", type(exc).__name__),
+                        error_message=str(exc)[:500],
+                    )
+                )
+                continue
+            results.append(
+                BatchCreateResultItem(
+                    account_id=target.account_id,
+                    success=True,
+                    task_id=task.id,
+                    error_code=None,
+                    error_message=None,
+                )
+            )
+        return results
+
     # ----- read -----
 
     def list_tasks(
@@ -344,7 +462,9 @@ class SocialPublishTaskService:
             raise WorkNotFoundError(f"work {work_id} not found")
         return work
 
-    def _validate_payload(self, request: CreateTaskRequest) -> dict[str, Any]:
+    def _validate_payload(
+        self, request: CreateTaskRequest, *, platform: str
+    ) -> dict[str, Any]:
         title = (request.title or "").strip()
         if not title:
             raise TaskInvalidPayloadError("title is required")
@@ -361,11 +481,47 @@ class SocialPublishTaskService:
             raise TaskInvalidPayloadError(
                 f"desc exceeds {DESC_MAX_LEN} characters"
             )
-        return {
+        payload: dict[str, Any] = {
             "title": title,
             "tags": tags,
             "desc": desc or None,
         }
+        platform_payload = self._validate_platform_payload(
+            platform=platform,
+            raw=request.platform_payload,
+        )
+        if platform_payload:
+            payload["platform_payload"] = platform_payload
+        return payload
+
+    def _validate_platform_payload(
+        self, *, platform: str, raw: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        """Filter platform_payload to the per-platform allowlist + validate
+        the value shape. Unknown keys are silently dropped (rather than
+        rejected) so a multi-platform batch dispatch doesn't fail just
+        because the user filled in a douyin-only field while also
+        publishing to ks."""
+        if not raw:
+            return {}
+        allowed = _PLATFORM_PAYLOAD_KEYS.get(platform, frozenset())
+        if not allowed:
+            return {}
+        cleaned: dict[str, Any] = {}
+        for key in allowed:
+            value = raw.get(key)
+            if value is None:
+                continue
+            if key == "location":
+                location = str(value).strip()
+                if not location:
+                    continue
+                if len(location) > LOCATION_MAX_LEN:
+                    raise TaskInvalidPayloadError(
+                        f"location exceeds {LOCATION_MAX_LEN} characters"
+                    )
+                cleaned["location"] = location
+        return cleaned
 
     def _resolve_video_transport(self, work: CreatorWork | None) -> _VideoTransport:
         """Pick presigned URL vs multipart for the work's video.

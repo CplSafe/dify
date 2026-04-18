@@ -32,6 +32,7 @@ from services.sau_client import (
     SauTaskStatusResponse,
 )
 from services.social_publish_task_service import (
+    BatchCreateTaskRequest,
     CreateTaskRequest,
     SocialPublishTaskService,
 )
@@ -816,3 +817,220 @@ class TestGetTaskStatus:
         snap = service.get_task_status(task_id="t", tenant_id="tenant-a")
         assert snap.task["status"] == SocialPublishTaskStatus.QUEUED.value
         task_repo.update_terminal.assert_not_called()
+
+
+# ---------- P4: platform_payload + batch dispatch ----------
+
+
+class TestPlatformPayload:
+    def test_xhs_location_threaded_into_payload(
+        self, service, account_repo, task_repo, sau, db_session, storage_load
+    ):
+        account_repo.get_by_id_and_tenant.return_value = _account(platform="xhs")
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        task_repo.create.return_value = _task()
+        task_repo.attach_sau_task_id.return_value = _task(
+            status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-1"
+        )
+        sau.post_video.return_value = SauPublishResponse(sau_task_id="cel-1")
+
+        service.create_task(
+            tenant_id="tenant-a",
+            created_by="u",
+            request=CreateTaskRequest(
+                account_id="acc-1",
+                work_id="work-1",
+                title="hi",
+                tags=None,
+                desc=None,
+                platform_payload={"location": "Shanghai"},
+            ),
+        )
+        sent_payload = sau.post_video.call_args.kwargs["payload"]
+        # Allowed key is forwarded under the platform_payload sub-dict so
+        # the sau worker's apply_platform_extras can pick it up.
+        assert sent_payload["platform_payload"] == {"location": "Shanghai"}
+
+    def test_ks_drops_platform_payload(
+        self, service, account_repo, task_repo, sau, db_session, storage_load
+    ):
+        account_repo.get_by_id_and_tenant.return_value = _account(platform="ks")
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        task_repo.create.return_value = _task()
+        task_repo.attach_sau_task_id.return_value = _task(
+            status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-1"
+        )
+        sau.post_video.return_value = SauPublishResponse(sau_task_id="cel-1")
+
+        service.create_task(
+            tenant_id="tenant-a",
+            created_by="u",
+            request=CreateTaskRequest(
+                account_id="acc-1",
+                work_id="work-1",
+                title="hi",
+                tags=None,
+                desc=None,
+                # KS uploader has no location support; runner should
+                # silently drop, not 400.
+                platform_payload={"location": "Shanghai"},
+            ),
+        )
+        sent_payload = sau.post_video.call_args.kwargs["payload"]
+        assert "platform_payload" not in sent_payload
+
+    def test_unknown_keys_are_silently_dropped(
+        self, service, account_repo, task_repo, sau, db_session, storage_load
+    ):
+        # A multi-target batch may pass a key relevant to one platform
+        # while we're publishing to another — that should not 400.
+        account_repo.get_by_id_and_tenant.return_value = _account(platform="douyin")
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        task_repo.create.return_value = _task()
+        task_repo.attach_sau_task_id.return_value = _task(
+            status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-1"
+        )
+        sau.post_video.return_value = SauPublishResponse(sau_task_id="cel-1")
+
+        service.create_task(
+            tenant_id="tenant-a",
+            created_by="u",
+            request=CreateTaskRequest(
+                account_id="acc-1",
+                work_id="work-1",
+                title="hi",
+                tags=None,
+                desc=None,
+                platform_payload={
+                    "location": "Beijing",
+                    "totally_made_up_field": "ignored",
+                },
+            ),
+        )
+        sent_payload = sau.post_video.call_args.kwargs["payload"]
+        assert sent_payload["platform_payload"] == {"location": "Beijing"}
+
+    def test_oversize_location_rejected(
+        self, service, account_repo, db_session, storage_load
+    ):
+        account_repo.get_by_id_and_tenant.return_value = _account(platform="douyin")
+        _make_work_session(db_session)
+        with pytest.raises(TaskInvalidPayloadError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="u",
+                request=CreateTaskRequest(
+                    account_id="acc-1",
+                    work_id="work-1",
+                    title="hi",
+                    tags=None,
+                    desc=None,
+                    platform_payload={"location": "x" * 200},
+                ),
+            )
+
+
+class TestBatchDispatch:
+    def test_empty_targets_rejected(self, service):
+        with pytest.raises(TaskInvalidPayloadError):
+            service.create_tasks_batch(
+                tenant_id="tenant-a",
+                created_by="u",
+                work_id="work-1",
+                title="hi",
+                tags=None,
+                desc=None,
+                targets=[],
+            )
+
+    def test_too_many_targets_rejected(self, service):
+        with pytest.raises(TaskInvalidPayloadError):
+            service.create_tasks_batch(
+                tenant_id="tenant-a",
+                created_by="u",
+                work_id="work-1",
+                title="hi",
+                tags=None,
+                desc=None,
+                targets=[
+                    BatchCreateTaskRequest(account_id=f"acc-{i}") for i in range(11)
+                ],
+            )
+
+    def test_partial_success_is_per_target(
+        self, service, account_repo, task_repo, sau, db_session, storage_load
+    ):
+        accounts = {
+            "acc-dy": _account(id="acc-dy", platform="douyin", sau_account_id="sau-dy"),
+            "acc-xhs": _account(id="acc-xhs", platform="xhs", sau_account_id="sau-xhs"),
+        }
+        account_repo.get_by_id_and_tenant.side_effect = lambda aid, _t: accounts.get(aid)
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        task_repo.create.side_effect = [_task(id="t-dy"), _task(id="t-xhs")]
+        task_repo.attach_sau_task_id.side_effect = [
+            _task(id="t-dy", status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-dy"),
+            _task(id="t-xhs", status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-xhs"),
+        ]
+        # First target enqueues fine; second fails at sau.
+        sau.post_video.side_effect = [
+            SauPublishResponse(sau_task_id="cel-dy"),
+            SauUnreachableError("xhs route down"),
+        ]
+
+        results = service.create_tasks_batch(
+            tenant_id="tenant-a",
+            created_by="u",
+            work_id="work-1",
+            title="hi",
+            tags=None,
+            desc=None,
+            targets=[
+                BatchCreateTaskRequest(
+                    account_id="acc-dy",
+                    platform_payload={"location": "Shanghai"},
+                ),
+                BatchCreateTaskRequest(
+                    account_id="acc-xhs",
+                    platform_payload={"location": "Beijing"},
+                ),
+            ],
+        )
+        assert len(results) == 2
+        assert results[0].account_id == "acc-dy"
+        assert results[0].success is True
+        assert results[0].task_id == "t-dy"
+        assert results[1].account_id == "acc-xhs"
+        assert results[1].success is False
+        assert "xhs route down" in (results[1].error_message or "")
+
+    def test_duplicate_account_ids_flagged_per_target(
+        self, service, account_repo, task_repo, sau, db_session, storage_load
+    ):
+        account_repo.get_by_id_and_tenant.return_value = _account(platform="douyin")
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        task_repo.create.return_value = _task()
+        task_repo.attach_sau_task_id.return_value = _task(
+            status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-1"
+        )
+        sau.post_video.return_value = SauPublishResponse(sau_task_id="cel-1")
+
+        results = service.create_tasks_batch(
+            tenant_id="tenant-a",
+            created_by="u",
+            work_id="work-1",
+            title="hi",
+            tags=None,
+            desc=None,
+            targets=[
+                BatchCreateTaskRequest(account_id="acc-1"),
+                BatchCreateTaskRequest(account_id="acc-1"),
+            ],
+        )
+        assert results[0].success is True
+        assert results[1].success is False
+        assert results[1].error_code == "duplicate_target"

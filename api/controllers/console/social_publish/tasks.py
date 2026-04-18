@@ -2,6 +2,7 @@
 
 Routes (all under /console/api):
 - POST   /social-publish/tasks                  create a publish task
+- POST   /social-publish/tasks/batch            create up to N tasks in one call
 - GET    /social-publish/tasks                  list current tenant's tasks
 - GET    /social-publish/tasks/<task_id>        status snapshot
 
@@ -54,6 +55,7 @@ from services.errors.social_publish import (
 )
 from services.sau_client import get_sau_client
 from services.social_publish_task_service import (
+    BatchCreateTaskRequest,
     CreateTaskRequest,
     SocialPublishTaskService,
 )
@@ -143,12 +145,16 @@ class SocialPublishTasksApi(Resource):
     def post(self):
         current_user, current_tenant_id = current_account_with_tenant()
         body = request.get_json(silent=True) or {}
+        platform_payload = body.get("platform_payload")
+        if platform_payload is not None and not isinstance(platform_payload, dict):
+            raise TaskInvalidPayloadHTTPError()
         req = CreateTaskRequest(
             account_id=str(body.get("account_id") or ""),
             work_id=body.get("work_id"),
             title=str(body.get("title") or ""),
             tags=list(body.get("tags") or []) or None,
             desc=body.get("desc"),
+            platform_payload=platform_payload,
         )
         if not req.account_id:
             raise TaskInvalidPayloadHTTPError()
@@ -162,6 +168,82 @@ class SocialPublishTasksApi(Resource):
         except Exception as exc:
             raise _to_http_error(exc) from exc
         return {"task_id": task.id, "status": task.status}
+
+
+@console_ns.route("/social-publish/tasks/batch")
+class SocialPublishTasksBatchApi(Resource):
+    """Dispatch the same content to multiple accounts in one call.
+
+    Body shape::
+
+        {
+          "title": "...",
+          "tags": ["a"],
+          "desc": "...",
+          "work_id": "...",
+          "targets": [
+            {"account_id": "<douyin-acc>", "platform_payload": {"location": "Shanghai"}},
+            {"account_id": "<xhs-acc>",   "platform_payload": {"location": "Beijing"}}
+          ]
+        }
+
+    The response is always 200 with a per-target ``results`` array — the
+    FE renders per-row success/failure rather than getting a single 4xx
+    that hides which targets actually went through. Quota / single-flight
+    / rate-limit errors are reported per-target so a partial batch can
+    still succeed.
+    """
+
+    @setup_required
+    @login_required
+    @account_initialization_required
+    def post(self):
+        current_user, current_tenant_id = current_account_with_tenant()
+        body = request.get_json(silent=True) or {}
+        raw_targets = body.get("targets")
+        if not isinstance(raw_targets, list) or not raw_targets:
+            raise TaskInvalidPayloadHTTPError()
+        targets: list[BatchCreateTaskRequest] = []
+        for raw in raw_targets:
+            if not isinstance(raw, dict):
+                raise TaskInvalidPayloadHTTPError()
+            account_id = str(raw.get("account_id") or "")
+            if not account_id:
+                raise TaskInvalidPayloadHTTPError()
+            platform_payload = raw.get("platform_payload")
+            if platform_payload is not None and not isinstance(platform_payload, dict):
+                raise TaskInvalidPayloadHTTPError()
+            targets.append(
+                BatchCreateTaskRequest(
+                    account_id=account_id,
+                    platform_payload=platform_payload,
+                )
+            )
+        try:
+            service = _build_service()
+            results = service.create_tasks_batch(
+                tenant_id=current_tenant_id,
+                created_by=current_user.id,
+                work_id=body.get("work_id"),
+                title=str(body.get("title") or ""),
+                tags=list(body.get("tags") or []) or None,
+                desc=body.get("desc"),
+                targets=targets,
+            )
+        except Exception as exc:
+            raise _to_http_error(exc) from exc
+        return {
+            "results": [
+                {
+                    "account_id": r.account_id,
+                    "success": r.success,
+                    "task_id": r.task_id,
+                    "error_code": r.error_code,
+                    "error_message": r.error_message,
+                }
+                for r in results
+            ]
+        }
 
 
 @console_ns.route("/social-publish/tasks/<string:task_id>")

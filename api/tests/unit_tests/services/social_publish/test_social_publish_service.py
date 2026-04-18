@@ -93,10 +93,12 @@ class TestGetAccount:
 
 class TestStartAuth:
     def test_rejects_unsupported_platform(self, service):
+        # P4: ks doesn't have an upstream cookie_gen yet; xhs is now
+        # supported alongside douyin.
         with pytest.raises(PlatformUnsupportedError):
             service.start_auth(
                 tenant_id="t",
-                platform="xhs",  # P1 only supports douyin
+                platform="ks",
                 account_id=None,
                 created_by="u",
             )

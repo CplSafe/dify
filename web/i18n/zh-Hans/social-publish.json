@@ -23,7 +23,7 @@
   "accountList.status.active": "正常",
   "accountList.status.expired": "已过期",
   "accountList.status.pending_auth": "待授权",
-  "accountList.subtitle": "管理你绑定的抖音/小红书/快手账号",
+  "accountList.subtitle": "管理你绑定的抖音/小红书账号",
   "accountList.title": "社交账号",
   "auth.close": "关闭",
   "auth.done": "完成",

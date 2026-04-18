@@ -72,7 +72,7 @@
   "publish.locationFor": "位置（{{platform}} · {{name}}）",
   "publish.locationGroup": "发布位置（可选）",
   "publish.locationPlaceholder": "城市或地点，最多 80 字",
-  "publish.noActiveAccount": "当前无可用账号，请先在账号管理添加",
+  "publish.noActiveAccount": "暂无可用账号，请先到「设置 → 社交账号」绑定",
   "publish.partial": "部分账号发布成功，其他需重试",
   "publish.queued": "已加入队列",
   "publish.retry": "重新发布",

@@ -1,15 +1,13 @@
 'use client'
 /* eslint-disable tailwindcss/enforce-consistent-class-order -- TODO(wallet): preexisting issues tracked for a follow-up cleanup */
 
-import { RiBroadcastLine, RiHome4Line, RiVideoLine } from '@remixicon/react'
+import { RiHome4Line, RiVideoLine } from '@remixicon/react'
 import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/app/components/base/ui/tooltip'
-import { useGlobalPublicStore } from '@/context/global-public-context'
 import Link from '@/next/link'
 import { usePathname, useSearchParams } from '@/next/navigation'
 import { cn } from '@/utils/classnames'
@@ -74,16 +72,11 @@ function NavItem({ href, icon: Icon, label, active, collapsed }: NavItemProps) {
 export default function CreatorSidebar() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const { t } = useTranslation('socialPublish')
-  const socialPublishEnabled = useGlobalPublicStore(
-    s => s.systemFeatures.social_publish_enabled,
-  )
   const [collapsed, setCollapsed] = useState(false)
 
   const selectedAppId = searchParams.get('app_id')
   const isCreatorHome = pathname === '/creator' && !selectedAppId
   const isCreatorWorks = pathname === '/creator-works'
-  const isSocialPublish = pathname.startsWith('/creator/social-publish')
 
   // Hydrate collapsed state from localStorage on mount (client-only to avoid SSR mismatch)
   useEffect(() => {
@@ -209,15 +202,6 @@ export default function CreatorSidebar() {
               active={isCreatorWorks}
               collapsed={collapsed}
             />
-            {socialPublishEnabled && (
-              <NavItem
-                href="/creator/social-publish/accounts"
-                icon={RiBroadcastLine}
-                label={t('navTitle')}
-                active={isSocialPublish}
-                collapsed={collapsed}
-              />
-            )}
           </div>
         </nav>
 

@@ -5,11 +5,9 @@ import { useTranslation } from 'react-i18next'
 import SearchInput from '@/app/components/base/search-input'
 import { ScrollArea } from '@/app/components/base/ui/scroll-area'
 import BillingPage from '@/app/components/billing/billing-page'
+import { SocialPublishAccountList } from '@/app/components/creator/social-publish/account-list'
 import CustomPage from '@/app/components/custom/custom-page'
-import {
-  ACCOUNT_SETTING_TAB,
-
-} from '@/app/components/header/account-setting/constants'
+import { ACCOUNT_SETTING_TAB } from '@/app/components/header/account-setting/constants'
 import MenuDialog from '@/app/components/header/account-setting/menu-dialog'
 import { useAppContext } from '@/context/app-context'
 import { useProviderContext } from '@/context/provider-context'
@@ -23,6 +21,7 @@ import MembersPage from './members-page'
 import ModelProviderPage from './model-provider-page'
 import { useResetModelProviderListExpanded } from './model-provider-page/atoms'
 import RebateConfigPage from './rebate-config-page'
+import SmsLogsPage from './sms-logs-page'
 import UserManagementPage from './user-management-page'
 
 const iconClassName = `
@@ -71,6 +70,12 @@ export default function AccountSetting({
         icon: <span className={cn('i-ri-group-2-line', iconClassName)} />,
         activeIcon: <span className={cn('i-ri-group-2-fill', iconClassName)} />,
       },
+      {
+        key: ACCOUNT_SETTING_TAB.SOCIAL_PUBLISH,
+        name: t('settings.socialPublishAccounts', { ns: 'common' }),
+        icon: <span className={cn('i-ri-share-line', iconClassName)} />,
+        activeIcon: <span className={cn('i-ri-share-fill', iconClassName)} />,
+      },
     ]
 
     if (enableBilling) {
@@ -78,8 +83,16 @@ export default function AccountSetting({
         key: ACCOUNT_SETTING_TAB.BILLING,
         name: t('settings.billing', { ns: 'common' }),
         description: t('plansCommon.receiptInfo', { ns: 'billing' }),
-        icon: <span className={cn('i-ri-money-dollar-circle-line', iconClassName)} />,
-        activeIcon: <span className={cn('i-ri-money-dollar-circle-fill', iconClassName)} />,
+        icon: (
+          <span
+            className={cn('i-ri-money-dollar-circle-line', iconClassName)}
+          />
+        ),
+        activeIcon: (
+          <span
+            className={cn('i-ri-money-dollar-circle-fill', iconClassName)}
+          />
+        ),
       })
     }
 
@@ -88,13 +101,17 @@ export default function AccountSetting({
         key: ACCOUNT_SETTING_TAB.DATA_SOURCE,
         name: t('settings.dataSource', { ns: 'common' }),
         icon: <span className={cn('i-ri-database-2-line', iconClassName)} />,
-        activeIcon: <span className={cn('i-ri-database-2-fill', iconClassName)} />,
+        activeIcon: (
+          <span className={cn('i-ri-database-2-fill', iconClassName)} />
+        ),
       },
       {
         key: ACCOUNT_SETTING_TAB.API_BASED_EXTENSION,
         name: t('settings.apiBasedExtension', { ns: 'common' }),
         icon: <span className={cn('i-ri-puzzle-2-line', iconClassName)} />,
-        activeIcon: <span className={cn('i-ri-puzzle-2-fill', iconClassName)} />,
+        activeIcon: (
+          <span className={cn('i-ri-puzzle-2-fill', iconClassName)} />
+        ),
       },
     )
 
@@ -103,7 +120,9 @@ export default function AccountSetting({
         key: ACCOUNT_SETTING_TAB.CUSTOM,
         name: t('custom', { ns: 'custom' }),
         icon: <span className={cn('i-ri-color-filter-line', iconClassName)} />,
-        activeIcon: <span className={cn('i-ri-color-filter-fill', iconClassName)} />,
+        activeIcon: (
+          <span className={cn('i-ri-color-filter-fill', iconClassName)} />
+        ),
       })
     }
 
@@ -113,13 +132,27 @@ export default function AccountSetting({
           key: ACCOUNT_SETTING_TAB.USER_MANAGEMENT,
           name: '用户管理',
           icon: <span className={cn('i-ri-shield-user-line', iconClassName)} />,
-          activeIcon: <span className={cn('i-ri-shield-user-fill', iconClassName)} />,
+          activeIcon: (
+            <span className={cn('i-ri-shield-user-fill', iconClassName)} />
+          ),
         },
         {
           key: ACCOUNT_SETTING_TAB.REBATE_CONFIG,
           name: '返点配置',
-          icon: <span className={cn('i-ri-money-cny-circle-line', iconClassName)} />,
-          activeIcon: <span className={cn('i-ri-money-cny-circle-fill', iconClassName)} />,
+          icon: (
+            <span className={cn('i-ri-money-cny-circle-line', iconClassName)} />
+          ),
+          activeIcon: (
+            <span className={cn('i-ri-money-cny-circle-fill', iconClassName)} />
+          ),
+        },
+        {
+          key: ACCOUNT_SETTING_TAB.SMS_LOGS,
+          name: '短信日志',
+          icon: <span className={cn('i-ri-message-2-line', iconClassName)} />,
+          activeIcon: (
+            <span className={cn('i-ri-message-2-fill', iconClassName)} />
+          ),
         },
       )
     }
@@ -144,21 +177,28 @@ export default function AccountSetting({
           key: ACCOUNT_SETTING_TAB.LANGUAGE,
           name: t('settings.language', { ns: 'common' }),
           icon: <span className={cn('i-ri-translate-2', iconClassName)} />,
-          activeIcon: <span className={cn('i-ri-translate-2', iconClassName)} />,
+          activeIcon: (
+            <span className={cn('i-ri-translate-2', iconClassName)} />
+          ),
         },
       ],
     },
   ]
-  const activeItem = [...menuItems[0].items, ...menuItems[1].items].find(item => item.key === activeMenu)
+  const activeItem = [...menuItems[0].items, ...menuItems[1].items].find(
+    item => item.key === activeMenu,
+  )
 
   const [searchValue, setSearchValue] = useState<string>('')
 
-  const handleTabChange = useCallback((tab: AccountSettingTab) => {
-    if (tab === ACCOUNT_SETTING_TAB.PROVIDER)
-      resetModelProviderListExpanded()
+  const handleTabChange = useCallback(
+    (tab: AccountSettingTab) => {
+      if (tab === ACCOUNT_SETTING_TAB.PROVIDER)
+        resetModelProviderListExpanded()
 
-    onTabChangeAction(tab)
-  }, [onTabChangeAction, resetModelProviderListExpanded])
+      onTabChangeAction(tab)
+    },
+    [onTabChangeAction, resetModelProviderListExpanded],
+  )
 
   const handleClose = useCallback(() => {
     resetModelProviderListExpanded()
@@ -166,45 +206,44 @@ export default function AccountSetting({
   }, [onCancelAction, resetModelProviderListExpanded])
 
   return (
-    <MenuDialog
-      show
-      onClose={handleClose}
-    >
+    <MenuDialog show onClose={handleClose}>
       <div className="mx-auto flex h-screen max-w-[1048px]">
         <div className="flex w-[44px] flex-col border-r border-divider-burn pl-4 pr-6 sm:w-[224px]">
-          <div className="mb-8 mt-6 px-3 py-2 text-text-primary title-2xl-semi-bold">{t('userProfile.settings', { ns: 'common' })}</div>
+          <div className="mb-8 mt-6 px-3 py-2 text-text-primary title-2xl-semi-bold">
+            {t('userProfile.settings', { ns: 'common' })}
+          </div>
           <div className="w-full">
-            {
-              menuItems.map(menuItem => (
-                <div key={menuItem.key} className="mb-2">
-                  {!isCurrentWorkspaceDatasetOperator && (
-                    <div className="mb-0.5 py-2 pb-1 pl-3 text-text-tertiary system-xs-medium-uppercase">{menuItem.name}</div>
-                  )}
-                  <div>
-                    {
-                      menuItem.items.map(item => (
-                        <button
-                          type="button"
-                          key={item.key}
-                          className={cn(
-                            'mb-0.5 flex h-[37px] w-full items-center rounded-lg p-1 pl-3 text-left text-sm',
-                            activeMenu === item.key ? 'bg-state-base-active text-components-menu-item-text-active system-sm-semibold' : 'text-components-menu-item-text system-sm-medium',
-                          )}
-                          aria-label={item.name}
-                          title={item.name}
-                          onClick={() => {
-                            handleTabChange(item.key)
-                          }}
-                        >
-                          {activeMenu === item.key ? item.activeIcon : item.icon}
-                          {!isMobile && <div className="truncate">{item.name}</div>}
-                        </button>
-                      ))
-                    }
+            {menuItems.map(menuItem => (
+              <div key={menuItem.key} className="mb-2">
+                {!isCurrentWorkspaceDatasetOperator && (
+                  <div className="mb-0.5 py-2 pb-1 pl-3 text-text-tertiary system-xs-medium-uppercase">
+                    {menuItem.name}
                   </div>
+                )}
+                <div>
+                  {menuItem.items.map(item => (
+                    <button
+                      type="button"
+                      key={item.key}
+                      className={cn(
+                        'mb-0.5 flex h-[37px] w-full items-center rounded-lg p-1 pl-3 text-left text-sm',
+                        activeMenu === item.key
+                          ? 'bg-state-base-active text-components-menu-item-text-active system-sm-semibold'
+                          : 'text-components-menu-item-text system-sm-medium',
+                      )}
+                      aria-label={item.name}
+                      title={item.name}
+                      onClick={() => {
+                        handleTabChange(item.key)
+                      }}
+                    >
+                      {activeMenu === item.key ? item.activeIcon : item.icon}
+                      {!isMobile && <div className="truncate">{item.name}</div>}
+                    </button>
+                  ))}
                 </div>
-              ))
-            }
+              </div>
+            ))}
           </div>
         </div>
         <div className="relative flex min-h-0 w-[824px]">
@@ -218,7 +257,9 @@ export default function AccountSetting({
             >
               <span className="i-ri-close-line h-5 w-5" />
             </Button>
-            <div className="mt-1 text-text-tertiary system-2xs-medium-uppercase">ESC</div>
+            <div className="mt-1 text-text-tertiary system-2xs-medium-uppercase">
+              ESC
+            </div>
           </div>
           <ScrollArea
             className="h-full min-h-0 flex-1 bg-components-panel-bg"
@@ -231,7 +272,9 @@ export default function AccountSetting({
               <div className="shrink-0 text-text-primary title-2xl-semi-bold">
                 {activeItem?.name}
                 {activeItem?.description && (
-                  <div className="mt-1 text-text-tertiary system-sm-regular">{activeItem?.description}</div>
+                  <div className="mt-1 text-text-tertiary system-sm-regular">
+                    {activeItem?.description}
+                  </div>
                 )}
               </div>
               {activeItem?.key === ACCOUNT_SETTING_TAB.PROVIDER && (
@@ -245,15 +288,29 @@ export default function AccountSetting({
               )}
             </div>
             <div className="px-4 pt-2 sm:px-8">
-              {activeMenu === ACCOUNT_SETTING_TAB.PROVIDER && <ModelProviderPage searchText={searchValue} />}
+              {activeMenu === ACCOUNT_SETTING_TAB.PROVIDER && (
+                <ModelProviderPage searchText={searchValue} />
+              )}
               {activeMenu === ACCOUNT_SETTING_TAB.MEMBERS && <MembersPage />}
+              {activeMenu === ACCOUNT_SETTING_TAB.SOCIAL_PUBLISH && (
+                <SocialPublishAccountList />
+              )}
               {activeMenu === ACCOUNT_SETTING_TAB.BILLING && <BillingPage />}
-              {activeMenu === ACCOUNT_SETTING_TAB.DATA_SOURCE && <DataSourcePage />}
-              {activeMenu === ACCOUNT_SETTING_TAB.API_BASED_EXTENSION && <ApiBasedExtensionPage />}
+              {activeMenu === ACCOUNT_SETTING_TAB.DATA_SOURCE && (
+                <DataSourcePage />
+              )}
+              {activeMenu === ACCOUNT_SETTING_TAB.API_BASED_EXTENSION && (
+                <ApiBasedExtensionPage />
+              )}
               {activeMenu === ACCOUNT_SETTING_TAB.CUSTOM && <CustomPage />}
               {activeMenu === ACCOUNT_SETTING_TAB.LANGUAGE && <LanguagePage />}
-              {activeMenu === ACCOUNT_SETTING_TAB.USER_MANAGEMENT && <UserManagementPage />}
-              {activeMenu === ACCOUNT_SETTING_TAB.REBATE_CONFIG && <RebateConfigPage />}
+              {activeMenu === ACCOUNT_SETTING_TAB.USER_MANAGEMENT && (
+                <UserManagementPage />
+              )}
+              {activeMenu === ACCOUNT_SETTING_TAB.REBATE_CONFIG && (
+                <RebateConfigPage />
+              )}
+              {activeMenu === ACCOUNT_SETTING_TAB.SMS_LOGS && <SmsLogsPage />}
             </div>
           </ScrollArea>
         </div>

@@ -72,7 +72,7 @@
   "publish.locationFor": "Location ({{platform}} · {{name}})",
   "publish.locationGroup": "Location (optional)",
   "publish.locationPlaceholder": "City or venue, up to 80 chars",
-  "publish.noActiveAccount": "No active account — add one from account management first",
+  "publish.noActiveAccount": "No active account — open Settings → Social accounts to bind one first",
   "publish.partial": "Some targets succeeded, some failed",
   "publish.queued": "Queued",
   "publish.retry": "Retry",

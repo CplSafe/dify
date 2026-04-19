@@ -44,7 +44,9 @@ logger = logging.getLogger(__name__)
 AUTH_SESSION_TTL_SECONDS = 200  # 180s wait + 20s buffer for the last poll
 QR_VALID_SECONDS = 180
 
-AuthStatus = Literal["waiting", "scanned", "success", "expired", "failed"]
+AuthStatus = Literal[
+    "waiting", "scanned", "awaiting_user", "success", "expired", "failed"
+]
 # Account-creation allowlist. P4 opens up xhs alongside douyin; ks doesn't
 # yet have an upstream cookie_gen so scan-to-auth would fail — sau will
 # surface that as a typed 400, but we keep ks off the account-creation
@@ -70,6 +72,9 @@ class AuthStatusResponse:
     status: AuthStatus
     account: dict | None
     message: str | None
+    # P7: when status == "awaiting_user", FE pivots to the SMS challenge
+    # modal which calls ``POST /social-publish/accounts/auth/challenge/{id}/...``.
+    challenge_session_id: str | None = None
 
 
 # ---------- Service ----------
@@ -207,7 +212,27 @@ class SocialPublishService:
             status=session["status"],
             account=account_dict,
             message=session.get("message"),
+            challenge_session_id=session.get("challenge_session_id"),
         )
+
+    # ----- P7: SMS challenge relay pass-through -----
+    #
+    # These thin wrappers exist so the controller doesn't reach into the
+    # sau_client directly (keeping all sau-side network calls behind the
+    # service abstraction). The request/response shapes match
+    # apps/sau_api/routers/challenge.py 1:1.
+
+    def sau_client_get_challenge(self, *, session_id: str) -> dict:
+        return self._sau.get_challenge(session_id=session_id)
+
+    def sau_client_trigger_sms(self, *, session_id: str) -> dict:
+        return self._sau.trigger_challenge_sms(session_id=session_id)
+
+    def sau_client_submit_code(self, *, session_id: str, code: str) -> dict:
+        return self._sau.submit_challenge_code(session_id=session_id, code=code)
+
+    def sau_client_abort(self, *, session_id: str) -> dict:
+        return self._sau.abort_challenge(session_id=session_id)
 
     # ----- account delete -----
 
@@ -259,6 +284,13 @@ class SocialPublishService:
             else session.get("profile")
         )
         session["message"] = status.message
+        # P7: surface SMS challenge session id so the FE can render the
+        # SMS verification modal. Cleared once the challenge resolves
+        # (sau status leaves "awaiting_user").
+        if status.status == "awaiting_user":
+            session["challenge_session_id"] = status.challenge_session_id
+        else:
+            session["challenge_session_id"] = None
         session["updated_at"] = _utcnow_iso()
         self._write_session(session_id=session_id, payload=session)
 

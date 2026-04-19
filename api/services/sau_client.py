@@ -55,10 +55,17 @@ class SauLoginProfile:
 
 @dataclass(frozen=True)
 class SauLoginStatusResponse:
-    status: Literal["waiting", "scanned", "success", "expired", "failed"]
+    # P7: ``awaiting_user`` added — surfaces when抖音/小红书 mid-flow
+    # SMS challenge needs human intervention.
+    status: Literal[
+        "waiting", "scanned", "awaiting_user", "success", "expired", "failed"
+    ]
     sau_account_id: str | None
     profile: SauLoginProfile | None
     message: str | None = None
+    # When status == "awaiting_user", points at the Redis-backed
+    # challenge_session that dify can drive via the /challenge/* routes.
+    challenge_session_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -173,7 +180,32 @@ class SauClient:
             sau_account_id=data.get("sau_account_id"),
             profile=profile,
             message=data.get("message"),
+            challenge_session_id=data.get("challenge_session_id"),
         )
+
+    # -------- P7: SMS challenge relay --------
+
+    def get_challenge(self, *, session_id: str) -> dict[str, Any]:
+        """Fetch the current state of an SMS challenge session."""
+        return self._request("GET", f"/challenge/{session_id}")
+
+    def trigger_challenge_sms(self, *, session_id: str) -> dict[str, Any]:
+        """User clicked "send me the SMS" — sau worker will click the
+        「获取验证码」button on the chromium page."""
+        return self._request("POST", f"/challenge/{session_id}/trigger-sms")
+
+    def submit_challenge_code(self, *, session_id: str, code: str) -> dict[str, Any]:
+        """User typed the OTP — sau worker will fill it + click 下一步."""
+        return self._request(
+            "POST",
+            f"/challenge/{session_id}/submit-code",
+            json={"code": code},
+        )
+
+    def abort_challenge(self, *, session_id: str) -> dict[str, Any]:
+        """User gave up on the challenge — sau marks the session aborted
+        and the underlying upload/login surfaces ``verification_aborted``."""
+        return self._request("POST", f"/challenge/{session_id}/abort")
 
     def check_account(
         self,

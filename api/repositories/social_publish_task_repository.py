@@ -31,6 +31,7 @@ class SocialPublishTaskRepository(Protocol):
         self,
         task_id: str,
         tenant_id: str,
+        user_id: str | None = None,
     ) -> SocialPublishTask | None: ...
 
     def list_by_tenant(
@@ -40,12 +41,20 @@ class SocialPublishTaskRepository(Protocol):
         account_id: str | None = None,
         status: str | None = None,
         limit: int = 50,
+        user_id: str | None = None,
     ) -> Sequence[SocialPublishTask]: ...
 
-    def has_active_for_account(self, *, tenant_id: str, account_id: str) -> bool:
+    def has_active_for_account(
+        self,
+        *,
+        tenant_id: str,
+        account_id: str,
+        user_id: str | None = None,
+    ) -> bool:
         """Return True if a task in ``ACTIVE_TASK_STATUSES`` exists for the
-        ``(tenant_id, account_id)`` pair. Used for single-flight enforcement
-        — same account cannot have two in-flight publishes.
+        ``(tenant_id, account_id)`` pair, optionally narrowed by ``user_id``
+        (P8 per-member isolation). Used for single-flight enforcement —
+        the same account+member cannot have two in-flight publishes.
         """
         ...
 

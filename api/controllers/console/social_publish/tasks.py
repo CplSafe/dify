@@ -120,7 +120,8 @@ class SocialPublishTasksApi(Resource):
     @login_required
     @account_initialization_required
     def get(self):
-        _, current_tenant_id = current_account_with_tenant()
+        # P8: per-member — list only the current member's tasks.
+        current_user, current_tenant_id = current_account_with_tenant()
         account_id = request.args.get("account_id") or None
         status = request.args.get("status") or None
         try:
@@ -131,6 +132,7 @@ class SocialPublishTasksApi(Resource):
             service = _build_service()
             tasks = service.list_tasks(
                 tenant_id=current_tenant_id,
+                user_id=current_user.id,
                 account_id=account_id,
                 status=status,
                 limit=limit,
@@ -252,11 +254,14 @@ class SocialPublishTaskItemApi(Resource):
     @login_required
     @account_initialization_required
     def get(self, task_id: str):
-        _, current_tenant_id = current_account_with_tenant()
+        # P8: per-member — only the task's creator can poll its status.
+        current_user, current_tenant_id = current_account_with_tenant()
         try:
             service = _build_service()
             snapshot = service.get_task_status(
-                task_id=task_id, tenant_id=current_tenant_id
+                task_id=task_id,
+                tenant_id=current_tenant_id,
+                user_id=current_user.id,
             )
         except Exception as exc:
             raise _to_http_error(exc) from exc

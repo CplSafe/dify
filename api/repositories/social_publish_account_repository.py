@@ -34,7 +34,25 @@ class SocialPublishAccountRepository(Protocol):
         account_id: str,
         tenant_id: str,
     ) -> SocialPublishAccount | None:
-        """Return a row only if it belongs to the given tenant."""
+        """Return a row only if it belongs to the given tenant.
+
+        Tenant-only filter — used by admin / cross-member paths. Member-
+        facing routes should use ``get_by_id_and_tenant_and_user``.
+        """
+        ...
+
+    def get_by_id_and_tenant_and_user(
+        self,
+        account_id: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> SocialPublishAccount | None:
+        """Return a row only if it belongs to the given tenant AND was
+        created by the given user.
+
+        P8: per-member isolation — member B cannot reach member A's
+        account even if they guess the id.
+        """
         ...
 
     def get_by_sau_account_id(
@@ -53,7 +71,25 @@ class SocialPublishAccountRepository(Protocol):
         tenant_id: str,
         platform: str | None = None,
     ) -> Sequence[SocialPublishAccount]:
-        """List all accounts visible to this tenant, newest first."""
+        """List all accounts in this tenant, newest first.
+
+        Tenant-only filter — used only by admin / future cross-member
+        paths. Member-facing routes should use ``list_by_tenant_and_user``.
+        """
+        ...
+
+    def list_by_tenant_and_user(
+        self,
+        tenant_id: str,
+        user_id: str,
+        platform: str | None = None,
+    ) -> Sequence[SocialPublishAccount]:
+        """P8: list only accounts created by ``user_id`` in this tenant.
+
+        Filter on ``(tenant_id, created_by)``. The accompanying composite
+        index ``social_publish_account_tenant_user_platform_idx`` keeps
+        the per-tenant slice cheap.
+        """
         ...
 
     def update_status(
@@ -78,5 +114,19 @@ class SocialPublishAccountRepository(Protocol):
         account_id: str,
         tenant_id: str,
     ) -> bool:
-        """Delete a row and return True if a row was actually removed."""
+        """Delete a row and return True if a row was actually removed.
+
+        Tenant-only — admin path.
+        """
+        ...
+
+    def delete_by_id_and_tenant_and_user(
+        self,
+        account_id: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> bool:
+        """P8: per-member delete — only the creator can drop their own
+        account. Returns True if a row was actually removed.
+        """
         ...

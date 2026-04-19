@@ -92,8 +92,15 @@ SINGLE_FLIGHT_LOCK_TTL_SECONDS = 60
 QUOTA_COUNTER_TTL_SECONDS = 600
 
 
-def _single_flight_lock_key(tenant_id: str, account_id: str) -> str:
-    return f"sau:publish:single_flight:{tenant_id}:{account_id}"
+def _single_flight_lock_key(
+    tenant_id: str, user_id: str, account_id: str,
+) -> str:
+    # P8: lock key includes user_id so two members in the same tenant
+    # publishing to *different* accounts they each own can run in
+    # parallel (the previous (tenant_id, account_id) shape was already
+    # account-narrow so this is just defence-in-depth — but explicit
+    # ``user_id`` makes the intent obvious in the redis key namespace).
+    return f"sau:publish:single_flight:{tenant_id}:{user_id}:{account_id}"
 
 
 def _quota_counter_key(tenant_id: str) -> str:
@@ -207,7 +214,15 @@ class SocialPublishTaskService:
         created_by: str,
         request: CreateTaskRequest,
     ) -> SocialPublishTask:
-        account = self._resolve_account(tenant_id=tenant_id, account_id=request.account_id)
+        # P8: ``created_by`` IS the current user_id. We resolve the
+        # account with that user_id so member B can't reference member
+        # A's account by passing its id (resolution returns
+        # AccountNotFoundError instead of leaking existence).
+        account = self._resolve_account(
+            tenant_id=tenant_id,
+            account_id=request.account_id,
+            user_id=created_by,
+        )
         if account.status != SocialPublishAccountStatus.ACTIVE.value:
             # Surface a typed error so the FE can drop straight into the
             # re-auth flow instead of a generic failure message.
@@ -257,7 +272,7 @@ class SocialPublishTaskService:
             # dispatch succeeds (the row is now persisted with
             # status=queued, and has_active_for_account picks it up on the
             # next attempt).
-            lock_key = _single_flight_lock_key(tenant_id, account.id)
+            lock_key = _single_flight_lock_key(tenant_id, created_by, account.id)
             if not redis_client.set(
                 lock_key, "1", nx=True, ex=SINGLE_FLIGHT_LOCK_TTL_SECONDS
             ):
@@ -267,7 +282,9 @@ class SocialPublishTaskService:
 
             try:
                 if self._tasks.has_active_for_account(
-                    tenant_id=tenant_id, account_id=account.id
+                    tenant_id=tenant_id,
+                    account_id=account.id,
+                    user_id=created_by,
                 ):
                     raise TaskAlreadyInFlightError(
                         f"account {account.id} already has an in-flight publish task"
@@ -415,16 +432,28 @@ class SocialPublishTaskService:
         self,
         *,
         tenant_id: str,
+        user_id: str,
         account_id: str | None = None,
         status: str | None = None,
         limit: int = 50,
     ) -> Sequence[SocialPublishTask]:
+        # P8: per-member list — each member sees only their own tasks.
+        # Same scoping rule as accounts.
         return self._tasks.list_by_tenant(
-            tenant_id, account_id=account_id, status=status, limit=limit
+            tenant_id,
+            account_id=account_id,
+            status=status,
+            limit=limit,
+            user_id=user_id,
         )
 
-    def get_task_status(self, *, task_id: str, tenant_id: str) -> TaskStatusResponse:
-        task = self._tasks.get_by_id_and_tenant(task_id, tenant_id)
+    def get_task_status(
+        self, *, task_id: str, tenant_id: str, user_id: str,
+    ) -> TaskStatusResponse:
+        # P8: triple-WHERE on (id, tenant, created_by). Member B can't
+        # poll member A's task by guessing its id — surfaces as
+        # TaskNotFoundError indistinguishable from "doesn't exist".
+        task = self._tasks.get_by_id_and_tenant(task_id, tenant_id, user_id)
         if task is None:
             raise TaskNotFoundError(f"task {task_id} not found")
 
@@ -446,9 +475,15 @@ class SocialPublishTaskService:
     # ----- internals -----
 
     def _resolve_account(
-        self, *, tenant_id: str, account_id: str
+        self, *, tenant_id: str, account_id: str, user_id: str,
     ) -> SocialPublishAccount:
-        account = self._accounts.get_by_id_and_tenant(account_id, tenant_id)
+        # P8: triple-WHERE on (id, tenant, created_by) so a user can't
+        # operate on another member's account by guessing the id. The
+        # AccountNotFoundError is identical to the genuine "doesn't
+        # exist" path — no existence-leak.
+        account = self._accounts.get_by_id_and_tenant_and_user(
+            account_id, tenant_id, user_id,
+        )
         if account is None:
             raise AccountNotFoundError(f"account {account_id} not found")
         return account

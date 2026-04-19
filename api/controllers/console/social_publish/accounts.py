@@ -106,12 +106,20 @@ class SocialPublishAccountsListApi(Resource):
     @login_required
     @account_initialization_required
     def get(self):
-        """List current tenant's bound social accounts."""
-        _, current_tenant_id = current_account_with_tenant()
+        """List current member's bound social accounts in this tenant.
+
+        P8: per-member isolation — each member only sees the accounts
+        they themselves bound, not their colleagues' accounts.
+        """
+        current_user, current_tenant_id = current_account_with_tenant()
         platform = request.args.get("platform") or None
         try:
             service = _build_service()
-            accounts = service.list_accounts(tenant_id=current_tenant_id, platform=platform)
+            accounts = service.list_accounts(
+                tenant_id=current_tenant_id,
+                user_id=current_user.id,
+                platform=platform,
+            )
         except Exception as exc:
             raise _to_http_error(exc) from exc
 
@@ -179,11 +187,18 @@ class SocialPublishAccountItemApi(Resource):
     @login_required
     @account_initialization_required
     def delete(self, account_id: str):
-        """Delete an account; tells sau to drop the cookie best-effort."""
-        _, current_tenant_id = current_account_with_tenant()
+        """Delete an account; tells sau to drop the cookie best-effort.
+
+        P8: per-member — only the creator of the account can delete it.
+        """
+        current_user, current_tenant_id = current_account_with_tenant()
         try:
             service = _build_service()
-            service.delete_account(account_id=account_id, tenant_id=current_tenant_id)
+            service.delete_account(
+                account_id=account_id,
+                tenant_id=current_tenant_id,
+                user_id=current_user.id,
+            )
         except Exception as exc:
             raise _to_http_error(exc) from exc
 

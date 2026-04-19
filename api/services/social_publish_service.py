@@ -98,17 +98,31 @@ class SocialPublishService:
         self,
         *,
         tenant_id: str,
+        user_id: str,
         platform: str | None = None,
     ) -> Sequence[SocialPublishAccount]:
-        return self._repo.list_by_tenant(tenant_id, platform=platform)
+        # P8: per-member isolation. Each member only sees the accounts
+        # they themselves bound. Admin-style "see-all-in-tenant" reads
+        # have to call ``list_by_tenant`` on the repo directly — no
+        # service method exposes that path right now.
+        return self._repo.list_by_tenant_and_user(
+            tenant_id, user_id, platform=platform,
+        )
 
     def get_account(
         self,
         *,
         account_id: str,
         tenant_id: str,
+        user_id: str,
     ) -> SocialPublishAccount:
-        row = self._repo.get_by_id_and_tenant(account_id, tenant_id)
+        # P8: per-member isolation. We deliberately raise
+        # AccountNotFoundError (not a permission error) when a different
+        # member's id is supplied — indistinguishable from "id doesn't
+        # exist" so attackers can't enumerate other members' accounts.
+        row = self._repo.get_by_id_and_tenant_and_user(
+            account_id, tenant_id, user_id,
+        )
         if row is None:
             raise AccountNotFoundError(f"account {account_id} not found")
         return row
@@ -136,9 +150,14 @@ class SocialPublishService:
 
         # When re-authorising, validate ownership upfront so we can pass the
         # sau_account_id straight through to sau (cookie path locator).
+        # P8: ``created_by`` IS the current user_id (controller passes it
+        # via current_account_with_tenant). We feed it into get_account so
+        # member B can't re-auth member A's account by guessing the id.
         sau_account_id: str | None = None
         if account_id is not None:
-            existing = self.get_account(account_id=account_id, tenant_id=tenant_id)
+            existing = self.get_account(
+                account_id=account_id, tenant_id=tenant_id, user_id=created_by,
+            )
             sau_account_id = existing.sau_account_id
 
         session_id = str(uuid.uuid4())
@@ -236,8 +255,15 @@ class SocialPublishService:
 
     # ----- account delete -----
 
-    def delete_account(self, *, account_id: str, tenant_id: str) -> None:
-        row = self.get_account(account_id=account_id, tenant_id=tenant_id)
+    def delete_account(
+        self, *, account_id: str, tenant_id: str, user_id: str,
+    ) -> None:
+        # P8: user_id-scoped lookup so member B can't delete member A's
+        # account by guessing the id. get_account already raises
+        # AccountNotFoundError on user mismatch.
+        row = self.get_account(
+            account_id=account_id, tenant_id=tenant_id, user_id=user_id,
+        )
 
         # Best-effort: tell sau to drop the cookie. Failure here must not block
         # the local clean-up — operators can run a sweeper later.
@@ -258,7 +284,9 @@ class SocialPublishService:
                 },
             )
 
-        if not self._repo.delete_by_id_and_tenant(account_id, tenant_id):
+        if not self._repo.delete_by_id_and_tenant_and_user(
+            account_id, tenant_id, user_id,
+        ):
             raise TenantMismatchError("account vanished mid-delete or not yours")
 
     # ---------- internals ----------

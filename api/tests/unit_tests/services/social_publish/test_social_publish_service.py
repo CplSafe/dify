@@ -33,7 +33,27 @@ from services.social_publish_service import (
 
 @pytest.fixture
 def repo() -> MagicMock:
-    return MagicMock()
+    repo = MagicMock()
+    # P8: service now goes through *_and_user variants. Mirror them
+    # to the legacy stubs so individual tests don't have to learn
+    # about the new methods. Tests that need to assert call args on
+    # the new methods can still do so on the repo mock directly.
+    repo.get_by_id_and_tenant_and_user.side_effect = (
+        lambda account_id, tenant_id, user_id: repo.get_by_id_and_tenant(
+            account_id, tenant_id,
+        )
+    )
+    repo.list_by_tenant_and_user.side_effect = (
+        lambda tenant_id, user_id, platform=None: repo.list_by_tenant(
+            tenant_id, platform=platform,
+        )
+    )
+    repo.delete_by_id_and_tenant_and_user.side_effect = (
+        lambda account_id, tenant_id, user_id: repo.delete_by_id_and_tenant(
+            account_id, tenant_id,
+        )
+    )
+    return repo
 
 
 @pytest.fixture
@@ -77,7 +97,7 @@ def _row(*, tenant_id: str = "tenant-a", **overrides: Any) -> SocialPublishAccou
 class TestGetAccount:
     def test_returns_row_when_repository_finds_it(self, service, repo):
         repo.get_by_id_and_tenant.return_value = _row()
-        result = service.get_account(account_id="row-1", tenant_id="tenant-a")
+        result = service.get_account(account_id="row-1", tenant_id="tenant-a", user_id="u")
         assert result.id == "row-1"
 
     def test_raises_account_not_found_when_repository_returns_none(
@@ -85,7 +105,7 @@ class TestGetAccount:
     ):
         repo.get_by_id_and_tenant.return_value = None
         with pytest.raises(AccountNotFoundError):
-            service.get_account(account_id="row-1", tenant_id="tenant-a")
+            service.get_account(account_id="row-1", tenant_id="tenant-a", user_id="u")
 
 
 # ---------- start_auth ----------
@@ -279,7 +299,7 @@ class TestDeleteAccount:
         repo.get_by_id_and_tenant.return_value = _row(sau_account_id="sau-1")
         repo.delete_by_id_and_tenant.return_value = True
 
-        service.delete_account(account_id="row-1", tenant_id="tenant-a")
+        service.delete_account(account_id="row-1", tenant_id="tenant-a", user_id="u")
 
         sau.delete_account.assert_called_once_with(
             tenant_id="tenant-a",
@@ -293,7 +313,7 @@ class TestDeleteAccount:
         repo.delete_by_id_and_tenant.return_value = True
         sau.delete_account.side_effect = SauUnreachableError("down")
 
-        service.delete_account(account_id="row-1", tenant_id="tenant-a")
+        service.delete_account(account_id="row-1", tenant_id="tenant-a", user_id="u")
 
         repo.delete_by_id_and_tenant.assert_called_once()
 
@@ -304,4 +324,4 @@ class TestDeleteAccount:
         repo.delete_by_id_and_tenant.return_value = False
 
         with pytest.raises(TenantMismatchError):
-            service.delete_account(account_id="row-1", tenant_id="tenant-a")
+            service.delete_account(account_id="row-1", tenant_id="tenant-a", user_id="u")

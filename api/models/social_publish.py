@@ -66,6 +66,13 @@ class SocialPublishAccount(TypeBase):
         sa.Index("social_publish_account_tenant_platform_idx", "tenant_id", "platform"),
         sa.Index("social_publish_account_sau_account_id_uk", "sau_account_id", unique=True),
         sa.Index("social_publish_account_status_idx", "status"),
+        # P8: per-member account list query is
+        #   WHERE tenant_id = ? AND created_by = ? [AND platform = ?]
+        # this composite covers all three filter columns.
+        sa.Index(
+            "social_publish_account_tenant_user_platform_idx",
+            "tenant_id", "created_by", "platform",
+        ),
     )
 
     id: Mapped[str] = mapped_column(

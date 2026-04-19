@@ -52,12 +52,20 @@ class DifyAPISQLAlchemySocialPublishTaskRepository(SocialPublishTaskRepository):
         self,
         task_id: str,
         tenant_id: str,
+        user_id: str | None = None,
     ) -> SocialPublishTask | None:
+        # P8: optional user_id narrows to ``created_by`` so member B can't
+        # poll member A's task by guessing the id. None preserves the
+        # legacy admin-style read for any future cross-member admin
+        # surface.
         with self._session_maker() as session:
-            stmt = select(SocialPublishTask).where(
+            conditions = [
                 SocialPublishTask.id == task_id,
                 SocialPublishTask.tenant_id == tenant_id,
-            )
+            ]
+            if user_id is not None:
+                conditions.append(SocialPublishTask.created_by == user_id)
+            stmt = select(SocialPublishTask).where(*conditions)
             return session.execute(stmt).scalar_one_or_none()
 
     def list_by_tenant(
@@ -67,7 +75,12 @@ class DifyAPISQLAlchemySocialPublishTaskRepository(SocialPublishTaskRepository):
         account_id: str | None = None,
         status: str | None = None,
         limit: int = 50,
+        user_id: str | None = None,
     ) -> Sequence[SocialPublishTask]:
+        # P8: optional user_id narrows to ``created_by``. The composite
+        # (tenant_id, created_at) index already covers the per-tenant
+        # slice; created_by is a low-cardinality follow-on filter so we
+        # don't need a new index for the per-member case.
         with self._session_maker() as session:
             stmt = select(SocialPublishTask).where(
                 SocialPublishTask.tenant_id == tenant_id,
@@ -76,18 +89,33 @@ class DifyAPISQLAlchemySocialPublishTaskRepository(SocialPublishTaskRepository):
                 stmt = stmt.where(SocialPublishTask.account_id == account_id)
             if status is not None:
                 stmt = stmt.where(SocialPublishTask.status == status)
+            if user_id is not None:
+                stmt = stmt.where(SocialPublishTask.created_by == user_id)
             stmt = stmt.order_by(SocialPublishTask.created_at.desc()).limit(limit)
             return session.execute(stmt).scalars().all()
 
-    def has_active_for_account(self, *, tenant_id: str, account_id: str) -> bool:
+    def has_active_for_account(
+        self,
+        *,
+        tenant_id: str,
+        account_id: str,
+        user_id: str | None = None,
+    ) -> bool:
+        # P8: when ``user_id`` is supplied, member-level isolation —
+        # member B's pending task for account-A doesn't block member A
+        # from publishing to a *different* account they own. The legacy
+        # tenant+account-only path (user_id=None) is kept for the
+        # service layer's admin reads — but note that even before P8
+        # there was no admin caller exercising this path.
         with self._session_maker() as session:
-            stmt = select(
-                exists().where(
-                    SocialPublishTask.tenant_id == tenant_id,
-                    SocialPublishTask.account_id == account_id,
-                    SocialPublishTask.status.in_(ACTIVE_TASK_STATUSES),
-                )
-            )
+            conditions = [
+                SocialPublishTask.tenant_id == tenant_id,
+                SocialPublishTask.account_id == account_id,
+                SocialPublishTask.status.in_(ACTIVE_TASK_STATUSES),
+            ]
+            if user_id is not None:
+                conditions.append(SocialPublishTask.created_by == user_id)
+            stmt = select(exists().where(*conditions))
             return bool(session.execute(stmt).scalar())
 
     def count_active_for_tenant(self, tenant_id: str) -> int:

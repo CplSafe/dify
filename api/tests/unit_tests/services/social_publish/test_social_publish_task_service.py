@@ -43,11 +43,24 @@ from services.social_publish_task_service import (
 @pytest.fixture
 def task_repo() -> MagicMock:
     return MagicMock()
+    # Note: get_by_id_and_tenant grew an optional ``user_id`` 3rd positional
+    # but tests stub via .return_value so MagicMock handles both arities.
 
 
 @pytest.fixture
 def account_repo() -> MagicMock:
-    return MagicMock()
+    repo = MagicMock()
+    # P8: service now calls get_by_id_and_tenant_and_user (not the
+    # legacy get_by_id_and_tenant). Most tests still set ``.return_value``
+    # on the legacy attribute — mirror it here so individual tests don't
+    # have to learn about the new method. Tests that need to assert
+    # call args directly can still do so on the new attribute.
+    repo.get_by_id_and_tenant_and_user.side_effect = (
+        lambda account_id, tenant_id, user_id: repo.get_by_id_and_tenant(
+            account_id, tenant_id,
+        )
+    )
+    return repo
 
 
 @pytest.fixture
@@ -731,7 +744,7 @@ class TestGetTaskStatus:
     def test_raises_for_unknown_task(self, service, task_repo):
         task_repo.get_by_id_and_tenant.return_value = None
         with pytest.raises(TaskNotFoundError):
-            service.get_task_status(task_id="t", tenant_id="tenant-a")
+            service.get_task_status(task_id="t", tenant_id="tenant-a", user_id="u")
 
     def test_returns_terminal_without_polling_sau(self, service, task_repo, sau):
         task_repo.get_by_id_and_tenant.return_value = _task(
@@ -739,7 +752,7 @@ class TestGetTaskStatus:
             sau_task_id="cel-1",
             result_url="https://x",
         )
-        snap = service.get_task_status(task_id="t", tenant_id="tenant-a")
+        snap = service.get_task_status(task_id="t", tenant_id="tenant-a", user_id="u")
         sau.get_task.assert_not_called()
         assert snap.task["status"] == SocialPublishTaskStatus.SUCCESS.value
         assert snap.result["url"] == "https://x"
@@ -758,7 +771,7 @@ class TestGetTaskStatus:
             status=SocialPublishTaskStatus.RUNNING.value, sau_task_id="cel-1"
         )
 
-        service.get_task_status(task_id="t", tenant_id="tenant-a")
+        service.get_task_status(task_id="t", tenant_id="tenant-a", user_id="u")
         task_repo.update_status_to_running.assert_called_once()
 
     def test_marks_terminal_success_with_result_url(self, service, task_repo, sau):
@@ -776,7 +789,7 @@ class TestGetTaskStatus:
             sau_task_id="cel-1",
             result_url="https://x",
         )
-        snap = service.get_task_status(task_id="t", tenant_id="tenant-a")
+        snap = service.get_task_status(task_id="t", tenant_id="tenant-a", user_id="u")
         assert task_repo.update_terminal.call_args.kwargs["status"] == "success"
         assert snap.result["url"] == "https://x"
 
@@ -795,7 +808,7 @@ class TestGetTaskStatus:
         task_repo.update_terminal.return_value = _task(
             status=SocialPublishTaskStatus.FAILED.value, error_code="cookie_invalid"
         )
-        service.get_task_status(task_id="t", tenant_id="tenant-a")
+        service.get_task_status(task_id="t", tenant_id="tenant-a", user_id="u")
 
         # Account row gets flipped to expired so the FE shows re-auth.
         account_repo.update_status.assert_called_once()
@@ -818,7 +831,7 @@ class TestGetTaskStatus:
         task_repo.update_terminal.return_value = _task(
             status=SocialPublishTaskStatus.FAILED.value, error_code="upload_failed"
         )
-        service.get_task_status(task_id="t", tenant_id="tenant-a")
+        service.get_task_status(task_id="t", tenant_id="tenant-a", user_id="u")
         kw = task_repo.update_terminal.call_args.kwargs
         assert kw["status"] == SocialPublishTaskStatus.FAILED.value
         # Classified via the upstream-status fallback (which is empty
@@ -837,7 +850,7 @@ class TestGetTaskStatus:
         task_repo.update_terminal.return_value = _task(
             status=SocialPublishTaskStatus.FAILED.value, error_code="worker_crashed"
         )
-        service.get_task_status(task_id="t", tenant_id="tenant-a")
+        service.get_task_status(task_id="t", tenant_id="tenant-a", user_id="u")
         kw = task_repo.update_terminal.call_args.kwargs
         assert kw["error_code"] == "worker_crashed"
 
@@ -849,7 +862,7 @@ class TestGetTaskStatus:
         )
         sau.get_task.side_effect = SauUnreachableError("network blip")
         # Must not raise — caller should keep polling.
-        snap = service.get_task_status(task_id="t", tenant_id="tenant-a")
+        snap = service.get_task_status(task_id="t", tenant_id="tenant-a", user_id="u")
         assert snap.task["status"] == SocialPublishTaskStatus.QUEUED.value
         task_repo.update_terminal.assert_not_called()
 
@@ -1063,3 +1076,81 @@ class TestBatchDispatch:
         assert results[0].success is True
         assert results[1].success is False
         assert results[1].error_code == "duplicate_target"
+
+
+# ---------- P8: per-member account isolation ----------
+
+
+class TestPerMemberIsolation:
+    """Verify the user_id-scoped repo lookups + single-flight lock key."""
+
+    def test_other_member_account_id_surfaces_as_not_found(
+        self, service, account_repo, db_session, storage_load,
+    ):
+        # Setup: ``get_by_id_and_tenant_and_user`` returns None for the
+        # current user (i.e. the account exists in the tenant but is owned
+        # by someone else). Service should raise AccountNotFoundError —
+        # NOT a permission error — to avoid leaking existence.
+        account_repo.get_by_id_and_tenant_and_user.side_effect = None
+        account_repo.get_by_id_and_tenant_and_user.return_value = None
+        with pytest.raises(AccountNotFoundError):
+            service.create_task(
+                tenant_id="tenant-a",
+                created_by="user-B",  # not the account's creator
+                request=CreateTaskRequest(
+                    account_id="acc-of-A",
+                    work_id="work-1",
+                    title="hi",
+                    tags=None,
+                    desc=None,
+                ),
+            )
+
+    def test_single_flight_lock_key_includes_user_id(self):
+        # Hitting the implementation directly so we don't need a redis stub.
+        from services.social_publish_task_service import _single_flight_lock_key
+        a = _single_flight_lock_key("tenant-a", "user-A", "acc-1")
+        b = _single_flight_lock_key("tenant-a", "user-B", "acc-1")
+        # Different members publishing to the same account-id (e.g. via
+        # a stale id) get different lock keys — they don't block each
+        # other. This is mostly defence-in-depth since
+        # get_by_id_and_tenant_and_user already prevents B from reaching
+        # account A's row, but the explicit user_id in the key namespace
+        # makes the intent obvious.
+        assert a != b
+        assert "user-A" in a
+        assert "user-B" in b
+
+    def test_create_task_threads_user_id_to_repo_lookup(
+        self, service, account_repo, task_repo, sau, db_session, storage_load,
+    ):
+        # Successful create: assert the repo was called with user_id =
+        # created_by, not just (account_id, tenant_id).
+        account_repo.get_by_id_and_tenant_and_user.side_effect = None
+        account_repo.get_by_id_and_tenant_and_user.return_value = _account()
+        _make_work_session(db_session)
+        task_repo.has_active_for_account.return_value = False
+        task_repo.create.return_value = _task()
+        task_repo.attach_sau_task_id.return_value = _task(
+            status=SocialPublishTaskStatus.QUEUED.value, sau_task_id="cel-1"
+        )
+        sau.post_video.return_value = SauPublishResponse(sau_task_id="cel-1")
+
+        service.create_task(
+            tenant_id="tenant-a",
+            created_by="user-A",
+            request=CreateTaskRequest(
+                account_id="acc-1",
+                work_id="work-1",
+                title="hi",
+                tags=None,
+                desc=None,
+            ),
+        )
+        # The account lookup must have included user_id="user-A".
+        account_repo.get_by_id_and_tenant_and_user.assert_called_with(
+            "acc-1", "tenant-a", "user-A",
+        )
+        # has_active_for_account must also have user-A scoping.
+        kw = task_repo.has_active_for_account.call_args.kwargs
+        assert kw.get("user_id") == "user-A"

@@ -1,3 +1,5 @@
+// Account
+
 export type SocialPublishPlatform = 'douyin' | 'xhs' | 'ks'
 
 export type SocialPublishAccountStatus = 'pending_auth' | 'active' | 'expired'
@@ -12,9 +14,12 @@ export type SocialPublishAccount = {
   created_at: string
 }
 
+// Auth (QR)
+
 export type AuthSessionStatus
   = | 'waiting'
     | 'scanned'
+    | 'awaiting_user' // P7: SMS challenge needs user input
     | 'success'
     | 'expired'
     | 'failed'
@@ -29,7 +34,29 @@ export type AuthStatusResponse = {
   status: AuthSessionStatus
   account: SocialPublishAccount | null
   message: string | null
+  /** When status === 'awaiting_user', the SMS-relay session id sau spawned. */
+  challenge_session_id: string | null
 }
+
+// Auth (P7: SMS challenge, surfaced via /accounts/auth/challenge/{id})
+
+export type ChallengeSessionStatus
+  = | 'awaiting_user' // waiting for trigger SMS or submit code
+    | 'user_submitted' // user submitted; sau worker hasn't picked up yet
+    | 'completed' // sau worker consumed the action; flow continues
+    | 'aborted' // user gave up or session timed out
+
+export type ChallengeSessionInfo = {
+  session_id: string
+  platform: string
+  kind: 'sms'
+  status: ChallengeSessionStatus
+  last_action_detail: string | null
+  created_at: number
+  updated_at: number
+}
+
+// Tasks
 
 export type SocialPublishErrorCode
   = | 'feature_disabled'
@@ -75,12 +102,13 @@ export type SocialPublishTask = TaskError & {
   updated_at: string
 }
 
+/**
+ * Per-platform extras forwarded to the uploader. Keys outside the
+ * per-platform allowlist are dropped server-side; `location` is capped
+ * at 80 chars and silently omitted for platforms whose uploader has no
+ * location field (currently ks).
+ */
 export type SocialPublishPlatformPayload = {
-  /**
-   * Free-text venue / city. Backend caps at 80 chars and silently
-   *  drops it for platforms whose uploader has no location field
-   *  (currently ks).
-   */
   location?: string
 }
 
@@ -93,10 +121,6 @@ type TaskContent = {
 export type CreateTaskRequest = TaskContent & {
   account_id: string
   work_id: string
-  /**
-   * P4: per-platform extras (e.g. `{location: 'Shanghai'}`). Keys
-   *  outside the per-platform allowlist are dropped server-side.
-   */
   platform_payload?: SocialPublishPlatformPayload
 }
 

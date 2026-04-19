@@ -20,6 +20,7 @@ import {
   fetchSocialPublishAuthStatus,
   startSocialPublishAuth,
 } from '@/service/social-publish'
+import { SmsChallengePanel } from './sms-challenge-panel'
 
 const POLL_INTERVAL_MS = 2_000
 // Hard cap mirrors backend QR_VALID_SECONDS (180s) plus a small buffer; the
@@ -59,6 +60,12 @@ export function AuthQrModal({
   const [session, setSession] = useState<AuthStartResponse | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [secondsLeft, setSecondsLeft] = useState<number>(0)
+  // P7: when sau surfaces an SMS challenge mid-login, the auth status
+  // poll returns awaiting_user + challenge_session_id. We swap the QR
+  // image for an SMS-relay panel keyed off this id.
+  const [challengeSessionId, setChallengeSessionId] = useState<string | null>(
+    null,
+  )
 
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tickTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -113,6 +120,11 @@ export function AuthQrModal({
         if (gen !== generationRef.current)
           return
         setServerStatus(res.status)
+        // P7: surface challenge_session_id (or clear it once the challenge
+        // resolves and sau drops back to a regular status). Render layer
+        // pivots to the SMS panel when status === awaiting_user and
+        // challengeSessionId is set.
+        setChallengeSessionId(res.challenge_session_id ?? null)
         if (res.status === 'success') {
           clearTimers()
           setPhase('success')
@@ -164,6 +176,7 @@ export function AuthQrModal({
     setErrorMsg(null)
     setServerStatus('waiting')
     setSession(null)
+    setChallengeSessionId(null)
     sessionIdRef.current = null
     try {
       const res = await startSocialPublishAuth({
@@ -282,48 +295,67 @@ export function AuthQrModal({
         </DialogDescription>
 
         <div className="mt-5 flex flex-col items-center gap-4">
-          <div className="relative flex h-56 w-56 items-center justify-center rounded-xl bg-slate-50">
-            {phase === 'starting' || !session
-              ? (
-                  <Spinner loading className="h-6 w-6 text-text-tertiary" />
-                )
-              : (
-                  <img
-                    src={normalizeQrSrc(session.qr_image_base64)}
-                    alt={t('auth.qrAltText')}
-                    className="h-52 w-52 object-contain"
-                  />
-                )}
-            {phase === 'success' && (
-              <div className="inset-0 absolute flex items-center justify-center rounded-xl bg-emerald-500/85 text-base font-semibold text-white">
-                {t('auth.successHint')}
-              </div>
-            )}
-          </div>
-
-          <p className="text-center text-sm text-text-secondary">{showHint}</p>
-
-          {phase === 'polling' && secondsLeft > 0 && (
-            <p className="text-xs text-text-tertiary">
-              {t('auth.secondsLeft', { seconds: secondsLeft })}
-            </p>
+          {/* P7: when sau surfaces an SMS challenge mid-login, swap the QR
+              image for the SMS-relay panel. The auth status poll keeps
+              running underneath so once sau marks the challenge resolved
+              the modal flips back to the QR / success view automatically. */}
+          {serverStatus === 'awaiting_user' && challengeSessionId && (
+            <SmsChallengePanel
+              challengeSessionId={challengeSessionId}
+              onTerminal={() => {
+                /* poll loop picks up the new status; nothing to do */
+              }}
+              onAbort={() => onOpenChange(false)}
+            />
           )}
+          {(serverStatus !== 'awaiting_user' || !challengeSessionId) && (
+            <>
+              <div className="relative flex h-56 w-56 items-center justify-center rounded-xl bg-slate-50">
+                {phase === 'starting' || !session
+                  ? (
+                      <Spinner loading className="h-6 w-6 text-text-tertiary" />
+                    )
+                  : (
+                      <img
+                        src={normalizeQrSrc(session.qr_image_base64)}
+                        alt={t('auth.qrAltText')}
+                        className="h-52 w-52 object-contain"
+                      />
+                    )}
+                {phase === 'success' && (
+                  <div className="inset-0 absolute flex items-center justify-center rounded-xl bg-emerald-500/85 text-base font-semibold text-white">
+                    {t('auth.successHint')}
+                  </div>
+                )}
+              </div>
 
-          <div className="mt-2 flex gap-2">
-            {canRefresh && (
-              <Button
-                variant="secondary"
-                onClick={start}
-                disabled={refreshDisabled}
-              >
-                <RiRefreshLine className="mr-1 h-4 w-4" />
-                {t('auth.refresh')}
-              </Button>
-            )}
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              {phase === 'success' ? t('auth.done') : t('auth.close')}
-            </Button>
-          </div>
+              <p className="text-center text-sm text-text-secondary">
+                {showHint}
+              </p>
+
+              {phase === 'polling' && secondsLeft > 0 && (
+                <p className="text-xs text-text-tertiary">
+                  {t('auth.secondsLeft', { seconds: secondsLeft })}
+                </p>
+              )}
+
+              <div className="mt-2 flex gap-2">
+                {canRefresh && (
+                  <Button
+                    variant="secondary"
+                    onClick={start}
+                    disabled={refreshDisabled}
+                  >
+                    <RiRefreshLine className="mr-1 h-4 w-4" />
+                    {t('auth.refresh')}
+                  </Button>
+                )}
+                <Button variant="ghost" onClick={() => onOpenChange(false)}>
+                  {phase === 'success' ? t('auth.done') : t('auth.close')}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>

@@ -69,35 +69,33 @@ register_schema_models(web_ns, MessageListQuery, MessageFeedbackPayload, Message
 
 @web_ns.route("/messages")
 class MessageListApi(WebApiResource):
-    @web_ns.doc("Get Message List")
-    @web_ns.doc(description="Retrieve paginated list of messages from a conversation in a chat application.")
     @web_ns.doc(
+        description="获取对话中的消息列表（分页，游标翻页，从旧到新）。"
+                    "仅适用于对话类应用。first_id 为游标，不传则从最新消息开始。",
         params={
-            "conversation_id": {"description": "Conversation UUID", "type": "string", "required": True},
+            "conversation_id": {"description": "对话 UUID", "type": "string", "required": True},
             "first_id": {
-                "description": "First message ID for pagination",
+                "description": "游标，当前页第一条消息 ID（用于向前翻页）",
                 "type": "string",
                 "required": False,
             },
             "limit": {
-                "description": "Number of messages to return (1-100)",
+                "description": "每页返回数量，范围 1-100，默认 20",
                 "type": "integer",
                 "required": False,
                 "default": 20,
             },
-        }
-    )
-    @web_ns.doc(
+        },
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "Conversation Not Found or Not a Chat App",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回消息列表",
+            401: "未认证",
+            403: "无访问权限",
+            404: "对话不存在或非对话类应用",
+            500: "服务器内部错误",
+        },
     )
     def get(self, app_model, end_user):
+        """获取对话消息列表"""
         app_mode = AppMode.value_of(app_model.mode)
         if app_mode not in {AppMode.CHAT, AppMode.AGENT_CHAT, AppMode.ADVANCED_CHAT}:
             raise NotChatAppError()
@@ -124,31 +122,20 @@ class MessageListApi(WebApiResource):
 
 @web_ns.route("/messages/<uuid:message_id>/feedbacks")
 class MessageFeedbackApi(WebApiResource):
-    @web_ns.doc("Create Message Feedback")
-    @web_ns.doc(description="Submit feedback (like/dislike) for a specific message.")
-    @web_ns.doc(params={"message_id": {"description": "Message UUID", "type": "string", "required": True}})
+    @web_ns.expect(web_ns.models[MessageFeedbackPayload.__name__])
     @web_ns.doc(
-        params={
-            "rating": {
-                "description": "Feedback rating",
-                "type": "string",
-                "enum": ["like", "dislike"],
-                "required": False,
-            },
-            "content": {"description": "Feedback content", "type": "string", "required": False},
-        }
-    )
-    @web_ns.doc(
+        description="对指定消息提交反馈（点赞 / 踩）。"
+                    "rating 传 null 可撤销已有反馈，content 为可选备注。",
+        params={"message_id": {"description": "消息 UUID", "type": "string", "required": True}},
         responses={
-            200: "Feedback submitted successfully",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "Message Not Found",
-            500: "Internal Server Error",
-        }
+            200: "反馈提交成功",
+            401: "未认证",
+            403: "无访问权限",
+            404: "消息不存在",
+        },
     )
     def post(self, app_model, end_user, message_id):
+        """提交消息反馈"""
         message_id = str(message_id)
 
         payload = MessageFeedbackPayload.model_validate(web_ns.payload or {})
@@ -169,20 +156,29 @@ class MessageFeedbackApi(WebApiResource):
 
 @web_ns.route("/messages/<uuid:message_id>/more-like-this")
 class MessageMoreLikeThisApi(WebApiResource):
-    @web_ns.doc("Generate More Like This")
-    @web_ns.doc(description="Generate a new completion similar to an existing message (completion apps only).")
-    @web_ns.expect(web_ns.models[MessageMoreLikeThisQuery.__name__])
     @web_ns.doc(
+        description="根据已有消息生成类似内容（仅文本生成类应用，且需开启「更多类似结果」功能）。"
+                    "通过 response_mode 参数选择 blocking 或 streaming 响应模式。",
+        params={
+            "message_id": {"description": "消息 UUID", "type": "string", "required": True},
+            "response_mode": {
+                "description": "响应模式：blocking 或 streaming",
+                "type": "string",
+                "enum": ["blocking", "streaming"],
+                "required": True,
+            },
+        },
         responses={
-            200: "Success",
-            400: "Bad Request - Not a completion app or feature disabled",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "Message Not Found",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回生成内容",
+            400: "请求错误或功能未开启",
+            401: "未认证",
+            403: "无访问权限",
+            404: "消息不存在",
+            500: "服务器内部错误",
+        },
     )
     def get(self, app_model, end_user, message_id):
+        """生成类似消息内容"""
         if app_model.mode != "completion":
             raise NotCompletionAppError()
 
@@ -224,20 +220,20 @@ class MessageMoreLikeThisApi(WebApiResource):
 
 @web_ns.route("/messages/<uuid:message_id>/suggested-questions")
 class MessageSuggestedQuestionApi(WebApiResource):
-    @web_ns.doc("Get Suggested Questions")
-    @web_ns.doc(description="Get suggested follow-up questions after a message (chat apps only).")
-    @web_ns.doc(params={"message_id": {"description": "Message UUID", "type": "string", "required": True}})
     @web_ns.doc(
+        description="获取消息的建议追问问题（仅对话类应用，且需开启「回答后建议问题」功能）。",
+        params={"message_id": {"description": "消息 UUID", "type": "string", "required": True}},
         responses={
-            200: "Success",
-            400: "Bad Request - Not a chat app or feature disabled",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "Message Not Found or Conversation Not Found",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回建议问题列表",
+            400: "请求错误或功能未开启",
+            401: "未认证",
+            403: "无访问权限",
+            404: "消息或对话不存在",
+            500: "服务器内部错误",
+        },
     )
     def get(self, app_model, end_user, message_id):
+        """获取消息的建议追问问题"""
         app_mode = AppMode.value_of(app_model.mode)
         if app_mode not in {AppMode.CHAT, AppMode.AGENT_CHAT, AppMode.ADVANCED_CHAT}:
             raise NotChatAppError()

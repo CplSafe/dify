@@ -72,13 +72,20 @@ class HumanInputFormApi(Resource):
 
     # NOTE(QuantumGhost): this endpoint is unauthenticated on purpose for now.
 
+    @web_ns.doc(
+        description="通过表单令牌获取人工输入表单定义。"
+                    "此接口故意设计为公开接口（无需认证），供外部用户填写工作流人工输入表单。"
+                    "有访问频率限制（IP 级别）。",
+        params={"form_token": {"description": "表单访问令牌", "type": "string", "required": True}},
+        responses={
+            200: "成功，返回表单定义（含输入字段和操作按钮）",
+            404: "表单不存在或已失效",
+            429: "访问频率超限",
+        },
+    )
     # def get(self, _app_model: App, _end_user: EndUser, form_token: str):
     def get(self, form_token: str):
-        """
-        Get human input form definition by token.
-
-        GET /api/form/human_input/<form_token>
-        """
+        """获取人工输入表单定义"""
         ip_address = extract_remote_ip(request)
         if _FORM_ACCESS_RATE_LIMITER.is_rate_limited(ip_address):
             raise WebFormRateLimitExceededError()
@@ -97,21 +104,20 @@ class HumanInputFormApi(Resource):
 
         return _jsonify_form_definition(form, site_payload=serialize_app_site_payload(app_model, site, None))
 
+    @web_ns.doc(
+        description="提交人工输入表单。"
+                    "用户填写表单后，系统将触发对应的工作流步骤继续执行。"
+                    "有提交频率限制（IP 级别）。",
+        params={"form_token": {"description": "表单访问令牌", "type": "string", "required": True}},
+        responses={
+            200: "提交成功",
+            404: "表单不存在",
+            429: "提交频率超限",
+        },
+    )
     # def post(self, _app_model: App, _end_user: EndUser, form_token: str):
     def post(self, form_token: str):
-        """
-        Submit human input form by token.
-
-        POST /api/form/human_input/<form_token>
-
-        Request body:
-        {
-            "inputs": {
-                "content": "User input content"
-            },
-            "action": "Approve"
-        }
-        """
+        """提交人工输入表单"""
         parser = reqparse.RequestParser()
         parser.add_argument("inputs", type=dict, required=True, location="json")
         parser.add_argument("action", type=str, required=True, location="json")

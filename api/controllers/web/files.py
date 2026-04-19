@@ -20,42 +20,20 @@ register_schema_models(web_ns, FileResponse)
 
 @web_ns.route("/files/upload")
 class FileApi(WebApiResource):
-    @web_ns.doc("upload_file")
-    @web_ns.doc(description="Upload a file for use in web applications")
     @web_ns.doc(
+        description="上传文件供 Web 应用使用（multipart/form-data）。"
+                    "支持图片、文档、音频等多种文件类型，会自动校验文件大小和格式。"
+                    "上传成功后返回文件 ID，可在后续消息请求的 files 字段中引用。",
         responses={
-            201: "File uploaded successfully",
-            400: "Bad request - invalid file or parameters",
-            413: "File too large",
-            415: "Unsupported file type",
-        }
+            201: "上传成功，返回文件信息",
+            400: "请求错误（未上传文件、文件名缺失等）",
+            413: "文件过大",
+            415: "不支持的文件类型",
+        },
     )
-    @web_ns.response(201, "File uploaded successfully", web_ns.models[FileResponse.__name__])
+    @web_ns.response(201, "上传成功", web_ns.models[FileResponse.__name__])
     def post(self, app_model, end_user):
-        """Upload a file for use in web applications.
-
-        Accepts file uploads for use within web applications, supporting
-        multiple file types with automatic validation and storage.
-
-        Args:
-            app_model: The associated application model
-            end_user: The end user uploading the file
-
-        Form Parameters:
-            file: The file to upload (required)
-            source: Optional source type (datasets or None)
-
-        Returns:
-            dict: File information including ID, URL, and metadata
-            int: HTTP status code 201 for success
-
-        Raises:
-            NoFileUploadedError: No file provided in request
-            TooManyFilesError: Multiple files provided (only one allowed)
-            FilenameNotExistsError: File has no filename
-            FileTooLargeError: File exceeds size limit
-            UnsupportedFileTypeError: File type not supported
-        """
+        """上传文件"""
         if "file" not in request.files:
             raise NoFileUploadedError()
 

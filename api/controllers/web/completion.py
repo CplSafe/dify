@@ -73,20 +73,22 @@ register_schema_models(web_ns, CompletionMessagePayload, ChatMessagePayload)
 # define completion api for user
 @web_ns.route("/completion-messages")
 class CompletionApi(WebApiResource):
-    @web_ns.doc("Create Completion Message")
-    @web_ns.doc(description="Create a completion message for text generation applications.")
     @web_ns.expect(web_ns.models[CompletionMessagePayload.__name__])
     @web_ns.doc(
+        description="向文本生成类应用发送补全请求。"
+                    "支持 blocking（同步等待完整结果）和 streaming（SSE 流式返回）两种模式。"
+                    "仅适用于 completion 模式应用。",
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "App Not Found",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回生成内容",
+            400: "请求错误",
+            401: "未认证",
+            403: "无访问权限",
+            404: "应用不存在",
+            500: "服务器内部错误",
+        },
     )
     def post(self, app_model, end_user):
+        """发送补全请求（文本生成应用）"""
         if app_model.mode != AppMode.COMPLETION:
             raise NotCompletionAppError()
 
@@ -126,20 +128,19 @@ class CompletionApi(WebApiResource):
 
 @web_ns.route("/completion-messages/<string:task_id>/stop")
 class CompletionStopApi(WebApiResource):
-    @web_ns.doc("Stop Completion Message")
-    @web_ns.doc(description="Stop a running completion message task.")
-    @web_ns.doc(params={"task_id": {"description": "Task ID to stop", "type": "string", "required": True}})
     @web_ns.doc(
+        description="停止正在运行的文本补全任务（streaming 模式）。"
+                    "前端点击「停止」按钮时调用，task_id 从流式响应的第一个事件中获取。",
+        params={"task_id": {"description": "要停止的任务 ID", "type": "string", "required": True}},
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "Task Not Found",
-            500: "Internal Server Error",
-        }
+            200: "停止成功",
+            401: "未认证",
+            403: "无访问权限",
+            404: "任务不存在",
+        },
     )
     def post(self, app_model, end_user, task_id):
+        """停止文本补全任务"""
         if app_model.mode != AppMode.COMPLETION:
             raise NotCompletionAppError()
 
@@ -155,20 +156,22 @@ class CompletionStopApi(WebApiResource):
 
 @web_ns.route("/chat-messages")
 class ChatApi(WebApiResource):
-    @web_ns.doc("Create Chat Message")
-    @web_ns.doc(description="Create a chat message for conversational applications.")
     @web_ns.expect(web_ns.models[ChatMessagePayload.__name__])
     @web_ns.doc(
+        description="向对话类应用发送聊天消息。"
+                    "支持 blocking 和 streaming 两种响应模式。"
+                    "仅适用于 chat / agent_chat / advanced_chat 模式应用。",
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "App Not Found",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回聊天回复",
+            400: "请求错误",
+            401: "未认证",
+            403: "无访问权限",
+            404: "对话不存在或应用不存在",
+            500: "服务器内部错误",
+        },
     )
     def post(self, app_model, end_user):
+        """发送聊天消息"""
         app_mode = AppMode.value_of(app_model.mode)
         if app_mode not in {AppMode.CHAT, AppMode.AGENT_CHAT, AppMode.ADVANCED_CHAT}:
             raise NotChatAppError()
@@ -213,20 +216,19 @@ class ChatApi(WebApiResource):
 
 @web_ns.route("/chat-messages/<string:task_id>/stop")
 class ChatStopApi(WebApiResource):
-    @web_ns.doc("Stop Chat Message")
-    @web_ns.doc(description="Stop a running chat message task.")
-    @web_ns.doc(params={"task_id": {"description": "Task ID to stop", "type": "string", "required": True}})
     @web_ns.doc(
+        description="停止正在运行的聊天消息流式任务（streaming 模式）。"
+                    "task_id 从流式响应的第一个事件中获取。",
+        params={"task_id": {"description": "要停止的任务 ID", "type": "string", "required": True}},
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "Task Not Found",
-            500: "Internal Server Error",
-        }
+            200: "停止成功",
+            401: "未认证",
+            403: "无访问权限",
+            404: "任务不存在",
+        },
     )
     def post(self, app_model, end_user, task_id):
+        """停止聊天消息任务"""
         app_mode = AppMode.value_of(app_model.mode)
         if app_mode not in {AppMode.CHAT, AppMode.AGENT_CHAT, AppMode.ADVANCED_CHAT}:
             raise NotChatAppError()

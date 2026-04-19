@@ -63,20 +63,20 @@ class LoginApi(Resource):
     @web_ns.expect(web_ns.models[LoginPayload.__name__])
     @setup_required
     @only_edition_enterprise
-    @web_ns.doc("web_app_login")
-    @web_ns.doc(description="Authenticate user for web application access")
     @web_ns.doc(
+        description="企业版 Web 应用账号密码登录。"
+                    "登录成功后返回 access_token，后续请求需在 Authorization 头中携带该令牌。",
         responses={
-            200: "Authentication successful",
-            400: "Bad request - invalid email or password format",
-            401: "Authentication failed - email or password mismatch",
-            403: "Account banned or login disabled",
-            404: "Account not found",
-        }
+            200: "登录成功，返回 access_token",
+            400: "请求格式错误（邮箱或密码格式不合法）",
+            401: "认证失败（邮箱或密码错误）",
+            403: "账号已封禁或该版本不支持此登录方式",
+            404: "账号不存在",
+        },
     )
     @decrypt_password_field
     def post(self):
-        """Authenticate user and login."""
+        """企业版 Web 应用账号密码登录"""
         payload = LoginPayload.model_validate(web_ns.payload or {})
 
         try:
@@ -99,15 +99,20 @@ class LoginApi(Resource):
 @web_ns.route("/login/status")
 class LoginStatusApi(Resource):
     @setup_required
-    @web_ns.doc("web_app_login_status")
-    @web_ns.doc(description="Check login status")
     @web_ns.doc(
+        description="检查当前用户及应用的登录状态。"
+                    "前端可通过此接口判断是否需要跳转到登录页，"
+                    "返回 logged_in（用户级别）和 app_logged_in（应用级别）两个状态位。",
+        params={
+            "app_code": "可选，Web 应用 code，用于检查应用级别登录状态",
+            "user_id": "可选，用户 ID",
+        },
         responses={
-            200: "Login status",
-            401: "Login status",
-        }
+            200: "成功，返回登录状态",
+        },
     )
     def get(self):
+        """检查用户及应用登录状态"""
         app_code = request.args.get("app_code")
         user_id = request.args.get("user_id")
         token = extract_webapp_access_token(request)
@@ -146,14 +151,15 @@ class LoginStatusApi(Resource):
 @web_ns.route("/logout")
 class LogoutApi(Resource):
     @setup_required
-    @web_ns.doc("web_app_logout")
-    @web_ns.doc(description="Logout user from web application")
     @web_ns.doc(
+        description="退出登录，清除 Cookie 中的 access_token。"
+                    "企业 SSO 场景下 Cookie SameSite=None，需通过此接口主动清除。",
         responses={
-            200: "Logout successful",
-        }
+            200: "退出成功",
+        },
     )
     def post(self):
+        """退出 Web 应用登录"""
         response = make_response({"result": "success"})
         # enterprise SSO sets same site to None in https deployment
         # so we need to logout by calling api
@@ -165,17 +171,18 @@ class LogoutApi(Resource):
 class EmailCodeLoginSendEmailApi(Resource):
     @setup_required
     @only_edition_enterprise
-    @web_ns.doc("send_email_code_login")
-    @web_ns.doc(description="Send email verification code for login")
     @web_ns.expect(web_ns.models[EmailCodeLoginSendPayload.__name__])
     @web_ns.doc(
+        description="发送邮箱验证码登录邮件（企业版）。"
+                    "调用后系统向指定邮箱发送验证码，用户需在 /email-code-login/validity 接口提交验证码完成登录。",
         responses={
-            200: "Email code sent successfully",
-            400: "Bad request - invalid email format",
-            404: "Account not found",
-        }
+            200: "邮件发送成功，返回 token",
+            400: "请求格式错误（邮箱格式不合法）",
+            401: "认证失败（邮箱不存在）",
+        },
     )
     def post(self):
+        """发送邮箱验证码登录邮件"""
         payload = EmailCodeLoginSendPayload.model_validate(web_ns.payload or {})
 
         if payload.language == "zh-Hans":
@@ -195,19 +202,21 @@ class EmailCodeLoginSendEmailApi(Resource):
 class EmailCodeLoginApi(Resource):
     @setup_required
     @only_edition_enterprise
-    @web_ns.doc("verify_email_code_login")
-    @web_ns.doc(description="Verify email code and complete login")
     @web_ns.expect(web_ns.models[EmailCodeLoginVerifyPayload.__name__])
     @web_ns.doc(
+        description="验证邮箱验证码并完成登录（企业版）。"
+                    "需传入 /email-code-login 返回的 token、邮箱和用户收到的验证码。"
+                    "验证通过后返回 access_token。",
         responses={
-            200: "Email code verified and login successful",
-            400: "Bad request - invalid code or token",
-            401: "Invalid token or expired code",
-            404: "Account not found",
-        }
+            200: "验证成功，返回 access_token",
+            400: "请求格式错误",
+            401: "token 无效或验证码错误",
+            404: "账号不存在",
+        },
     )
     @decrypt_code_field
     def post(self):
+        """验证邮箱验证码并完成登录"""
         payload = EmailCodeLoginVerifyPayload.model_validate(web_ns.payload or {})
 
         user_email = payload.email.lower()

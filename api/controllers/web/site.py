@@ -75,21 +75,19 @@ class AppSiteApi(WebApiResource):
     site_fields = _site_model
     app_fields = _app_model
 
-    @web_ns.doc("Get App Site Info")
-    @web_ns.doc(description="Retrieve app site information and configuration.")
     @web_ns.doc(
+        description="获取 Web 应用站点信息，包括标题、图标、颜色主题、版权声明等配置。"
+                    "前端初始化时调用此接口以渲染站点外观。",
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "App Not Found",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回站点及应用配置",
+            401: "未认证，缺少或无效的访问令牌",
+            403: "应用未开放站点访问，或租户已归档",
+            404: "应用不存在",
+        },
     )
     @marshal_with(app_fields)
     def get(self, app_model, end_user):
-        """Retrieve app site info."""
+        """获取 Web 应用站点信息"""
         # get site
         site = db.session.scalar(select(Site).where(Site.app_id == app_model.id).limit(1))
 

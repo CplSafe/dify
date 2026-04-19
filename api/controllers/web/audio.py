@@ -60,21 +60,21 @@ class AudioApi(WebApiResource):
     }
 
     @marshal_with(audio_to_text_response_fields)
-    @web_ns.doc("Audio to Text")
-    @web_ns.doc(description="Convert audio file to text using speech-to-text service.")
     @web_ns.doc(
+        description="语音转文字（ASR）。上传音频文件，返回识别后的文本内容。"
+                    "通过 multipart/form-data 上传 file 字段。",
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            413: "Audio file too large",
-            415: "Unsupported audio type",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回识别文本",
+            400: "请求错误",
+            401: "未认证",
+            403: "无访问权限",
+            413: "音频文件过大",
+            415: "不支持的音频格式",
+            500: "服务器内部错误",
+        },
     )
     def post(self, app_model: App, end_user):
-        """Convert audio to text"""
+        """语音转文字"""
         file = request.files["file"]
 
         try:
@@ -110,19 +110,19 @@ class AudioApi(WebApiResource):
 @web_ns.route("/text-to-audio")
 class TextApi(WebApiResource):
     @web_ns.expect(web_ns.models[TextToAudioPayload.__name__])
-    @web_ns.doc("Text to Audio")
-    @web_ns.doc(description="Convert text to audio using text-to-speech service.")
     @web_ns.doc(
+        description="文字转语音（TTS）。传入消息 ID 或直接传入文本，"
+                    "返回音频流（audio/mpeg）。可通过 voice 参数指定音色。",
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回音频流",
+            400: "请求错误",
+            401: "未认证",
+            403: "无访问权限",
+            500: "服务器内部错误",
+        },
     )
     def post(self, app_model: App, end_user):
-        """Convert text to audio"""
+        """文字转语音"""
         try:
             payload = TextToAudioPayload.model_validate(web_ns.payload or {})
 

@@ -22,16 +22,18 @@ from services.webapp_auth_service import WebAppAuthService, WebAppAuthType
 class PassportResource(Resource):
     """Base resource for passport."""
 
-    @web_ns.doc("get_passport")
-    @web_ns.doc(description="Get authentication passport for web application access")
     @web_ns.doc(
+        description="获取 Web 应用访问通行证（Passport）。"
+                    "前端初始化时调用此接口，返回 JWT access_token，"
+                    "后续所有接口需在 Authorization 或 X-App-Code 头中携带该令牌。",
         responses={
-            200: "Passport retrieved successfully",
-            401: "Unauthorized - missing app code or invalid authentication",
-            404: "Application or user not found",
-        }
+            200: "成功返回 access_token",
+            401: "未授权，缺少 X-App-Code 头或认证信息无效",
+            404: "应用或用户不存在",
+        },
     )
     def get(self):
+        """获取 Web 应用访问通行证"""
         system_features = FeatureService.get_system_features()
         app_code = request.headers.get(HEADER_NAME_APP_CODE)
         user_id = request.args.get("user_id")

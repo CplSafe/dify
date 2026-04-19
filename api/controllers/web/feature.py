@@ -6,26 +6,16 @@ from services.feature_service import FeatureService
 
 @web_ns.route("/system-features")
 class SystemFeatureApi(Resource):
-    @web_ns.doc("get_system_features")
-    @web_ns.doc(description="Get system feature flags and configuration")
-    @web_ns.doc(responses={200: "System features retrieved successfully", 500: "Internal server error"})
+    @web_ns.doc(
+        description="获取系统功能开关及配置（无需认证）。"
+                    "Web 应用初始化时调用，用于判断当前系统启用了哪些功能特性。"
+                    "此接口故意设计为公开接口，避免认证与初始化循环依赖，"
+                    "仅返回非敏感配置数据。",
+        responses={
+            200: "成功，返回系统功能配置",
+            500: "服务器内部错误",
+        },
+    )
     def get(self):
-        """Get system feature flags and configuration.
-
-        Returns the current system feature flags and configuration
-        that control various functionalities across the platform.
-
-        Returns:
-            dict: System feature configuration object
-
-        This endpoint is akin to the `SystemFeatureApi` endpoint in api/controllers/console/feature.py,
-        except it is intended for use by the web app, instead of the console dashboard.
-
-        NOTE: This endpoint is unauthenticated by design, as it provides system features
-        data required for webapp initialization.
-
-        Authentication would create circular dependency (can't authenticate without webapp loading).
-
-        Only non-sensitive configuration data should be returned by this endpoint.
-        """
+        """获取系统功能开关及配置"""
         return FeatureService.get_system_features().model_dump()

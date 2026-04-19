@@ -45,23 +45,22 @@ register_schema_models(web_ns, WorkflowRunPayload)
 
 @web_ns.route("/workflows/run")
 class WorkflowRunApi(WebApiResource):
-    @web_ns.doc("Run Workflow")
-    @web_ns.doc(description="Execute a workflow with provided inputs and files.")
     @web_ns.expect(web_ns.models[WorkflowRunPayload.__name__])
     @web_ns.doc(
+        description="执行工作流应用，传入输入变量和文件。"
+                    "以 SSE 流式方式返回工作流运行过程中的各节点事件。"
+                    "仅适用于 workflow 模式应用。",
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "App Not Found",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回工作流执行事件流",
+            400: "请求错误",
+            401: "未认证",
+            403: "无访问权限",
+            404: "应用不存在",
+            500: "服务器内部错误",
+        },
     )
     def post(self, app_model: App, end_user: EndUser):
-        """
-        Run workflow
-        """
+        """执行工作流"""
         app_mode = AppMode.value_of(app_model.mode)
         if app_mode != AppMode.WORKFLOW:
             raise NotWorkflowAppError()
@@ -96,27 +95,20 @@ class WorkflowRunApi(WebApiResource):
 
 @web_ns.route("/workflows/tasks/<string:task_id>/stop")
 class WorkflowTaskStopApi(WebApiResource):
-    @web_ns.doc("Stop Workflow Task")
-    @web_ns.doc(description="Stop a running workflow task.")
     @web_ns.doc(
+        description="停止正在运行的工作流任务。task_id 从流式事件的 workflow_started 事件中获取。",
         params={
-            "task_id": {"description": "Task ID to stop", "type": "string", "required": True},
-        }
-    )
-    @web_ns.doc(
+            "task_id": {"description": "要停止的任务 ID", "type": "string", "required": True},
+        },
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "Task Not Found",
-            500: "Internal Server Error",
-        }
+            200: "停止成功",
+            401: "未认证",
+            403: "无访问权限",
+            404: "任务不存在",
+        },
     )
     def post(self, app_model: App, end_user: EndUser, task_id: str):
-        """
-        Stop workflow task
-        """
+        """停止工作流任务"""
         app_mode = AppMode.value_of(app_model.mode)
         if app_mode != AppMode.WORKFLOW:
             raise NotWorkflowAppError()

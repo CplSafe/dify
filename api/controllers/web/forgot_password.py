@@ -56,17 +56,19 @@ class ForgotPasswordSendEmailApi(Resource):
     @only_edition_enterprise
     @setup_required
     @email_password_login_enabled
-    @web_ns.doc("send_forgot_password_email")
-    @web_ns.doc(description="Send password reset email")
     @web_ns.doc(
+        description="发送密码重置邮件（企业版）。"
+                    "系统向指定邮箱发送包含验证码的重置邮件，"
+                    "随后需在 /forgot-password/validity 接口验证验证码。",
         responses={
-            200: "Password reset email sent successfully",
-            400: "Bad request - invalid email format",
-            404: "Account not found",
-            429: "Too many requests - rate limit exceeded",
-        }
+            200: "邮件发送成功，返回 token",
+            400: "请求格式错误（邮箱格式不合法）",
+            401: "认证失败（邮箱不存在）",
+            429: "请求频率超限（同 IP 发送次数过多）",
+        },
     )
     def post(self):
+        """发送密码重置邮件"""
         payload = ForgotPasswordSendPayload.model_validate(web_ns.payload or {})
 
         request_email = payload.email
@@ -98,12 +100,17 @@ class ForgotPasswordCheckApi(Resource):
     @only_edition_enterprise
     @setup_required
     @email_password_login_enabled
-    @web_ns.doc("check_forgot_password_token")
-    @web_ns.doc(description="Verify password reset token validity")
     @web_ns.doc(
-        responses={200: "Token is valid", 400: "Bad request - invalid token format", 401: "Invalid or expired token"}
+        description="验证密码重置验证码有效性（企业版）。"
+                    "验证通过后返回新 token，需在 /forgot-password/resets 接口用此 token 完成密码重置。",
+        responses={
+            200: "验证成功，返回新 token",
+            400: "请求格式错误",
+            401: "验证码无效、过期，或超出错误次数限制",
+        },
     )
     def post(self):
+        """验证密码重置验证码"""
         payload = ForgotPasswordCheckPayload.model_validate(web_ns.payload or {})
 
         user_email = payload.email.lower()
@@ -146,17 +153,19 @@ class ForgotPasswordResetApi(Resource):
     @only_edition_enterprise
     @setup_required
     @email_password_login_enabled
-    @web_ns.doc("reset_password")
-    @web_ns.doc(description="Reset user password with verification token")
     @web_ns.doc(
+        description="重置用户密码（企业版）。"
+                    "需传入 /forgot-password/validity 返回的 token、新密码及确认密码。"
+                    "成功后原 token 自动失效，防止重放攻击。",
         responses={
-            200: "Password reset successfully",
-            400: "Bad request - invalid parameters or password mismatch",
-            401: "Invalid or expired token",
-            404: "Account not found",
-        }
+            200: "密码重置成功",
+            400: "请求格式错误（两次密码不一致或密码强度不足）",
+            401: "token 无效或已过期",
+            404: "账号不存在",
+        },
     )
     def post(self):
+        """重置用户密码"""
         payload = ForgotPasswordResetPayload.model_validate(web_ns.payload or {})
 
         # Validate passwords match

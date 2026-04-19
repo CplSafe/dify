@@ -54,43 +54,41 @@ register_schema_models(web_ns, ConversationListQuery, ConversationRenamePayload)
 
 @web_ns.route("/conversations")
 class ConversationListApi(WebApiResource):
-    @web_ns.doc("Get Conversation List")
-    @web_ns.doc(description="Retrieve paginated list of conversations for a chat application.")
     @web_ns.doc(
+        description="获取对话列表（分页，游标翻页）。仅适用于对话类应用。"
+                    "支持按置顶状态过滤和多种排序方式。",
         params={
-            "last_id": {"description": "Last conversation ID for pagination", "type": "string", "required": False},
+            "last_id": {"description": "游标，上一页最后一条对话 ID", "type": "string", "required": False},
             "limit": {
-                "description": "Number of conversations to return (1-100)",
+                "description": "每页返回数量，范围 1-100，默认 20",
                 "type": "integer",
                 "required": False,
                 "default": 20,
             },
             "pinned": {
-                "description": "Filter by pinned status",
+                "description": "按置顶状态过滤，true 只返回置顶，false 只返回未置顶",
                 "type": "string",
                 "enum": ["true", "false"],
                 "required": False,
             },
             "sort_by": {
-                "description": "Sort order",
+                "description": "排序方式，默认 -updated_at（最新更新在前）",
                 "type": "string",
                 "enum": ["created_at", "-created_at", "updated_at", "-updated_at"],
                 "required": False,
                 "default": "-updated_at",
             },
-        }
-    )
-    @web_ns.doc(
+        },
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "App Not Found or Not a Chat App",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回对话列表",
+            401: "未认证",
+            403: "无访问权限",
+            404: "应用不存在或非对话类应用",
+            500: "服务器内部错误",
+        },
     )
     def get(self, app_model, end_user):
+        """获取对话列表"""
         app_mode = AppMode.value_of(app_model.mode)
         if app_mode not in {AppMode.CHAT, AppMode.AGENT_CHAT, AppMode.ADVANCED_CHAT}:
             raise NotChatAppError()
@@ -123,20 +121,18 @@ class ConversationListApi(WebApiResource):
 
 @web_ns.route("/conversations/<uuid:c_id>")
 class ConversationApi(WebApiResource):
-    @web_ns.doc("Delete Conversation")
-    @web_ns.doc(description="Delete a specific conversation.")
-    @web_ns.doc(params={"c_id": {"description": "Conversation UUID", "type": "string", "required": True}})
     @web_ns.doc(
+        description="删除指定对话。仅适用于对话类应用。",
+        params={"c_id": {"description": "对话 UUID", "type": "string", "required": True}},
         responses={
-            204: "Conversation deleted successfully",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "Conversation Not Found or Not a Chat App",
-            500: "Internal Server Error",
-        }
+            204: "删除成功",
+            401: "未认证",
+            403: "无访问权限",
+            404: "对话不存在或非对话类应用",
+        },
     )
     def delete(self, app_model, end_user, c_id):
+        """删除对话"""
         app_mode = AppMode.value_of(app_model.mode)
         if app_mode not in {AppMode.CHAT, AppMode.AGENT_CHAT, AppMode.ADVANCED_CHAT}:
             raise NotChatAppError()
@@ -151,31 +147,20 @@ class ConversationApi(WebApiResource):
 
 @web_ns.route("/conversations/<uuid:c_id>/name")
 class ConversationRenameApi(WebApiResource):
-    @web_ns.doc("Rename Conversation")
-    @web_ns.doc(description="Rename a specific conversation with a custom name or auto-generate one.")
-    @web_ns.doc(params={"c_id": {"description": "Conversation UUID", "type": "string", "required": True}})
+    @web_ns.expect(web_ns.models[ConversationRenamePayload.__name__])
     @web_ns.doc(
-        params={
-            "name": {"description": "New conversation name", "type": "string", "required": False},
-            "auto_generate": {
-                "description": "Auto-generate conversation name",
-                "type": "boolean",
-                "required": False,
-                "default": False,
-            },
-        }
-    )
-    @web_ns.doc(
+        description="重命名对话，或根据第一条消息自动生成对话名称。",
+        params={"c_id": {"description": "对话 UUID", "type": "string", "required": True}},
         responses={
-            200: "Conversation renamed successfully",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "Conversation Not Found or Not a Chat App",
-            500: "Internal Server Error",
-        }
+            200: "重命名成功，返回对话信息",
+            400: "请求格式错误",
+            401: "未认证",
+            403: "无访问权限",
+            404: "对话不存在或非对话类应用",
+        },
     )
     def post(self, app_model, end_user, c_id):
+        """重命名对话"""
         app_mode = AppMode.value_of(app_model.mode)
         if app_mode not in {AppMode.CHAT, AppMode.AGENT_CHAT, AppMode.ADVANCED_CHAT}:
             raise NotChatAppError()
@@ -199,20 +184,18 @@ class ConversationRenameApi(WebApiResource):
 
 @web_ns.route("/conversations/<uuid:c_id>/pin")
 class ConversationPinApi(WebApiResource):
-    @web_ns.doc("Pin Conversation")
-    @web_ns.doc(description="Pin a specific conversation to keep it at the top of the list.")
-    @web_ns.doc(params={"c_id": {"description": "Conversation UUID", "type": "string", "required": True}})
     @web_ns.doc(
+        description="置顶对话，使其显示在对话列表顶部。",
+        params={"c_id": {"description": "对话 UUID", "type": "string", "required": True}},
         responses={
-            200: "Conversation pinned successfully",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "Conversation Not Found or Not a Chat App",
-            500: "Internal Server Error",
-        }
+            200: "置顶成功",
+            401: "未认证",
+            403: "无访问权限",
+            404: "对话不存在或非对话类应用",
+        },
     )
     def patch(self, app_model, end_user, c_id):
+        """置顶对话"""
         app_mode = AppMode.value_of(app_model.mode)
         if app_mode not in {AppMode.CHAT, AppMode.AGENT_CHAT, AppMode.ADVANCED_CHAT}:
             raise NotChatAppError()
@@ -229,20 +212,18 @@ class ConversationPinApi(WebApiResource):
 
 @web_ns.route("/conversations/<uuid:c_id>/unpin")
 class ConversationUnPinApi(WebApiResource):
-    @web_ns.doc("Unpin Conversation")
-    @web_ns.doc(description="Unpin a specific conversation to remove it from the top of the list.")
-    @web_ns.doc(params={"c_id": {"description": "Conversation UUID", "type": "string", "required": True}})
     @web_ns.doc(
+        description="取消置顶对话，将其从置顶位置移除。",
+        params={"c_id": {"description": "对话 UUID", "type": "string", "required": True}},
         responses={
-            200: "Conversation unpinned successfully",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "Conversation Not Found or Not a Chat App",
-            500: "Internal Server Error",
-        }
+            200: "取消置顶成功",
+            401: "未认证",
+            403: "无访问权限",
+            404: "对话不存在或非对话类应用",
+        },
     )
     def patch(self, app_model, end_user, c_id):
+        """取消置顶对话"""
         app_mode = AppMode.value_of(app_model.mode)
         if app_mode not in {AppMode.CHAT, AppMode.AGENT_CHAT, AppMode.ADVANCED_CHAT}:
             raise NotChatAppError()

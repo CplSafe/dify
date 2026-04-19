@@ -39,20 +39,19 @@ register_schema_models(web_ns, AppAccessModeQuery)
 class AppParameterApi(WebApiResource):
     """Resource for app variables."""
 
-    @web_ns.doc("Get App Parameters")
-    @web_ns.doc(description="Retrieve the parameters for a specific app.")
     @web_ns.doc(
+        description="获取应用的参数配置，包括开场白、建议问题、用户输入表单字段等。"
+                    "前端初始化聊天/工作流界面时调用，用于渲染输入表单和提示信息。",
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "App Not Found",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回参数配置",
+            401: "未认证",
+            403: "无访问权限",
+            404: "应用不存在或配置缺失",
+            500: "服务器内部错误",
+        },
     )
     def get(self, app_model: App, end_user):
-        """Retrieve app parameters."""
+        """获取应用参数配置"""
         if app_model.mode in {AppMode.ADVANCED_CHAT, AppMode.WORKFLOW}:
             workflow = app_model.workflow
             if workflow is None:
@@ -75,41 +74,39 @@ class AppParameterApi(WebApiResource):
 
 @web_ns.route("/meta")
 class AppMeta(WebApiResource):
-    @web_ns.doc("Get App Meta")
-    @web_ns.doc(description="Retrieve the metadata for a specific app.")
     @web_ns.doc(
+        description="获取应用元数据，包括工具图标、工具描述等信息。"
+                    "前端渲染 Agent 工具列表等场景时使用。",
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden",
-            404: "App Not Found",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回元数据",
+            401: "未认证",
+            403: "无访问权限",
+            404: "应用不存在",
+            500: "服务器内部错误",
+        },
     )
     def get(self, app_model: App, end_user):
-        """Get app meta"""
+        """获取应用元数据"""
         return AppService().get_app_meta(app_model)
 
 
 @web_ns.route("/webapp/access-mode")
 class AppAccessMode(Resource):
-    @web_ns.doc("Get App Access Mode")
-    @web_ns.doc(description="Retrieve the access mode for a web application (public or restricted).")
     @web_ns.doc(
+        description="查询 Web 应用的访问模式（public / internal / external）。"
+                    "前端据此判断是否需要引导用户登录。",
         params={
-            "appId": {"description": "Application ID", "type": "string", "required": False},
-            "appCode": {"description": "Application code", "type": "string", "required": False},
-        }
-    )
-    @web_ns.doc(
+            "appId": {"description": "应用 ID", "type": "string", "required": False},
+            "appCode": {"description": "应用 code", "type": "string", "required": False},
+        },
         responses={
-            200: "Success",
-            400: "Bad Request",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回 accessMode",
+            400: "参数错误",
+            500: "服务器内部错误",
+        },
     )
     def get(self):
+        """查询 Web 应用访问模式"""
         raw_args = request.args.to_dict()
         args = AppAccessModeQuery.model_validate(raw_args)
 
@@ -131,18 +128,19 @@ class AppAccessMode(Resource):
 
 @web_ns.route("/webapp/permission")
 class AppWebAuthPermission(Resource):
-    @web_ns.doc("Check App Permission")
-    @web_ns.doc(description="Check if user has permission to access a web application.")
-    @web_ns.doc(params={"appId": {"description": "Application ID", "type": "string", "required": True}})
     @web_ns.doc(
+        description="检查当前用户是否有权限访问指定 Web 应用。"
+                    "企业版权限校验场景使用，公开应用始终返回 true。",
+        params={"appId": {"description": "应用 ID", "type": "string", "required": True}},
         responses={
-            200: "Success",
-            400: "Bad Request",
-            401: "Unauthorized",
-            500: "Internal Server Error",
-        }
+            200: "成功，返回 result（布尔值）",
+            400: "参数错误",
+            401: "未授权",
+            500: "服务器内部错误",
+        },
     )
     def get(self):
+        """检查用户对 Web 应用的访问权限"""
         user_id = "visitor"
         app_code = request.headers.get(HEADER_NAME_APP_CODE)
         app_id = request.args.get("appId")

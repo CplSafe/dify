@@ -8,7 +8,7 @@ from collections.abc import Generator
 from flask import Response, request
 from sqlalchemy.orm import sessionmaker
 
-from controllers.web import api
+from controllers.web import api, web_ns
 from controllers.web.error import InvalidArgumentError, NotFoundError
 from controllers.web.wraps import WebApiResource
 from core.app.apps.advanced_chat.app_generator import AdvancedChatAppGenerator
@@ -26,14 +26,27 @@ from services.workflow_event_snapshot_service import build_workflow_event_stream
 class WorkflowEventsApi(WebApiResource):
     """API for getting workflow execution events after resume."""
 
+    @web_ns.doc(
+        description="获取工作流执行事件流（SSE）。"
+                    "用于恢复/重连场景：当前端与流式事件连接中断后，"
+                    "可通过此接口重新订阅并获取任务已产生的所有事件。"
+                    "若任务已完成则立即返回结束事件；否则从 Redis 读取实时事件流。",
+        params={
+            "task_id": {"description": "工作流任务 ID（即 workflow_run_id）", "type": "string"},
+            "include_state_snapshot": {
+                "description": "是否包含节点状态快照，默认 false",
+                "type": "boolean",
+                "required": False,
+            },
+        },
+        responses={
+            200: "成功，返回 SSE 事件流（text/event-stream）",
+            401: "未认证",
+            404: "任务不存在或无权访问",
+        },
+    )
     def get(self, app_model: App, end_user: EndUser, task_id: str):
-        """
-        Get workflow execution events stream after resume.
-
-        GET /api/workflow/<task_id>/events
-
-        Returns Server-Sent Events stream.
-        """
+        """获取工作流执行事件流"""
         workflow_run_id = task_id
         session_maker = sessionmaker(db.engine)
         repo = DifyAPIRepositoryFactory.create_api_workflow_run_repository(session_maker)

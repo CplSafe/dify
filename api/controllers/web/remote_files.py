@@ -30,34 +30,20 @@ register_schema_models(web_ns, RemoteFileUploadPayload, RemoteFileInfo, FileWith
 
 @web_ns.route("/remote-files/<path:url>")
 class RemoteFileInfoApi(WebApiResource):
-    @web_ns.doc("get_remote_file_info")
-    @web_ns.doc(description="Get information about a remote file")
     @web_ns.doc(
+        description="获取远程文件的基本信息（Content-Type、Content-Length）。"
+                    "URL 需经过 URL 编码后作为路径参数传入。",
+        params={"url": {"description": "远程文件 URL（URL 编码后的路径参数）", "type": "string"}},
         responses={
-            200: "Remote file information retrieved successfully",
-            400: "Bad request - invalid URL",
-            404: "Remote file not found",
-            500: "Failed to fetch remote file",
-        }
+            200: "成功，返回文件类型和大小",
+            400: "URL 格式错误",
+            404: "远程文件不存在",
+            500: "获取远程文件失败",
+        },
     )
-    @web_ns.response(200, "Remote file info", web_ns.models[RemoteFileInfo.__name__])
+    @web_ns.response(200, "远程文件信息", web_ns.models[RemoteFileInfo.__name__])
     def get(self, app_model, end_user, url):
-        """Get information about a remote file.
-
-        Retrieves basic information about a file located at a remote URL,
-        including content type and content length.
-
-        Args:
-            app_model: The associated application model
-            end_user: The end user making the request
-            url: URL-encoded path to the remote file
-
-        Returns:
-            dict: Remote file information including type and length
-
-        Raises:
-            HTTPException: If the remote file cannot be accessed
-        """
+        """获取远程文件信息"""
         decoded_url = urllib.parse.unquote(url)
         resp = ssrf_proxy.head(decoded_url)
         if resp.status_code != httpx.codes.OK:
@@ -73,40 +59,22 @@ class RemoteFileInfoApi(WebApiResource):
 
 @web_ns.route("/remote-files/upload")
 class RemoteFileUploadApi(WebApiResource):
-    @web_ns.doc("upload_remote_file")
-    @web_ns.doc(description="Upload a file from a remote URL")
+    @web_ns.expect(web_ns.models[RemoteFileUploadPayload.__name__])
     @web_ns.doc(
+        description="从远程 URL 下载文件并上传至平台存储，供 Web 应用使用。"
+                    "系统会自动获取文件内容、校验文件大小和格式，"
+                    "上传成功后返回含签名 URL 的文件信息。",
         responses={
-            201: "Remote file uploaded successfully",
-            400: "Bad request - invalid URL or parameters",
-            413: "File too large",
-            415: "Unsupported file type",
-            500: "Failed to fetch remote file",
-        }
+            201: "上传成功，返回文件信息（含签名 URL）",
+            400: "请求格式错误",
+            413: "文件过大",
+            415: "不支持的文件类型",
+            500: "获取或上传远程文件失败",
+        },
     )
-    @web_ns.response(201, "Remote file uploaded", web_ns.models[FileWithSignedUrl.__name__])
+    @web_ns.response(201, "上传成功", web_ns.models[FileWithSignedUrl.__name__])
     def post(self, app_model, end_user):
-        """Upload a file from a remote URL.
-
-        Downloads a file from the provided remote URL and uploads it
-        to the platform storage for use in web applications.
-
-        Args:
-            app_model: The associated application model
-            end_user: The end user making the request
-
-        JSON Parameters:
-            url: The remote URL to download the file from (required)
-
-        Returns:
-            dict: File information including ID, signed URL, and metadata
-            int: HTTP status code 201 for success
-
-        Raises:
-            RemoteFileUploadError: Failed to fetch file from remote URL
-            FileTooLargeError: File exceeds size limit
-            UnsupportedFileTypeError: File type not supported
-        """
+        """从远程 URL 上传文件"""
         payload = RemoteFileUploadPayload.model_validate(web_ns.payload or {})
         url = str(payload.url)
 

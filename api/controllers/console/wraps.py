@@ -278,6 +278,19 @@ def email_register_enabled[**P, R](view: Callable[P, R]) -> Callable[P, R]:
     return decorated
 
 
+def sms_login_enabled[**P, R](view: Callable[P, R]) -> Callable[P, R]:
+    @wraps(view)
+    def decorated(*args: P.args, **kwargs: P.kwargs):
+        features = FeatureService.get_system_features()
+        if features.enable_sms_code_login:
+            return view(*args, **kwargs)
+
+        # otherwise, return 403
+        abort(403)
+
+    return decorated
+
+
 def enable_change_email[**P, R](view: Callable[P, R]) -> Callable[P, R]:
     @wraps(view)
     def decorated(*args: P.args, **kwargs: P.kwargs):

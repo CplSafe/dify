@@ -1,5 +1,4 @@
 import logging
-
 from decimal import Decimal
 
 from flask import make_response, request
@@ -220,7 +219,7 @@ class EmailRegisterResetApi(Resource):
         # Grant signup bonus (¥50) to the new user's workspace.
         try:
             tenant_id = str(account.current_tenant_id)
-            SIGNUP_BONUS = Decimal("50")
+            SIGNUP_BONUS = Decimal(50)
             TenantBalanceService.topup(tenant_id=tenant_id, amount=SIGNUP_BONUS)
             db.session.commit()
             logger.info("Signup bonus ¥%s granted to tenant=%s account=%s", SIGNUP_BONUS, tenant_id, account.id)

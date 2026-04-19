@@ -1,8 +1,3 @@
-import {
-  RiContractLine,
-  RiDoorLockLine,
-  RiErrorWarningFill,
-} from '@remixicon/react'
 import * as React from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -17,6 +12,7 @@ import { cn } from '@/utils/classnames'
 import Loading from '../components/base/loading'
 import MailAndCodeAuth from './components/mail-and-code-auth'
 import MailAndPasswordAuth from './components/mail-and-password-auth'
+import PhoneAndCodeAuth from './components/phone-and-code-auth'
 import SocialAuth from './components/social-auth'
 import SSOAuth from './components/sso-auth'
 import Split from './split'
@@ -33,16 +29,24 @@ const NormalForm = () => {
   const invite_token = decodeURIComponent(
     searchParams.get('invite_token') || '',
   )
-  const [isInitCheckLoading, setInitCheckLoading] = useState(true)
+  const [isInitCheckLoading, setIsInitCheckLoading] = useState(true)
   const [isRedirecting, setIsRedirecting] = useState(false)
   const isLoading = isCheckLoading || isInitCheckLoading || isRedirecting
   const { systemFeatures } = useGlobalPublicStore()
-  const [authType, updateAuthType] = useState<'code' | 'password'>('password')
+  const [authType, setAuthType] = useState<'code' | 'password' | 'sms'>(
+    'password',
+  )
   const [showORLine, setShowORLine] = useState(false)
   const [allMethodsAreDisabled, setAllMethodsAreDisabled] = useState(false)
-  const [workspaceName, setWorkSpaceName] = useState('')
+  const [workspaceName, setWorkspaceName] = useState('')
 
   const isInviteLink = Boolean(invite_token && invite_token !== 'null')
+  const signupHref = React.useMemo(() => {
+    const inviteCode = searchParams.get('invite_code')
+    return inviteCode
+      ? `/signup?invite_code=${encodeURIComponent(inviteCode)}`
+      : '/signup'
+  }, [searchParams])
 
   const init = useCallback(async () => {
     try {
@@ -61,17 +65,21 @@ const NormalForm = () => {
         !systemFeatures.enable_social_oauth_login
         && !systemFeatures.enable_email_code_login
         && !systemFeatures.enable_email_password_login
+        && !systemFeatures.enable_sms_code_login
         && !systemFeatures.sso_enforced_for_signin,
       )
       setShowORLine(
         (systemFeatures.enable_social_oauth_login
           || systemFeatures.sso_enforced_for_signin)
         && (systemFeatures.enable_email_code_login
-          || systemFeatures.enable_email_password_login),
+          || systemFeatures.enable_email_password_login
+          || systemFeatures.enable_sms_code_login),
       )
-      updateAuthType(
-        systemFeatures.enable_email_password_login ? 'password' : 'code',
-      )
+      if (systemFeatures.enable_sms_code_login)
+        setAuthType('sms')
+      else if (systemFeatures.enable_email_password_login)
+        setAuthType('password')
+      else setAuthType('code')
       if (isInviteLink) {
         const checkRes = await invitationCheck({
           url: '/activate/check',
@@ -79,7 +87,7 @@ const NormalForm = () => {
             token: invite_token,
           },
         })
-        setWorkSpaceName(checkRes?.data?.workspace_name || '')
+        setWorkspaceName(checkRes?.data?.workspace_name || '')
       }
     }
     catch (error) {
@@ -87,7 +95,7 @@ const NormalForm = () => {
       setAllMethodsAreDisabled(true)
     }
     finally {
-      setInitCheckLoading(false)
+      setIsInitCheckLoading(false)
     }
   }, [isLoggedIn, message, router, invite_token, isInviteLink, systemFeatures])
   useEffect(() => {
@@ -111,9 +119,9 @@ const NormalForm = () => {
       <div className="mx-auto mt-8 w-full">
         <div className="relative">
           <div className="rounded-lg bg-linear-to-r from-workflow-workflow-progress-bg-1 to-workflow-workflow-progress-bg-2 p-4">
-            <div className="shadows-shadow-lg relative mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-components-card-bg shadow">
-              <RiContractLine className="h-5 w-5" />
-              <RiErrorWarningFill className="absolute -right-1 -top-1 h-4 w-4 text-text-warning-secondary" />
+            <div className="relative mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-components-card-bg shadow-lg">
+              <i className="i-ri-contract-line h-5 w-5" />
+              <i className="i-ri-error-warning-fill absolute -right-1 -top-1 h-4 w-4 text-text-warning-secondary" />
             </div>
             <p className="text-text-primary system-sm-medium">
               {t('licenseLost', { ns: 'login' })}
@@ -131,9 +139,9 @@ const NormalForm = () => {
       <div className="mx-auto mt-8 w-full">
         <div className="relative">
           <div className="rounded-lg bg-linear-to-r from-workflow-workflow-progress-bg-1 to-workflow-workflow-progress-bg-2 p-4">
-            <div className="shadows-shadow-lg relative mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-components-card-bg shadow">
-              <RiContractLine className="h-5 w-5" />
-              <RiErrorWarningFill className="absolute -right-1 -top-1 h-4 w-4 text-text-warning-secondary" />
+            <div className="relative mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-components-card-bg shadow-lg">
+              <i className="i-ri-contract-line h-5 w-5" />
+              <i className="i-ri-error-warning-fill absolute -right-1 -top-1 h-4 w-4 text-text-warning-secondary" />
             </div>
             <p className="text-text-primary system-sm-medium">
               {t('licenseExpired', { ns: 'login' })}
@@ -151,9 +159,9 @@ const NormalForm = () => {
       <div className="mx-auto mt-8 w-full">
         <div className="relative">
           <div className="rounded-lg bg-linear-to-r from-workflow-workflow-progress-bg-1 to-workflow-workflow-progress-bg-2 p-4">
-            <div className="shadows-shadow-lg relative mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-components-card-bg shadow">
-              <RiContractLine className="h-5 w-5" />
-              <RiErrorWarningFill className="absolute -right-1 -top-1 h-4 w-4 text-text-warning-secondary" />
+            <div className="relative mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-components-card-bg shadow-lg">
+              <i className="i-ri-contract-line h-5 w-5" />
+              <i className="i-ri-error-warning-fill absolute -right-1 -top-1 h-4 w-4 text-text-warning-secondary" />
             </div>
             <p className="text-text-primary system-sm-medium">
               {t('licenseInactive', { ns: 'login' })}
@@ -221,8 +229,32 @@ const NormalForm = () => {
               </div>
             </div>
           )}
+          {systemFeatures.enable_sms_code_login && authType === 'sms' && (
+            <>
+              <PhoneAndCodeAuth />
+              {(systemFeatures.enable_email_code_login
+                || systemFeatures.enable_email_password_login) && (
+                <div
+                  className="cursor-pointer py-1 text-center"
+                  onClick={() => {
+                    setAuthType(
+                      systemFeatures.enable_email_code_login
+                        ? 'code'
+                        : 'password',
+                    )
+                  }}
+                >
+                  <span className="text-components-button-secondary-accent-text system-xs-medium">
+                    {t('useEmail', { ns: 'login' })}
+                  </span>
+                </div>
+              )}
+              <Split className="mb-5 mt-4" />
+            </>
+          )}
           {(systemFeatures.enable_email_code_login
-            || systemFeatures.enable_email_password_login) && (
+            || systemFeatures.enable_email_password_login)
+          && authType !== 'sms' && (
             <>
               {systemFeatures.enable_email_code_login
                 && authType === 'code' && (
@@ -232,7 +264,7 @@ const NormalForm = () => {
                     <div
                       className="cursor-pointer py-1 text-center"
                       onClick={() => {
-                        updateAuthType('password')
+                        setAuthType('password')
                       }}
                     >
                       <span className="text-components-button-secondary-accent-text system-xs-medium">
@@ -254,7 +286,7 @@ const NormalForm = () => {
                     <div
                       className="cursor-pointer py-1 text-center"
                       onClick={() => {
-                        updateAuthType('code')
+                        setAuthType('code')
                       }}
                     >
                       <span className="text-components-button-secondary-accent-text system-xs-medium">
@@ -264,6 +296,18 @@ const NormalForm = () => {
                   )}
                 </>
               )}
+              {systemFeatures.enable_sms_code_login && (
+                <div
+                  className="cursor-pointer py-1 text-center"
+                  onClick={() => {
+                    setAuthType('sms')
+                  }}
+                >
+                  <span className="text-components-button-secondary-accent-text system-xs-medium">
+                    {t('sms.usePhone', { ns: 'login' })}
+                  </span>
+                </div>
+              )}
               <Split className="mb-5 mt-4" />
             </>
           )}
@@ -271,15 +315,7 @@ const NormalForm = () => {
           {systemFeatures.is_allow_register && authType === 'password' && (
             <div className="mb-3 text-[13px] font-medium leading-4 text-text-secondary">
               <span>{t('signup.noAccount', { ns: 'login' })}</span>
-              <Link
-                className="text-text-accent"
-                href={(() => {
-                  const inviteCode = searchParams.get('invite_code')
-                  return inviteCode
-                    ? `/signup?invite_code=${encodeURIComponent(inviteCode)}`
-                    : '/signup'
-                })()}
-              >
+              <Link className="text-text-accent" href={signupHref}>
                 {t('signup.signUp', { ns: 'login' })}
               </Link>
             </div>
@@ -287,8 +323,8 @@ const NormalForm = () => {
           {allMethodsAreDisabled && (
             <>
               <div className="rounded-lg bg-linear-to-r from-workflow-workflow-progress-bg-1 to-workflow-workflow-progress-bg-2 p-4">
-                <div className="shadows-shadow-lg mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-components-card-bg shadow">
-                  <RiDoorLockLine className="h-5 w-5" />
+                <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-components-card-bg shadow-lg">
+                  <i className="i-ri-door-lock-line h-5 w-5" />
                 </div>
                 <p className="text-text-primary system-sm-medium">
                   {t('noLoginMethod', { ns: 'login' })}

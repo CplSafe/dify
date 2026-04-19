@@ -121,6 +121,27 @@ class APIWorkflowRunRepository(WorkflowExecutionRepository, Protocol):
         """
         ...
 
+    def get_workflow_run_by_app_and_id(
+        self,
+        app_id: str,
+        run_id: str,
+    ) -> WorkflowRun | None:
+        """
+        Get a specific workflow run by app_id and run_id without tenant isolation.
+
+        Used for console views where app-level access has already been verified
+        by the controller layer, and the workflow_run may have been created under
+        a different tenant than the app owner.
+
+        Args:
+            app_id: Application identifier
+            run_id: Workflow run identifier
+
+        Returns:
+            WorkflowRun object if found, None otherwise
+        """
+        ...
+
     def get_workflow_run_by_id_without_tenant(
         self,
         run_id: str,

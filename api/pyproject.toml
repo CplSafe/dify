@@ -4,6 +4,7 @@ version = "1.13.3"
 requires-python = "~=3.12.0"
 
 dependencies = [
+    "alibabacloud-dysmsapi20170525~=3.0.0",
     "aliyun-log-python-sdk~=0.9.37",
     "arize-phoenix-otel~=0.15.0",
     "azure-identity==1.25.3",

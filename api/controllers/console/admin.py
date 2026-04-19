@@ -3,6 +3,7 @@ import io
 from collections.abc import Callable
 from functools import wraps
 
+import flask_login
 from flask import request
 from flask_restx import Resource
 from pydantic import BaseModel, Field, field_validator
@@ -12,7 +13,7 @@ from werkzeug.exceptions import BadRequest, NotFound, Unauthorized
 from configs import dify_config
 from constants.languages import supported_language
 from controllers.console import console_ns
-from controllers.console.wraps import only_edition_cloud
+from controllers.console.wraps import only_edition_cloud, setup_required
 from core.db.session_factory import session_factory
 from extensions.ext_database import db
 from libs.token import extract_access_token
@@ -441,3 +442,22 @@ class BatchAddNotificationAccountsApi(Resource):
                 unique_emails.append(email)
 
         return unique_emails
+
+
+@console_ns.route("/admin/sms-logs")
+class SmsCodeLogApi(Resource):
+    """Paginated SMS verification code logs for system admins."""
+
+    @setup_required
+    @flask_login.login_required
+    def get(self):
+        user = flask_login.current_user
+        if not getattr(user, "is_system_admin", False):
+            raise Unauthorized("Only system admins can access SMS logs.")
+
+        from services.sms_service import SmsService
+
+        page = request.args.get("page", 1, type=int)
+        per_page = request.args.get("per_page", 20, type=int)
+        phone = request.args.get("phone", None, type=str)
+        return SmsService.get_sms_logs(page=page, per_page=per_page, phone=phone)

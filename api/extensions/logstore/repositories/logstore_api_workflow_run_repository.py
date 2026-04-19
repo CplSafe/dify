@@ -447,6 +447,69 @@ class LogstoreAPIWorkflowRunRepository(APIWorkflowRunRepository):
             stmt = select(WorkflowRun).where(WorkflowRun.id == run_id)
             return session.scalar(stmt)
 
+    def get_workflow_run_by_app_and_id(
+        self,
+        app_id: str,
+        run_id: str,
+    ) -> WorkflowRun | None:
+        """
+        Get a specific workflow run by app_id and run_id without tenant isolation.
+        Falls back to PostgreSQL if not found in LogStore.
+        """
+        logger.debug("get_workflow_run_by_app_and_id: app_id=%s, run_id=%s", app_id, run_id)
+        try:
+            escaped_run_id = escape_identifier(run_id)
+            escaped_app_id = escape_identifier(app_id)
+
+            if self.logstore_client.supports_pg_protocol:
+                sql_query = f"""
+                    SELECT * FROM (
+                        SELECT *,
+                            ROW_NUMBER() OVER (PARTITION BY id ORDER BY log_version DESC) as rn
+                        FROM "{AliyunLogStore.workflow_run_logstore}"
+                        WHERE app_id = '{escaped_app_id}'
+                          AND id = '{escaped_run_id}'
+                          AND __time__ > 0
+                    ) AS subquery WHERE rn = 1
+                    LIMIT 1
+                """
+                results = self.logstore_client.execute_sql(
+                    sql=sql_query,
+                    logstore=AliyunLogStore.workflow_run_logstore,
+                )
+            else:
+                query = f"app_id: {escaped_app_id} and id: {escaped_run_id}"
+                from_time = 0
+                to_time = int(time.time())
+                results = self.logstore_client.get_logs(
+                    logstore=AliyunLogStore.workflow_run_logstore,
+                    from_time=from_time,
+                    to_time=to_time,
+                    query=query,
+                    line=1,
+                    reverse=False,
+                )
+
+            if not results:
+                try:
+                    return self._fallback_get_workflow_run_by_id(run_id)
+                except Exception:
+                    logger.exception("PostgreSQL fallback failed: run_id=%s", run_id)
+                return None
+
+            if self.logstore_client.supports_pg_protocol or len(results) == 1:
+                return _dict_to_workflow_run(results[0])
+            else:
+                max_result = max(results, key=lambda x: int(x.get("log_version", 0)))
+                return _dict_to_workflow_run(max_result)
+
+        except Exception:
+            try:
+                return self._fallback_get_workflow_run_by_id(run_id)
+            except Exception:
+                logger.exception("PostgreSQL fallback also failed: run_id=%s", run_id)
+            raise
+
     def get_workflow_runs_count(
         self,
         tenant_id: str,

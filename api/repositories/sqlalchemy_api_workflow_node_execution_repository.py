@@ -108,9 +108,9 @@ class DifyAPISQLAlchemyWorkflowNodeExecutionRepository(DifyAPIWorkflowNodeExecut
 
     def get_executions_by_workflow_run(
         self,
-        tenant_id: str,
-        app_id: str,
-        workflow_run_id: str,
+        tenant_id: str | None = None,
+        app_id: str = "",
+        workflow_run_id: str = "",
     ) -> Sequence[WorkflowNodeExecutionModel]:
         """
         Get all node executions for a specific workflow run.
@@ -119,7 +119,7 @@ class DifyAPISQLAlchemyWorkflowNodeExecutionRepository(DifyAPIWorkflowNodeExecut
         using SQLAlchemy 2.0 style syntax.
 
         Args:
-            tenant_id: The tenant identifier
+            tenant_id: Optional tenant identifier. When None, filtering is done by app_id only.
             app_id: The application identifier
             workflow_run_id: The workflow run identifier
 
@@ -127,11 +127,13 @@ class DifyAPISQLAlchemyWorkflowNodeExecutionRepository(DifyAPIWorkflowNodeExecut
             A sequence of WorkflowNodeExecutionModel instances ordered by index (desc)
         """
         stmt = WorkflowNodeExecutionModel.preload_offload_data(select(WorkflowNodeExecutionModel))
-        stmt = stmt.where(
-            WorkflowNodeExecutionModel.tenant_id == tenant_id,
+        conditions = [
             WorkflowNodeExecutionModel.app_id == app_id,
             WorkflowNodeExecutionModel.workflow_run_id == workflow_run_id,
-        ).order_by(asc(WorkflowNodeExecutionModel.created_at))
+        ]
+        if tenant_id is not None:
+            conditions.insert(0, WorkflowNodeExecutionModel.tenant_id == tenant_id)
+        stmt = stmt.where(*conditions).order_by(asc(WorkflowNodeExecutionModel.created_at))
 
         with self._session_maker() as session:
             return session.execute(stmt).scalars().all()

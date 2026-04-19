@@ -102,8 +102,7 @@ class WorkflowRunService:
         :param app_model: app model
         :param run_id: workflow run id
         """
-        return self._workflow_run_repo.get_workflow_run_by_id(
-            tenant_id=app_model.tenant_id,
+        return self._workflow_run_repo.get_workflow_run_by_app_and_id(
             app_id=app_model.id,
             run_id=run_id,
         )
@@ -149,13 +148,7 @@ class WorkflowRunService:
         if not workflow_run:
             return []
 
-        # Get tenant_id from user
-        tenant_id = user.tenant_id if isinstance(user, EndUser) else user.current_tenant_id
-        if tenant_id is None:
-            raise ValueError("User tenant_id cannot be None")
-
         return self._node_execution_service_repo.get_executions_by_workflow_run(
-            tenant_id=tenant_id,
             app_id=app_model.id,
             workflow_run_id=run_id,
         )

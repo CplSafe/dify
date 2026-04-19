@@ -279,6 +279,9 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
             WorkflowNodeExecutionStatus.SUCCEEDED,
             finished_at=event.finished_at,
         )
+        # Extract tokens from HTTP request node response body when token_field_name is configured
+        if event.node_type == "http-request":
+            self._extract_http_node_tokens(event)
 
     def _handle_node_failed(self, event: NodeRunFailedEvent) -> None:
         domain_execution = self._get_node_execution(event.id)
@@ -313,6 +316,75 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+    def _extract_http_node_tokens(self, event: NodeRunSucceededEvent) -> None:
+        """Extract token count from an HTTP request node's response body.
+
+        When an HTTP node is configured with ``token_field_name`` (e.g.
+        ``usage.total_tokens``), parse the response body JSON and walk the
+        dot-separated path to read the integer token value.  The extracted
+        tokens are accumulated into ``graph_runtime_state`` so they appear
+        in ``execution.total_tokens`` and trigger billing.
+        """
+        import json
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            # Look up the node config from the workflow graph data
+            graph_data = self._workflow_info.graph_data or {}
+            nodes = graph_data.get("nodes", [])
+            node_config: dict[str, Any] | None = None
+            for n in nodes:
+                if n.get("id") == event.node_id:
+                    node_config = n.get("data", {})
+                    break
+
+            if not node_config:
+                return
+
+            token_field_name: str = node_config.get("token_field_name", "") or ""
+            if not token_field_name.strip():
+                return
+
+            # Get the response body from node outputs
+            outputs = event.node_run_result.outputs or {}
+            body_raw = outputs.get("body")
+            if not body_raw:
+                return
+
+            # Parse body as JSON (it may already be a dict or a JSON string)
+            if isinstance(body_raw, str):
+                body = json.loads(body_raw)
+            elif isinstance(body_raw, dict):
+                body = body_raw
+            else:
+                return
+
+            # Walk the dot-separated path to extract the token value
+            value: Any = body
+            for key in token_field_name.strip().split("."):
+                if isinstance(value, dict):
+                    value = value.get(key)
+                else:
+                    value = None
+                    break
+
+            if value is None:
+                return
+
+            tokens = int(value)
+            if tokens > 0:
+                self.graph_runtime_state.add_tokens(tokens)
+                logger.debug(
+                    "Extracted %d tokens from HTTP node %s (field: %s)",
+                    tokens,
+                    event.node_id,
+                    token_field_name,
+                )
+        except (json.JSONDecodeError, ValueError, TypeError, KeyError) as exc:
+            logger.debug("Failed to extract tokens from HTTP node %s: %s", event.node_id, exc)
+
     def _get_execution_id(self) -> str:
         workflow_execution_id = self._system_variables().get(SystemVariableKey.WORKFLOW_EXECUTION_ID)
         if not workflow_execution_id:

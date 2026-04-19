@@ -238,9 +238,9 @@ class LogstoreAPIWorkflowNodeExecutionRepository(DifyAPIWorkflowNodeExecutionRep
 
     def get_executions_by_workflow_run(
         self,
-        tenant_id: str,
-        app_id: str,
-        workflow_run_id: str,
+        tenant_id: str | None = None,
+        app_id: str = "",
+        workflow_run_id: str = "",
     ) -> Sequence[WorkflowNodeExecutionModel]:
         """
         Get all node executions for a specific workflow run.
@@ -256,20 +256,26 @@ class LogstoreAPIWorkflowNodeExecutionRepository(DifyAPIWorkflowNodeExecutionRep
         )
         try:
             # Escape parameters to prevent SQL injection
-            escaped_tenant_id = escape_identifier(tenant_id)
             escaped_app_id = escape_identifier(app_id)
             escaped_workflow_run_id = escape_identifier(workflow_run_id)
+
+            # Build tenant filter conditionally
+            tenant_sql_filter = ""
+            tenant_query_filter = ""
+            if tenant_id is not None:
+                escaped_tenant_id = escape_identifier(tenant_id)
+                tenant_sql_filter = f"tenant_id = '{escaped_tenant_id}' AND "
+                tenant_query_filter = f"tenant_id: {escaped_tenant_id} and "
 
             # Check if PG protocol is supported
             if self.logstore_client.supports_pg_protocol:
                 # Use PG protocol with SQL query (get latest version of each record)
                 sql_query = f"""
                     SELECT * FROM (
-                        SELECT *, 
+                        SELECT *,
                             ROW_NUMBER() OVER (PARTITION BY id ORDER BY log_version DESC) as rn
                         FROM "{AliyunLogStore.workflow_node_execution_logstore}"
-                        WHERE tenant_id = '{escaped_tenant_id}' 
-                          AND app_id = '{escaped_app_id}' 
+                        WHERE {tenant_sql_filter}app_id = '{escaped_app_id}'
                           AND workflow_run_id = '{escaped_workflow_run_id}'
                           AND __time__ > 0
                     ) AS subquery WHERE rn = 1
@@ -282,7 +288,7 @@ class LogstoreAPIWorkflowNodeExecutionRepository(DifyAPIWorkflowNodeExecutionRep
             else:
                 # Use SDK with LogStore query syntax
                 query = (
-                    f"tenant_id: {escaped_tenant_id} and app_id: {escaped_app_id} "
+                    f"{tenant_query_filter}app_id: {escaped_app_id} "
                     f"and workflow_run_id: {escaped_workflow_run_id}"
                 )
                 from_time = 0

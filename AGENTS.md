@@ -43,3 +43,29 @@ The codebase is split into:
 - Backend architecture adheres to DDD and Clean Architecture principles.
 - Async work runs through Celery with Redis as the broker.
 - Frontend user-facing strings must use `web/i18n/en-US/`; avoid hardcoded text.
+
+
+<claude-mem-context>
+# Memory Context
+
+# [dify] recent context, 2026-04-18 8:45pm GMT+8
+
+Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
+Format: ID TIME TYPE TITLE
+Fetch details: get_observations([IDs]) | Search: mem-search skill
+
+Stats: 9 obs (4,457t read) | 118,779t work | 96% savings
+
+### Apr 18, 2026
+28 4:57p 🔵 Code Review: Social Publish Frontend Integration (Dify)
+31 4:58p 🔵 Dify Frontend Code Review Skill Structure
+33 " 🔵 Social Publish P1 Frontend Plan: Architecture and API Contracts
+35 4:59p 🔵 Backend P1 Commit ee32eb349: Social Publish Account Management API
+88 7:45p 🔵 Social Publish Backend P2: Security & Correctness Review Findings
+90 " 🔵 backend-code-review skill structure in dify project
+92 7:46p 🔵 Dify P2 Social Publish Backend: Full 12-Question Security & Correctness Review Initiated
+94 " 🔵 P2 Design Doc: Accepted Tech Debt and Security Model Documented
+96 7:47p 🔵 Controller _to_http_error: RuntimeError from missing SAU_INTERNAL_TOKEN escapes mapping
+
+Access 119k tokens of past work via get_observations([IDs]) or mem-search skill.
+</claude-mem-context>

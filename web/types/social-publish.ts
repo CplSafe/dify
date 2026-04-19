@@ -152,4 +152,10 @@ export type BatchCreateTaskResponse = {
 export type TaskStatusResponse = {
   task: SocialPublishTask
   result: TaskError & { url: string | null }
+  /**
+   * P7: when the publish task is paused waiting for SMS verification,
+   *  this id lets the FE render the SmsChallengePanel. ``null`` when no
+   *  challenge is active.
+   */
+  challenge_session_id: string | null
 }

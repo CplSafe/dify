@@ -156,6 +156,12 @@ class BatchCreateResultItem:
 class TaskStatusResponse:
     task: dict[str, Any]
     result: dict[str, Any]
+    # P7: when sau worker is mid-flow waiting for SMS verification, this
+    # carries the challenge_session_id so the FE can render the same
+    # SmsChallengePanel used in the auth flow. ``None`` when no challenge
+    # is active. The id is only valid while the underlying Redis session
+    # is alive (5min TTL).
+    challenge_session_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -422,8 +428,10 @@ class SocialPublishTaskService:
         if task is None:
             raise TaskNotFoundError(f"task {task_id} not found")
 
+        challenge_session_id: str | None = None
         if not task.is_terminal() and task.sau_task_id:
-            task = self._poll_sau(task) or task
+            updated, challenge_session_id = self._poll_sau(task)
+            task = updated or task
 
         return TaskStatusResponse(
             task=task.to_dict(),
@@ -432,6 +440,7 @@ class SocialPublishTaskService:
                 "error_code": task.error_code,
                 "error_message": task.error_message,
             },
+            challenge_session_id=challenge_session_id,
         )
 
     # ----- internals -----
@@ -610,36 +619,58 @@ class SocialPublishTaskService:
             video_url=None,
         )
 
-    def _poll_sau(self, task: SocialPublishTask) -> SocialPublishTask | None:
+    def _poll_sau(
+        self, task: SocialPublishTask
+    ) -> tuple[SocialPublishTask | None, str | None]:
+        """Returns (updated_task_or_None, challenge_session_id_or_None).
+
+        The second tuple element is non-None only when sau worker is mid-flow
+        and has surfaced an SMS challenge via ``self.update_state(meta=...)``.
+        """
         try:
             snapshot = self._sau.get_task(sau_task_id=task.sau_task_id or "")
         except SauUnreachableError:
             # Transient — keep the row as-is so the next poll tries again.
-            return None
+            return None, None
         except SauApiError as exc:
             logger.warning(
                 "sau /tasks/%s returned %d", task.sau_task_id, exc.status_code
             )
-            return None
+            return None, None
+
+        # P7: extract challenge_session_id from running-task meta. None
+        # for terminal / pre-running states. The id is only valid while
+        # sau's Redis session is alive.
+        challenge_session_id: str | None = None
+        if isinstance(snapshot.meta, dict):
+            raw = snapshot.meta.get("challenge_session_id")
+            if isinstance(raw, str) and raw:
+                challenge_session_id = raw
 
         state = snapshot.state.upper()
         if state in ("PENDING", "RECEIVED", "RETRY"):
-            return None
+            return None, challenge_session_id
         if state == "STARTED":
-            return self._tasks.update_status_to_running(
-                task_id=task.id, tenant_id=task.tenant_id
+            return (
+                self._tasks.update_status_to_running(
+                    task_id=task.id, tenant_id=task.tenant_id
+                ),
+                challenge_session_id,
             )
         if state == "SUCCESS":
-            return self._handle_success(task, snapshot.result or {})
+            return self._handle_success(task, snapshot.result or {}), None
         if state == "FAILURE":
-            return self._handle_failure(
-                task,
-                error_code="worker_crashed",
-                error_message=str(snapshot.error or "celery task crashed"),
+            return (
+                self._handle_failure(
+                    task,
+                    error_code="worker_crashed",
+                    error_message=str(snapshot.error or "celery task crashed"),
+                ),
+                None,
             )
         # Unknown state — leave the row alone, log for ops.
         logger.warning("unknown sau task state %r for %s", state, task.sau_task_id)
-        return None
+        return None, challenge_session_id
 
     def _handle_success(
         self, task: SocialPublishTask, result: dict[str, Any]

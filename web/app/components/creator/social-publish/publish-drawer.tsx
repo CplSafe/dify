@@ -28,6 +28,7 @@ import {
   fetchSocialPublishAccounts,
   fetchSocialPublishTask,
 } from '@/service/social-publish'
+import { SmsChallengePanel } from './sms-challenge-panel'
 
 const POLL_INTERVAL_MS = 3_000
 const TERMINAL_STATUSES: SocialPublishTaskStatus[] = ['success', 'failed']
@@ -116,6 +117,13 @@ export function PublishDrawer({
   // Per-target results from the batch endpoint, surfaced in the partial /
   // done states so the user can see which accounts went through.
   const [batchResults, setBatchResults] = useState<BatchCreateResultItem[]>([])
+  // P7-extra: when sau worker is mid-flow waiting for SMS verification,
+  // the publish task's poll response carries challenge_session_id. We
+  // swap the spinner for SmsChallengePanel so the user can complete the
+  // SMS flow without having to leave the publish modal.
+  const [challengeSessionId, setChallengeSessionId] = useState<string | null>(
+    null,
+  )
 
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const generationRef = useRef(0)
@@ -214,6 +222,7 @@ export function PublishDrawer({
     setTask(null)
     setErrorCode(null)
     setBatchResults([])
+    setChallengeSessionId(null)
     setTitle(defaultTitle ?? '')
     setTagsRaw('')
     setDesc('')
@@ -237,6 +246,10 @@ export function PublishDrawer({
         if (gen !== generationRef.current)
           return
         setTask(res.task)
+        // P7-extra: surface (or clear) the SMS challenge id every poll
+        // tick so the modal can swap to / from SmsChallengePanel as the
+        // sau worker enters / exits the awaiting_user state.
+        setChallengeSessionId(res.challenge_session_id ?? null)
         if (TERMINAL_STATUSES.includes(res.task.status)) {
           clearPoll()
           if (res.task.status === 'success') {
@@ -280,6 +293,7 @@ export function PublishDrawer({
     setPhase('submitting')
     setErrorCode(null)
     setBatchResults([])
+    setChallengeSessionId(null)
 
     const tags = parseTags(tagsRaw)
     const trimmedDesc = desc.trim() || undefined
@@ -566,7 +580,21 @@ export function PublishDrawer({
     </div>
   )
 
-  const trackingBody = (
+  // P7-extra: when sau worker is paused waiting for SMS verification,
+  // show the SMS-relay panel inline so the user can complete the
+  // challenge without leaving this modal. Once the user submits or aborts,
+  // the next poll tick will clear challengeSessionId and we revert to the
+  // regular tracking spinner.
+  const trackingChallengeBody = challengeSessionId !== null && (
+    <SmsChallengePanel
+      challengeSessionId={challengeSessionId}
+      onTerminal={() => {
+        /* poll loop will refresh task status; nothing to do here */
+      }}
+      onAbort={() => onOpenChange(false)}
+    />
+  )
+  const trackingSpinnerBody = challengeSessionId === null && (
     <div className="flex flex-col items-center gap-3 py-6">
       <Spinner loading className="h-5 w-5 text-text-tertiary" />
       <p className="text-sm text-text-secondary">
@@ -576,6 +604,12 @@ export function PublishDrawer({
       </p>
       <p className="text-xs text-text-tertiary">{t('publish.tracking')}</p>
     </div>
+  )
+  const trackingBody = (
+    <>
+      {trackingChallengeBody}
+      {trackingSpinnerBody}
+    </>
   )
 
   const doneBody = (

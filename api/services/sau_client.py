@@ -89,6 +89,10 @@ class SauTaskStatusResponse:
     state: str
     result: dict[str, Any] | None
     error: str | None
+    # P7: while the task is still running, sau exposes
+    # ``self.update_state(meta=...)`` keys here. Currently used to surface
+    # ``challenge_session_id`` when an SMS verification challenge surfaces.
+    meta: dict[str, Any] | None = None
 
 
 # ---------- Client ----------
@@ -298,6 +302,7 @@ class SauClient:
             state=str(data.get("state", "PENDING")),
             result=data.get("result") if isinstance(data.get("result"), dict) else None,
             error=data.get("error"),
+            meta=data.get("meta") if isinstance(data.get("meta"), dict) else None,
         )
 
     # -------- internals --------

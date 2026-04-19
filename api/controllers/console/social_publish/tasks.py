@@ -260,4 +260,11 @@ class SocialPublishTaskItemApi(Resource):
             )
         except Exception as exc:
             raise _to_http_error(exc) from exc
-        return {"task": snapshot.task, "result": snapshot.result}
+        return {
+            "task": snapshot.task,
+            "result": snapshot.result,
+            # P7: when sau worker is mid-flow waiting for SMS verification,
+            # this lets the FE pivot to the SmsChallengePanel without waiting
+            # for the task to terminate.
+            "challenge_session_id": snapshot.challenge_session_id,
+        }

@@ -24,7 +24,7 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 
 from flask import request
-from flask_restx import Resource
+from flask_restx import Resource, fields
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import select
 
@@ -84,6 +84,65 @@ class AllocationToOwnerNotAllowedError(BaseHTTPException):
     )
     code = 409
 
+
+# ---------------------------------------------------------------------------
+# Swagger 模型定义（模块级，避免重复注册）
+# ---------------------------------------------------------------------------
+
+allocation_create_req = console_ns.model(
+    "AllocationCreateReq",
+    {
+        "amount": fields.String(
+            required=True,
+            description="签名金额（元），正数为分配，负数为追回",
+            example="100.00",
+        ),
+        "description": fields.String(
+            required=False,
+            description="备注说明，最多 256 个字符（可为空）",
+            example="季度额度充值",
+        ),
+    },
+)
+
+allocation_item = console_ns.model(
+    "AllocationItem",
+    {
+        "id": fields.String(description="分配记录 ID"),
+        "tenant_id": fields.String(description="工作空间 ID"),
+        "account_id": fields.String(description="目标成员账号 ID"),
+        "operator_id": fields.String(description="操作人账号 ID（工作空间所有者）"),
+        "amount": fields.String(description="分配金额（元），负数为追回"),
+        "description": fields.String(description="备注说明"),
+        "created_at": fields.String(description="操作时间 ISO8601"),
+    },
+)
+
+allocation_list_resp = console_ns.model(
+    "AllocationListResp",
+    {
+        "data": fields.List(fields.Nested(allocation_item), description="分配记录列表"),
+        "total": fields.Integer(description="总记录数"),
+        "limit": fields.Integer(description="每页条数"),
+        "offset": fields.Integer(description="偏移量"),
+    },
+)
+
+member_balance_item = console_ns.model(
+    "MemberBalanceItem",
+    {
+        "account_id": fields.String(description="成员账号 ID"),
+        "balance": fields.String(description="当前余额（元）"),
+        "currency": fields.String(description="货币单位，默认 CNY"),
+    },
+)
+
+member_balances_resp = console_ns.model(
+    "MemberBalancesResp",
+    {
+        "data": fields.List(fields.Nested(member_balance_item), description="成员余额列表"),
+    },
+)
 
 # ---------------------------------------------------------------------------
 # Request payload
@@ -149,6 +208,18 @@ class MemberAllocationApi(Resource):
     @login_required
     @account_initialization_required
     @tenant_owner_required
+    @console_ns.doc(
+        description="工作空间所有者向指定成员分配或追回额度（正数为分配，负数为追回）",
+        responses={
+            201: ("分配成功，返回分配记录", allocation_item),
+            400: "金额参数无效（格式错误或为零）",
+            401: "未登录",
+            403: "仅工作空间所有者可操作",
+            404: "目标成员不存在于当前工作空间",
+            409: "余额不足或不允许对所有者进行分配",
+        },
+    )
+    @console_ns.expect(allocation_create_req, validate=False)
     def post(self, member_id: str):
         current_user, current_tenant_id = current_account_with_tenant()
         try:
@@ -187,6 +258,19 @@ class TenantAllocationListApi(Resource):
     @login_required
     @account_initialization_required
     @tenant_owner_required
+    @console_ns.doc(
+        description="获取当前工作空间的额度分配历史（仅所有者可查看，按时间倒序）",
+        params={
+            "limit": "每页条数，最大 100，默认 20",
+            "offset": "分页偏移量，默认 0",
+        },
+        responses={
+            200: ("成功", allocation_list_resp),
+            401: "未登录",
+            403: "仅工作空间所有者可操作",
+        },
+    )
+    @console_ns.marshal_with(allocation_list_resp)
     def get(self):
         _, current_tenant_id = current_account_with_tenant()
         limit = min(int(request.args.get("limit", 20)), 100)
@@ -222,6 +306,15 @@ class MemberBalancesApi(Resource):
     @login_required
     @account_initialization_required
     @tenant_owner_required
+    @console_ns.doc(
+        description="获取当前工作空间所有成员的钱包余额（仅所有者可查看，系统管理员账号不在列表中）",
+        responses={
+            200: ("成功", member_balances_resp),
+            401: "未登录",
+            403: "仅工作空间所有者可操作",
+        },
+    )
+    @console_ns.marshal_with(member_balances_resp)
     def get(self):
         _, current_tenant_id = current_account_with_tenant()
 

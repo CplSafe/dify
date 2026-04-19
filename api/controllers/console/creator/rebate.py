@@ -17,6 +17,12 @@ from sqlalchemy import and_, func, select
 from werkzeug.exceptions import BadRequest, Forbidden
 
 from controllers.console import console_ns
+from controllers.console.creator.models import (
+    rebate_config_resp,
+    rebate_config_update_req,
+    rebate_record_list_resp,
+    rebate_summary_resp,
+)
 from controllers.console.wraps import (
     account_initialization_required,
     setup_required,
@@ -54,8 +60,16 @@ class RebateConfigApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="获取当前返佣配置（仅超级管理员可用）。配置不存在时自动创建默认配置。",
+        responses={
+            200: ("成功", rebate_config_resp),
+            403: "无权限",
+        },
+    )
+    @console_ns.marshal_with(rebate_config_resp)
     def get(self):
-        """Get current rebate config."""
+        """获取返佣配置"""
         current_user, _ = current_account_with_tenant()
         _require_system_admin(current_user)
 
@@ -65,8 +79,22 @@ class RebateConfigApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description=(
+            "更新返佣配置（仅超级管理员可用）。所有字段均为可选，"
+            "仅传入需修改的字段即可。rebate_rate/cost_rate 范围 0-100，"
+            "settlement_hour 范围 0-23，freeze_days 范围 0-90。"
+        ),
+        responses={
+            200: ("成功", rebate_config_resp),
+            400: "参数格式错误或超出范围",
+            403: "无权限",
+        },
+    )
+    @console_ns.expect(rebate_config_update_req, validate=False)
+    @console_ns.marshal_with(rebate_config_resp)
     def put(self):
-        """Update rebate config."""
+        """更新返佣配置"""
         current_user, _ = current_account_with_tenant()
         _require_system_admin(current_user)
 
@@ -129,7 +157,20 @@ class RebateRecordCancelApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description=(
+            "管理员取消指定返佣记录（仅超级管理员可用）。"
+            "只能取消状态为 pending（冻结中）的记录；"
+            "已 settled 的记录需走人工调账。"
+        ),
+        responses={
+            200: "取消成功，返回已更新的返佣记录",
+            400: "记录不存在或状态不为 pending",
+            403: "无权限",
+        },
+    )
     def post(self, record_id: str):
+        """取消返佣记录"""
         current_user, _ = current_account_with_tenant()
         _require_system_admin(current_user)
 
@@ -181,8 +222,23 @@ class RebateRecordListApi(Resource):
     @login_required
     @account_initialization_required
     @tenant_owner_required
+    @console_ns.doc(
+        description="获取当前用户（邀请人）的返佣收入记录，分页返回，支持按日期过滤。仅工作空间 Owner 可访问。",
+        params={
+            "page": "页码，默认 1",
+            "per_page": "每页条数，最大 100，默认 20",
+            "date_from": "可选，起始日期（含），格式 YYYY-MM-DD",
+            "date_to": "可选，截止日期（含），格式 YYYY-MM-DD",
+        },
+        responses={
+            200: ("成功", rebate_record_list_resp),
+            401: "未登录",
+            403: "非 Owner 身份",
+        },
+    )
+    @console_ns.marshal_with(rebate_record_list_resp)
     def get(self):
-        """Get paginated rebate income records for the current user."""
+        """获取当前用户的返佣收入记录"""
         current_user, _ = current_account_with_tenant()
         page = int(request.args.get("page", 1))
         per_page = min(int(request.args.get("per_page", 20)), 100)
@@ -241,8 +297,17 @@ class RebateSummaryApi(Resource):
     @login_required
     @account_initialization_required
     @tenant_owner_required
+    @console_ns.doc(
+        description="获取当前用户的返佣汇总统计，包括累计返佣总额、被邀请人消费总额、邀请人数。仅 Owner 可访问。",
+        responses={
+            200: ("成功", rebate_summary_resp),
+            401: "未登录",
+            403: "非 Owner 身份",
+        },
+    )
+    @console_ns.marshal_with(rebate_summary_resp)
     def get(self):
-        """Get summary of rebate income for the current user."""
+        """获取当前用户的返佣汇总统计"""
         current_user, _ = current_account_with_tenant()
 
         # Total rebate earned

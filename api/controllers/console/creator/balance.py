@@ -6,6 +6,13 @@ from flask import request
 from flask_restx import Resource
 
 from controllers.console import console_ns
+from controllers.console.creator.models import (
+    admin_balance_list_resp,
+    admin_topup_req,
+    balance_resp,
+    billing_record_list_resp,
+    topup_order_list_resp,
+)
 from controllers.console.workspace.topup import serialize_order
 from controllers.console.wraps import account_initialization_required, setup_required
 from libs.login import current_account_with_tenant, login_required
@@ -40,7 +47,16 @@ class UserBalanceApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="获取当前用户的可用余额。Owner 返回工作空间余额池，Member 返回个人分配余额。",
+        responses={
+            200: ("成功", balance_resp),
+            401: "未登录",
+        },
+    )
+    @console_ns.marshal_with(balance_resp)
     def get(self):
+        """获取当前用户的余额"""
         current_user, current_tenant_id = current_account_with_tenant()
 
         if UserBillingService.is_tenant_owner(current_user.id, current_tenant_id):
@@ -75,7 +91,20 @@ class AdminBalancesApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="管理员查看所有用户余额列表（仅超级管理员可用）。",
+        params={
+            "limit": "每页条数，最大 100，默认 50",
+            "offset": "偏移量，默认 0",
+        },
+        responses={
+            200: ("成功", admin_balance_list_resp),
+            403: "无权限（非超级管理员）",
+        },
+    )
+    @console_ns.marshal_with(admin_balance_list_resp)
     def get(self):
+        """管理员获取所有用户余额列表"""
         current_user, _ = current_account_with_tenant()
         _require_system_admin(current_user)
 
@@ -116,7 +145,17 @@ class AdminTopupApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="管理员为指定用户充值余额（仅超级管理员可用）。",
+        responses={
+            201: "充值成功，返回账单记录",
+            400: "参数缺失或金额格式错误",
+            403: "无权限",
+        },
+    )
+    @console_ns.expect(admin_topup_req, validate=False)
     def post(self):
+        """管理员为用户充值"""
         current_user, _ = current_account_with_tenant()
         _require_system_admin(current_user)
 
@@ -150,7 +189,20 @@ class BillingRecordsApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="获取当前用户的账单记录（充值、消费、返佣等）。",
+        params={
+            "limit": "每页条数，最大 100，默认 50",
+            "offset": "偏移量，默认 0",
+        },
+        responses={
+            200: ("成功", billing_record_list_resp),
+            401: "未登录",
+        },
+    )
+    @console_ns.marshal_with(billing_record_list_resp)
     def get(self):
+        """获取当前用户的账单记录"""
         current_user, _ = current_account_with_tenant()
         limit = min(int(request.args.get("limit", 50)), 100)
         offset = int(request.args.get("offset", 0))
@@ -173,7 +225,22 @@ class AdminBillingRecordsApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="管理员查看所有账单记录，可按工作空间或用户过滤（仅超级管理员可用）。",
+        params={
+            "limit": "每页条数，最大 100，默认 50",
+            "offset": "偏移量，默认 0",
+            "tenant_id": "可选，按工作空间过滤",
+            "account_id": "可选，按用户过滤",
+        },
+        responses={
+            200: ("成功", billing_record_list_resp),
+            403: "无权限",
+        },
+    )
+    @console_ns.marshal_with(billing_record_list_resp)
     def get(self):
+        """管理员获取所有账单记录"""
         current_user, _ = current_account_with_tenant()
         _require_system_admin(current_user)
 
@@ -206,7 +273,27 @@ class AdminTopupOrdersApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description=(
+            "管理员查看平台所有充值订单（仅超级管理员可用）。"
+            "包含 pending/success/failed/expired 等各状态订单，"
+            "可按工作空间、用户或状态过滤，用于排查支付异常。"
+        ),
+        params={
+            "limit": "每页条数，最大 100，默认 50",
+            "offset": "偏移量，默认 0",
+            "tenant_id": "可选，按工作空间过滤",
+            "account_id": "可选，按用户过滤",
+            "status": "可选，按订单状态过滤：pending / success / failed / expired",
+        },
+        responses={
+            200: ("成功", topup_order_list_resp),
+            403: "无权限",
+        },
+    )
+    @console_ns.marshal_with(topup_order_list_resp)
     def get(self):
+        """管理员获取所有充值订单"""
         current_user, _ = current_account_with_tenant()
         _require_system_admin(current_user)
 

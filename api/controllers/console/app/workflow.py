@@ -42,7 +42,6 @@ from core.trigger.debug.event_selectors import (
 from extensions.ext_database import db
 from extensions.ext_redis import redis_client
 from factories import file_factory, variable_factory
-from fields.member_fields import simple_account_fields
 from fields.workflow_fields import workflow_fields, workflow_pagination_fields
 from libs import helper
 from libs.datetime_utils import naive_utc_now
@@ -63,12 +62,7 @@ LISTENING_RETRY_IN = 2000
 DEFAULT_REF_TEMPLATE_SWAGGER_2_0 = "#/definitions/{model}"
 RESTORE_SOURCE_WORKFLOW_MUST_BE_PUBLISHED_MESSAGE = "source workflow must be published"
 
-# Register models for flask_restx to avoid dict type issues in Swagger
-# Register in dependency order: base models first, then dependent models
-
-# Base models
-simple_account_model = console_ns.model("SimpleAccount", simple_account_fields)
-
+from controllers.console.app.workflow_run import simple_account_model
 from fields.workflow_fields import pipeline_variable_fields, serialize_value_type
 
 conversation_variable_model = console_ns.model(

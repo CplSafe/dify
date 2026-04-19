@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 
 from flask import request
-from flask_restx import Resource
+from flask_restx import Resource, fields
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from controllers.console import console_ns
@@ -77,6 +77,91 @@ class TopupProviderError(BaseHTTPException):
     description = "The payment provider rejected the request."
     code = 502
 
+
+# ---------------------------------------------------------------------------
+# Swagger 模型定义（模块级）
+# ---------------------------------------------------------------------------
+
+tenant_balance_model = console_ns.model(
+    "TenantBalance",
+    {
+        "tenant_id": fields.String(description="工作空间 ID"),
+        "balance": fields.String(description="可用余额（元）"),
+        "locked": fields.String(description="锁定中的金额（元）"),
+        "total_topup": fields.String(description="累计充值总额（元）"),
+        "total": fields.String(description="总余额（可用 + 锁定，元）"),
+        "currency": fields.String(description="货币单位，默认 CNY"),
+        "updated_at": fields.String(description="最后更新时间 ISO8601"),
+    },
+)
+
+user_balance_model = console_ns.model(
+    "UserBalance",
+    {
+        "account_id": fields.String(description="成员账号 ID"),
+        "balance": fields.String(description="当前余额（元）"),
+        "currency": fields.String(description="货币单位，默认 CNY"),
+        "is_sufficient": fields.Boolean(description="余额是否足够（用于前端提示）"),
+        "updated_at": fields.String(description="最后更新时间 ISO8601"),
+    },
+)
+
+wallet_resp = console_ns.model(
+    "WalletResp",
+    {
+        "tenant": fields.Nested(tenant_balance_model, description="工作空间钱包信息"),
+        "user": fields.Nested(user_balance_model, description="当前成员钱包信息"),
+    },
+)
+
+topup_order_create_req = console_ns.model(
+    "TopupOrderCreateReq",
+    {
+        "amount_fen": fields.Integer(
+            required=True,
+            description="充值金额（分，整数），最小 1，最大 10,000,000",
+            example=10000,
+        ),
+        "subject": fields.String(
+            required=False,
+            description="支付宝收银台显示的商品名称，默认「钱包充值」，最多 256 字符",
+            example="钱包充值",
+        ),
+    },
+)
+
+order_item = console_ns.model(
+    "TopupOrderItem",
+    {
+        "order_id": fields.String(description="系统订单 ID"),
+        "out_trade_no": fields.String(description="商户唯一交易流水号"),
+        "provider": fields.String(description="支付渠道，如 alipay"),
+        "provider_trade_no": fields.String(description="支付宝/支付渠道侧交易号，支付前为 null"),
+        "tenant_id": fields.String(description="工作空间 ID"),
+        "account_id": fields.String(description="发起充值的成员账号 ID"),
+        "amount": fields.String(description="充值金额（元）"),
+        "amount_fen": fields.Integer(description="充值金额（分）"),
+        "subject": fields.String(description="订单标题"),
+        "status": fields.String(
+            description="订单状态：pending / paid / closed / expired"
+        ),
+        "qr_code": fields.String(description="二维码渠道的支付二维码内容（base64 或 URL）"),
+        "pay_url": fields.String(description="页面跳转渠道的支付链接"),
+        "paid_at": fields.String(description="支付完成时间 ISO8601，未支付为 null"),
+        "expires_at": fields.String(description="订单过期时间 ISO8601"),
+        "created_at": fields.String(description="订单创建时间 ISO8601"),
+    },
+)
+
+order_list_resp = console_ns.model(
+    "TopupOrderListResp",
+    {
+        "data": fields.List(fields.Nested(order_item), description="订单列表"),
+        "total": fields.Integer(description="总订单数"),
+        "limit": fields.Integer(description="每页条数"),
+        "offset": fields.Integer(description="偏移量"),
+    },
+)
 
 # ---------------------------------------------------------------------------
 # Request payloads
@@ -193,6 +278,14 @@ class WorkspaceWalletApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="获取当前工作空间钱包余额及当前登录成员的个人余额（所有成员均可访问）",
+        responses={
+            200: ("成功", wallet_resp),
+            401: "未登录",
+        },
+    )
+    @console_ns.marshal_with(wallet_resp)
     def get(self):
         current_user, current_tenant_id = current_account_with_tenant()
         return {
@@ -209,6 +302,18 @@ class TopupOrderListApi(Resource):
     @login_required
     @account_initialization_required
     @tenant_owner_required
+    @console_ns.doc(
+        description="发起充值订单，返回支付宝收银台二维码或跳转链接（仅工作空间所有者可操作）",
+        responses={
+            201: ("创建成功，返回订单信息", order_item),
+            400: "金额参数无效（低于最小限额或超过最大限额）",
+            401: "未登录",
+            403: "仅工作空间所有者可操作",
+            502: "支付渠道业务异常",
+            503: "充值功能未启用",
+        },
+    )
+    @console_ns.expect(topup_order_create_req, validate=False)
     def post(self):
         current_user, current_tenant_id = current_account_with_tenant()
         try:
@@ -237,6 +342,20 @@ class TopupOrderListApi(Resource):
     @login_required
     @account_initialization_required
     @tenant_owner_required
+    @console_ns.doc(
+        description="获取当前工作空间的充值订单列表，按创建时间倒序（仅工作空间所有者可操作）",
+        params={
+            "limit": "每页条数，最大 100，默认 20",
+            "offset": "分页偏移量，默认 0",
+            "status": "可选，按状态过滤：pending / paid / closed / expired",
+        },
+        responses={
+            200: ("成功", order_list_resp),
+            401: "未登录",
+            403: "仅工作空间所有者可操作",
+        },
+    )
+    @console_ns.marshal_with(order_list_resp)
     def get(self):
         """Owner-only: list top-up orders for the workspace.
 
@@ -270,6 +389,16 @@ class TopupOrderDetailApi(Resource):
     @login_required
     @account_initialization_required
     @tenant_owner_required
+    @console_ns.doc(
+        description="按商户交易流水号查询单条充值订单详情（仅工作空间所有者可操作）",
+        responses={
+            200: ("成功", order_item),
+            401: "未登录",
+            403: "仅工作空间所有者可操作",
+            404: "订单不存在",
+        },
+    )
+    @console_ns.marshal_with(order_item)
     def get(self, out_trade_no: str):
         """Owner-only: fetch a single top-up order. Same rationale as the
         list endpoint — the QR code / amount / status are owner-scoped."""
@@ -291,6 +420,17 @@ class TopupOrderCloseApi(Resource):
     @login_required
     @account_initialization_required
     @tenant_owner_required
+    @console_ns.doc(
+        description="主动关闭待支付的充值订单（无请求体）。已关闭/已支付/已过期订单不可重复关闭（仅工作空间所有者可操作）",
+        responses={
+            200: ("关闭成功，返回订单最新状态", order_item),
+            401: "未登录",
+            403: "仅工作空间所有者可操作",
+            404: "订单不存在",
+            409: "订单状态不允许关闭",
+        },
+    )
+    @console_ns.marshal_with(order_item)
     def post(self, out_trade_no: str):
         _, current_tenant_id = current_account_with_tenant()
         try:

@@ -13,12 +13,9 @@ from models.account import TenantStatus
 from models.model import App, Site
 from services.feature_service import FeatureService
 
-
-@web_ns.route("/site")
-class AppSiteApi(WebApiResource):
-    """Resource for app sites."""
-
-    model_config_fields = {
+_model_config_model = web_ns.model(
+    "AppModelConfig",
+    {
         "opening_statement": fields.String,
         "suggested_questions": fields.Raw(attribute="suggested_questions_list"),
         "suggested_questions_after_answer": fields.Raw(attribute="suggested_questions_after_answer_dict"),
@@ -26,9 +23,12 @@ class AppSiteApi(WebApiResource):
         "model": fields.Raw(attribute="model_dict"),
         "user_input_form": fields.Raw(attribute="user_input_form_list"),
         "pre_prompt": fields.String,
-    }
+    },
+)
 
-    site_fields = {
+_site_model = web_ns.model(
+    "AppSite",
+    {
         "title": fields.String,
         "chat_color_theme": fields.String,
         "chat_color_theme_inverted": fields.Boolean,
@@ -49,18 +49,31 @@ class AppSiteApi(WebApiResource):
         "show_workflow_steps": fields.Boolean,
         "show_answer_disclaimer": fields.Boolean,
         "use_icon_as_answer_icon": fields.Boolean,
-    }
+    },
+)
 
-    app_fields = {
+_app_model = web_ns.model(
+    "AppInfo",
+    {
         "app_id": fields.String,
         "end_user_id": fields.String,
         "enable_site": fields.Boolean,
-        "site": fields.Nested(site_fields),
-        "model_config": fields.Nested(model_config_fields, allow_null=True),
+        "site": fields.Nested(_site_model),
+        "model_config": fields.Nested(_model_config_model, allow_null=True),
         "plan": fields.String,
         "can_replace_logo": fields.Boolean,
         "custom_config": fields.Raw(attribute="custom_config"),
-    }
+    },
+)
+
+
+@web_ns.route("/site")
+class AppSiteApi(WebApiResource):
+    """Resource for app sites."""
+
+    model_config_fields = _model_config_model
+    site_fields = _site_model
+    app_fields = _app_model
 
     @web_ns.doc("Get App Site Info")
     @web_ns.doc(description="Retrieve app site information and configuration.")

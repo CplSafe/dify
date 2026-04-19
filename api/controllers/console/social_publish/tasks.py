@@ -34,6 +34,14 @@ from controllers.console.social_publish.error import (
     VideoTooLargeHTTPError,
     WorkNotFoundHTTPError,
 )
+from controllers.console.social_publish.models import (
+    batch_create_task_req,
+    batch_create_task_resp,
+    create_task_req,
+    create_task_resp,
+    task_list_resp,
+    task_status_resp,
+)
 from controllers.console.wraps import account_initialization_required, setup_required
 from libs.login import current_account_with_tenant, login_required
 from models.engine import db
@@ -119,7 +127,18 @@ class SocialPublishTasksApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="获取当前成员的发布任务列表（成员级隔离）。",
+        params={
+            "account_id": "可选，按账号 ID 过滤",
+            "status": "可选，按状态过滤：pending / queued / running / success / failed",
+            "limit": "可选，返回条数上限，默认 50，最大 100",
+        },
+        responses={200: ("成功", task_list_resp)},
+    )
+    @console_ns.marshal_with(task_list_resp)
     def get(self):
+        """获取当前成员的发布任务列表"""
         # P8: per-member — list only the current member's tasks.
         current_user, current_tenant_id = current_account_with_tenant()
         account_id = request.args.get("account_id") or None
@@ -144,7 +163,20 @@ class SocialPublishTasksApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="创建单个发布任务，将视频发布到指定社交账号。",
+        responses={
+            200: ("成功", create_task_resp),
+            400: "入参缺失或格式错误",
+            404: "账号不存在或不属于当前成员",
+            409: "该账号已有进行中的发布任务（单飞限制）",
+            429: "当前租户待处理任务数超出配额",
+        },
+    )
+    @console_ns.expect(create_task_req, validate=False)
+    @console_ns.marshal_with(create_task_resp)
     def post(self):
+        """创建发布任务"""
         current_user, current_tenant_id = current_account_with_tenant()
         body = request.get_json(silent=True) or {}
         platform_payload = body.get("platform_payload")
@@ -174,32 +206,19 @@ class SocialPublishTasksApi(Resource):
 
 @console_ns.route("/social-publish/tasks/batch")
 class SocialPublishTasksBatchApi(Resource):
-    """Dispatch the same content to multiple accounts in one call.
-
-    Body shape::
-
-        {
-          "title": "...",
-          "tags": ["a"],
-          "desc": "...",
-          "work_id": "...",
-          "targets": [
-            {"account_id": "<douyin-acc>", "platform_payload": {"location": "Shanghai"}},
-            {"account_id": "<xhs-acc>",   "platform_payload": {"location": "Beijing"}}
-          ]
-        }
-
-    The response is always 200 with a per-target ``results`` array — the
-    FE renders per-row success/failure rather than getting a single 4xx
-    that hides which targets actually went through. Quota / single-flight
-    / rate-limit errors are reported per-target so a partial batch can
-    still succeed.
-    """
-
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="批量创建发布任务，将同一视频同时发布到多个社交账号。"
+                    "响应始终为 200，每个目标账号单独返回成功/失败结果，"
+                    "部分失败不影响其他账号的任务创建。",
+        responses={200: ("成功，含每个目标的结果", batch_create_task_resp)},
+    )
+    @console_ns.expect(batch_create_task_req, validate=False)
+    @console_ns.marshal_with(batch_create_task_resp)
     def post(self):
+        """批量创建发布任务"""
         current_user, current_tenant_id = current_account_with_tenant()
         body = request.get_json(silent=True) or {}
         raw_targets = body.get("targets")
@@ -253,7 +272,19 @@ class SocialPublishTaskItemApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="查询单个发布任务的状态快照。前端建议每 3 秒轮询一次，"
+                    "直到 task.status 为 success / failed。"
+                    "若返回 challenge_session_id 说明 SAU worker 触发了 SMS 验证，"
+                    "需打开短信验证弹窗（/social-publish/tasks/{task_id} 的 challenge 流程）。",
+        responses={
+            200: ("成功", task_status_resp),
+            404: "任务不存在或不属于当前成员",
+        },
+    )
+    @console_ns.marshal_with(task_status_resp)
     def get(self, task_id: str):
+        """查询发布任务状态"""
         # P8: per-member — only the task's creator can poll its status.
         current_user, current_tenant_id = current_account_with_tenant()
         try:

@@ -108,18 +108,7 @@ register_schema_models(
     SuggestedQuestionsResponse,
 )
 
-# Register models for flask_restx to avoid dict type issues in Swagger
-# Register in dependency order: base models first, then dependent models
-
-# Base models
-simple_account_model = console_ns.model(
-    "SimpleAccount",
-    {
-        "id": fields.String,
-        "name": fields.String,
-        "email": fields.String,
-    },
-)
+from controllers.console.app.workflow_run import simple_account_model
 
 message_file_model = console_ns.model(
     "MessageFile",

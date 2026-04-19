@@ -30,12 +30,27 @@ from __future__ import annotations
 import logging
 
 from flask import Response, request
-from flask_restx import Resource
+from flask_restx import Resource, fields
 
 from controllers.inner_api import inner_api_ns
 from services.payment.payment_service import PaymentService
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Swagger 模型定义（模块级）
+# ---------------------------------------------------------------------------
+
+alipay_notify_resp = inner_api_ns.model(
+    "AlipayNotifyResp",
+    {
+        "result": fields.String(
+            description="固定返回纯文本 success（处理成功）或 fail（处理失败），"
+                        "支付宝收到 fail 会重试通知",
+            example="success",
+        ),
+    },
+)
 
 
 def _plain_text(body: str) -> Response:
@@ -47,6 +62,18 @@ def _plain_text(body: str) -> Response:
 class AlipayNotifyApi(Resource):
     """Receive Alipay async payment notifications."""
 
+    @inner_api_ns.doc(
+        description=(
+            "【内部接口】接收支付宝异步支付回调通知。"
+            "支付宝以 application/x-www-form-urlencoded 格式 POST 交易参数和 RSA 签名，"
+            "本接口验签后更新订单状态并为工作空间钱包入账。"
+            "返回纯文本 success 表示处理成功；返回 fail 触发支付宝重试。"
+            "该接口无需登录，安全性依赖 RSA 签名验证，不应对外暴露。"
+        ),
+        responses={
+            200: "处理结果（纯文本 success 或 fail）",
+        },
+    )
     def post(self):
         # Alipay sends form-encoded params. We accept JSON too purely as a
         # convenience for local manual testing — production traffic from

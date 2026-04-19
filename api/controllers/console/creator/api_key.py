@@ -10,6 +10,10 @@ from flask_restx import Resource
 from sqlalchemy import select
 
 from controllers.console import console_ns
+from controllers.console.creator.models import (
+    api_key_create_req,
+    api_key_resp,
+)
 from controllers.console.wraps import account_initialization_required, setup_required
 from libs.login import current_account_with_tenant, login_required
 from models.creator import UserGlobalApiKey
@@ -23,8 +27,16 @@ class UserGlobalApiKeyApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="获取当前用户的全局 API Key（脱敏展示，token 字段仅显示前后几位）。未创建时 api_key 为 null。",
+        responses={
+            200: ("成功", api_key_resp),
+            401: "未登录",
+        },
+    )
+    @console_ns.marshal_with(api_key_resp)
     def get(self):
-        """Return the current user's global API key (masked)."""
+        """获取当前用户的 API Key（脱敏）"""
         current_user, _ = current_account_with_tenant()
         key = db.session.scalar(
             select(UserGlobalApiKey).where(UserGlobalApiKey.account_id == current_user.id)
@@ -36,8 +48,21 @@ class UserGlobalApiKeyApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description=(
+            "生成（或重新生成）当前用户的全局 API Key。"
+            "若已存在旧 Key，旧 Key 将立即作废。"
+            "响应中 token 字段为明文，仅此次返回，后续查询会脱敏。"
+        ),
+        responses={
+            201: ("创建成功，返回明文 token", api_key_resp),
+            401: "未登录",
+        },
+    )
+    @console_ns.expect(api_key_create_req, validate=False)
+    @console_ns.marshal_with(api_key_resp, code=201)
     def post(self):
-        """Generate (or regenerate) the current user's global API key."""
+        """生成（或重置）当前用户的 API Key"""
         current_user, _ = current_account_with_tenant()
 
         # Delete existing key if present
@@ -71,8 +96,15 @@ class UserGlobalApiKeyApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="撤销（删除）当前用户的全局 API Key。Key 不存在时也返回成功。",
+        responses={
+            200: "撤销成功",
+            401: "未登录",
+        },
+    )
     def delete(self):
-        """Revoke the current user's global API key."""
+        """撤销当前用户的 API Key"""
         current_user, _ = current_account_with_tenant()
         key = db.session.scalar(
             select(UserGlobalApiKey).where(UserGlobalApiKey.account_id == current_user.id)

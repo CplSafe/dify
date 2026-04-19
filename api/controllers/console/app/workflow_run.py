@@ -501,10 +501,11 @@ class ConsoleWorkflowPauseDetailsApi(Resource):
         if not workflow_run:
             raise NotFoundError("Workflow run not found")
 
-        # Allow cross-workspace access for installed (Explore) apps: the workflow
-        # run's tenant_id belongs to the app owner's workspace, which may differ
-        # from the current user's workspace.  Verify ownership via created_by instead.
-        if workflow_run.created_by != current_user.id:
+        # Verify the current user has access to the app that owns this workflow run.
+        # We check app ownership rather than created_by, so that workspace admins
+        # can view pause details for runs created by any member.
+        app = db.session.get(App, workflow_run.app_id)
+        if not app or app.tenant_id != current_user.current_tenant_id:
             raise NotFoundError("Workflow run not found")
 
         # Check if workflow is suspended

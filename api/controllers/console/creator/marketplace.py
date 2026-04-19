@@ -12,6 +12,14 @@ from flask import request
 from flask_restx import Resource
 
 from controllers.console import console_ns
+from controllers.console.creator.models import (
+    marketplace_app_list_resp,
+    marketplace_default_app_req,
+    marketplace_default_app_resp,
+    marketplace_install_resp,
+    marketplace_publish_req,
+    marketplace_status_resp,
+)
 from controllers.console.wraps import account_initialization_required, setup_required
 from libs.login import current_account_with_tenant, login_required
 from services.marketplace_service import MarketplaceService
@@ -29,16 +37,33 @@ class MarketplaceAppsApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="获取已上架的创作者市场应用列表（所有已登录用户可访问）。",
+        responses={
+            200: ("成功", marketplace_app_list_resp),
+            401: "未登录",
+        },
+    )
+    @console_ns.marshal_with(marketplace_app_list_resp)
     def get(self):
-        """List all published marketplace apps."""
+        """获取市场应用列表"""
         apps = MarketplaceService.get_marketplace_apps()
         return {"data": apps, "total": len(apps)}
 
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="将指定 App 上架到创作者市场（仅超级管理员可用）。可同时设置为默认创作者首页应用。",
+        responses={
+            201: "上架成功，返回 marketplace 记录",
+            400: "参数缺失或 App 已上架",
+            403: "无权限",
+        },
+    )
+    @console_ns.expect(marketplace_publish_req, validate=False)
     def post(self):
-        """Publish an app to the marketplace (super admin only)."""
+        """上架应用到市场（超级管理员）"""
         current_user, _ = current_account_with_tenant()
         _require_system_admin(current_user)
 
@@ -69,8 +94,16 @@ class MarketplaceAppItemApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="将指定 App 从创作者市场下架（仅超级管理员可用）。",
+        responses={
+            200: "下架成功",
+            403: "无权限",
+            404: "App 未在市场中",
+        },
+    )
     def delete(self, app_id: str):
-        """Unpublish an app from the marketplace (super admin only)."""
+        """下架应用（超级管理员）"""
         current_user, _ = current_account_with_tenant()
         _require_system_admin(current_user)
 
@@ -84,8 +117,16 @@ class MarketplaceAppStatusApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="查询指定 App 是否已在创作者市场上架。",
+        responses={
+            200: ("成功", marketplace_status_resp),
+            401: "未登录",
+        },
+    )
+    @console_ns.marshal_with(marketplace_status_resp)
     def get(self, app_id: str):
-        """Check if an app is published in the marketplace."""
+        """查询应用上架状态"""
         is_published = MarketplaceService.is_published(app_id)
         return {"app_id": app_id, "is_published": is_published}
 
@@ -96,8 +137,17 @@ class MarketplaceAppDetailApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="获取市场应用的完整详情（含 App 配置、站点信息等）。"
+                    "所有创作者用户可访问，但 App 必须处于上架状态。",
+        responses={
+            200: "成功，返回 App 完整详情（结构同 /console/api/apps/{id}）",
+            401: "未登录",
+            404: "App 未上架或不存在",
+        },
+    )
     def get(self, app_id: str):
-        """Get full app detail for a marketplace app (accessible to all creator users)."""
+        """获取市场应用详情"""
         from sqlalchemy import select
 
         from controllers.console.app.app import AppDetailWithSite
@@ -134,15 +184,21 @@ class MarketplaceAppInstallApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description=(
+            "将市场应用安装到当前用户的探索工作空间，返回 installed_app_id。"
+            "若已安装则复用旧记录（already_installed=true）。"
+            "前端可凭 installed_app_id 跳转 /explore/installed/{id} 使用完整聊天 UI。"
+        ),
+        responses={
+            200: ("已安装（复用旧记录）", marketplace_install_resp),
+            201: ("新安装成功", marketplace_install_resp),
+            404: "App 未上架或不存在",
+        },
+    )
+    @console_ns.marshal_with(marketplace_install_resp)
     def post(self, app_id: str):
-        """Install a marketplace app into the current user's explore workspace.
-
-        Unlike the standard POST /installed-apps, this does NOT require a RecommendedApp entry —
-        any active marketplace app can be installed directly.
-
-        Returns the installed_app_id so the frontend can navigate to
-        /explore/installed/{installed_app_id} and use the full Dify explore chat UI.
-        """
+        """安装市场应用到探索工作空间"""
         from sqlalchemy import and_, select
 
         from libs.datetime_utils import naive_utc_now
@@ -202,8 +258,16 @@ class MarketplaceDefaultAppApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="获取当前设置的默认创作者首页应用。未设置时 data 为 null。",
+        responses={
+            200: ("成功", marketplace_default_app_resp),
+            401: "未登录",
+        },
+    )
+    @console_ns.marshal_with(marketplace_default_app_resp)
     def get(self):
-        """Get the default creator homepage app."""
+        """获取默认创作者首页应用"""
         default_app = MarketplaceService.get_default_app()
         if not default_app:
             return {"data": None}
@@ -212,8 +276,17 @@ class MarketplaceDefaultAppApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="设置指定市场应用为默认创作者首页应用（仅超级管理员可用）。该应用必须已上架。",
+        responses={
+            200: "设置成功，返回更新后的 marketplace 记录",
+            400: "参数缺失或 App 未上架",
+            403: "无权限",
+        },
+    )
+    @console_ns.expect(marketplace_default_app_req, validate=False)
     def post(self):
-        """Set a marketplace app as the default creator homepage app (super admin only)."""
+        """设置默认创作者首页应用（超级管理员）"""
         current_user, _ = current_account_with_tenant()
         _require_system_admin(current_user)
 

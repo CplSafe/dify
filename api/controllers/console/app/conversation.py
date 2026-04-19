@@ -62,18 +62,7 @@ console_ns.schema_model(
     ChatConversationQuery.model_json_schema(ref_template=DEFAULT_REF_TEMPLATE_SWAGGER_2_0),
 )
 
-# Register models for flask_restx to avoid dict type issues in Swagger
-# Register in dependency order: base models first, then dependent models
-
-# Base models
-simple_account_model = console_ns.model(
-    "SimpleAccount",
-    {
-        "id": fields.String,
-        "name": fields.String,
-        "email": fields.String,
-    },
-)
+from controllers.console.app.workflow_run import simple_account_model
 
 feedback_stat_model = console_ns.model(
     "FeedbackStat",

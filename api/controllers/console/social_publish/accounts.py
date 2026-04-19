@@ -30,6 +30,15 @@ from controllers.console.social_publish.error import (
     SessionExpiredHTTPError,
     TenantMismatchHTTPError,
 )
+from controllers.console.social_publish.models import (
+    account_list_resp,
+    auth_start_req,
+    auth_start_resp,
+    auth_status_resp,
+    challenge_action_resp,
+    challenge_state_resp,
+    challenge_submit_req,
+)
 from controllers.console.wraps import account_initialization_required, setup_required
 from libs.login import current_account_with_tenant, login_required
 from models.engine import db
@@ -105,12 +114,18 @@ class SocialPublishAccountsListApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="获取当前成员已绑定的社交账号列表（成员级隔离，只能看到自己绑定的账号）",
+        params={"platform": "可选，按平台过滤，取值 douyin / xhs"},
+        responses={
+            200: ("成功", account_list_resp),
+            400: "功能未启用或请求参数错误",
+            401: "未登录",
+        },
+    )
+    @console_ns.marshal_with(account_list_resp)
     def get(self):
-        """List current member's bound social accounts in this tenant.
-
-        P8: per-member isolation — each member only sees the accounts
-        they themselves bound, not their colleagues' accounts.
-        """
+        """获取当前成员已绑定的社交账号列表"""
         current_user, current_tenant_id = current_account_with_tenant()
         platform = request.args.get("platform") or None
         try:
@@ -131,8 +146,20 @@ class SocialPublishAuthStartApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="发起社交账号授权，返回二维码图片（base64）。"
+                    "用户扫码后轮询 /auth/status/{session_id} 获取结果。"
+                    "重新授权时传入 account_id。",
+        responses={
+            200: ("成功，返回 session_id 和二维码", auth_start_resp),
+            422: "platform 参数缺失或不支持",
+            503: "SAU 服务不可用",
+        },
+    )
+    @console_ns.expect(auth_start_req, validate=False)
+    @console_ns.marshal_with(auth_start_resp)
     def post(self):
-        """Begin an auth session and return a QR image."""
+        """发起社交账号扫码授权"""
         current_user, current_tenant_id = current_account_with_tenant()
         payload = request.get_json(silent=True) or {}
         platform = payload.get("platform")
@@ -164,8 +191,18 @@ class SocialPublishAuthStatusApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="轮询扫码授权会话状态。前端建议每 2 秒轮询一次，"
+                    "直到 status 为 success / expired / failed。"
+                    "若返回 challenge_session_id 说明触发了 SMS 二次验证，需切换到短信验证弹窗。",
+        responses={
+            200: ("成功", auth_status_resp),
+            404: "session_id 不存在或已过期",
+        },
+    )
+    @console_ns.marshal_with(auth_status_resp)
     def get(self, session_id: str):
-        """Poll the status of a sau auth session."""
+        """轮询扫码授权会话状态"""
         _, current_tenant_id = current_account_with_tenant()
         try:
             service = _build_service()
@@ -186,11 +223,15 @@ class SocialPublishAccountItemApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="解绑社交账号。只有绑定该账号的成员才能删除（成员级隔离）。",
+        responses={
+            200: "删除成功",
+            404: "账号不存在或不属于当前成员",
+        },
+    )
     def delete(self, account_id: str):
-        """Delete an account; tells sau to drop the cookie best-effort.
-
-        P8: per-member — only the creator of the account can delete it.
-        """
+        """解绑社交账号"""
         current_user, current_tenant_id = current_account_with_tenant()
         try:
             service = _build_service()
@@ -227,10 +268,14 @@ class SocialPublishAuthChallengeApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="查询 SMS 二次验证会话状态。前端每 2 秒轮询一次，"
+                    "直到 status 为 completed / aborted。",
+        responses={200: ("成功", challenge_state_resp), 404: "会话不存在"},
+    )
+    @console_ns.marshal_with(challenge_state_resp)
     def get(self, challenge_session_id: str):
-        """Return the current state of an SMS challenge session.
-
-        The FE polls this every ~2s while the SMS-relay modal is open."""
+        """查询 SMS 验证会话状态"""
         try:
             service = _build_service()
             data = service.sau_client_get_challenge(session_id=challenge_session_id)
@@ -246,9 +291,14 @@ class SocialPublishAuthChallengeTriggerSmsApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="触发平台发送短信验证码。对应用户点击「获取验证码」按钮，"
+                    "后端会在 Chromium 页面自动点击对应按钮。无请求体。",
+        responses={200: ("成功", challenge_action_resp), 404: "会话不存在"},
+    )
+    @console_ns.marshal_with(challenge_action_resp)
     def post(self, challenge_session_id: str):
-        """User clicked「发送验证码」— forward to sau, which will click the
-        platform's「获取验证码」button on the live chromium page."""
+        """触发平台发送短信验证码"""
         try:
             service = _build_service()
             data = service.sau_client_trigger_sms(session_id=challenge_session_id)
@@ -264,9 +314,15 @@ class SocialPublishAuthChallengeSubmitCodeApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="提交用户输入的短信验证码。后端自动填入 Chromium 页面并点击验证。"
+                    "若平台返回验证码错误，ok=false 且 detail 说明原因，需用户重新输入。",
+        responses={200: ("成功", challenge_action_resp), 400: "验证码格式错误（非纯数字或长度不对）"},
+    )
+    @console_ns.expect(challenge_submit_req, validate=False)
+    @console_ns.marshal_with(challenge_action_resp)
     def post(self, challenge_session_id: str):
-        """User typed the 6-digit OTP — forward to sau, which will fill
-        the input + click 下一步 on the chromium page."""
+        """提交短信验证码"""
         body = request.get_json(silent=True) or {}
         code = str(body.get("code") or "").strip()
         if not (code.isdigit() and 4 <= len(code) <= 8):
@@ -291,7 +347,13 @@ class SocialPublishAuthChallengeAbortApi(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @console_ns.doc(
+        description="用户主动取消 SMS 验证，中止当前会话。无请求体。",
+        responses={200: ("成功", challenge_action_resp), 404: "会话不存在"},
+    )
+    @console_ns.marshal_with(challenge_action_resp)
     def post(self, challenge_session_id: str):
+        """取消 SMS 验证会话"""
         try:
             service = _build_service()
             data = service.sau_client_abort(session_id=challenge_session_id)

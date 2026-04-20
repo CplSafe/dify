@@ -46,7 +46,9 @@ _task_item = console_ns.model(
 _task_list_resp = console_ns.model(
     "CreatorTaskListResp",
     {
-        "data": fields.List(fields.Nested(_task_item), description="任务列表"),
+        "tasks": fields.List(fields.Nested(_task_item), description="任务列表"),
+        "total": fields.Integer(description="任务总数"),
+        "in_progress_count": fields.Integer(description="进行中任务数"),
     },
 )
 

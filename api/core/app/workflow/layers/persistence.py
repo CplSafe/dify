@@ -380,15 +380,24 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
                 # Falls back to direct call if a future graphon version exposes
                 # add_tokens on the wrapper itself.
                 state = getattr(self.graph_runtime_state, "_state", None) or self.graph_runtime_state
+                before = getattr(state, "total_tokens", 0)
                 state.add_tokens(tokens)
-                logger.debug(
-                    "Extracted %d tokens from HTTP node %s (field: %s)",
-                    tokens,
+                after = getattr(state, "total_tokens", 0)
+                logger.info(
+                    "HTTP node %s tokens extracted: +%d (field=%s, total %d→%d)",
                     event.node_id,
+                    tokens,
                     token_field_name,
+                    before,
+                    after,
                 )
         except (json.JSONDecodeError, ValueError, TypeError, KeyError) as exc:
-            logger.debug("Failed to extract tokens from HTTP node %s: %s", event.node_id, exc)
+            logger.warning(
+                "Failed to extract tokens from HTTP node %s (field=%s): %s",
+                event.node_id,
+                token_field_name,
+                exc,
+            )
 
     def _get_execution_id(self) -> str:
         workflow_execution_id = self._system_variables().get(SystemVariableKey.WORKFLOW_EXECUTION_ID)

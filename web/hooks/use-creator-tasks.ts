@@ -13,31 +13,28 @@ import {
 } from '@/service/creator-task'
 
 const POLL_INTERVAL_MS = 5000
-const IN_PROGRESS_STATUSES = ['running', 'waiting_input'] as const
+const IN_PROGRESS_STATUSES: readonly string[] = ['running', 'waiting_input']
 
-function isInProgress(status: string): boolean {
-  return (IN_PROGRESS_STATUSES as readonly string[]).includes(status)
+const EMPTY_RESPONSE: CreatorTaskListResponse = {
+  tasks: [],
+  total: 0,
+  in_progress_count: 0,
 }
 
-function hasConflictStatus(err: unknown): boolean {
-  return (
-    typeof err === 'object'
-    && err !== null
-    && 'status' in err
-    && (err as { status: unknown }).status === 409
-  )
-}
+const isInProgress = (status: string | undefined): boolean =>
+  status != null && IN_PROGRESS_STATUSES.includes(status)
+
+const hasConflictStatus = (err: unknown): boolean =>
+  typeof err === 'object'
+  && err !== null
+  && 'status' in err
+  && (err as { status: unknown }).status === 409
 
 export function useCreatorTasks() {
-  const [data, setData] = useState<CreatorTaskListResponse>({
-    tasks: [],
-    total: 0,
-    in_progress_count: 0,
-  })
+  const [data, setData] = useState<CreatorTaskListResponse>(EMPTY_RESPONSE)
   const [loading, setLoading] = useState(false)
   const isFetchingRef = useRef(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const inProgressRef = useRef(false)
 
   const fetchTasks = useCallback(async () => {
     if (isFetchingRef.current)
@@ -45,8 +42,11 @@ export function useCreatorTasks() {
     isFetchingRef.current = true
     try {
       const result = await listCreatorTasks()
-      inProgressRef.current = result.in_progress_count > 0
-      setData(result)
+      setData({
+        tasks: Array.isArray(result?.tasks) ? result.tasks : [],
+        total: result?.total ?? 0,
+        in_progress_count: result?.in_progress_count ?? 0,
+      })
     }
     catch {
       // stale data is acceptable on network errors
@@ -55,17 +55,6 @@ export function useCreatorTasks() {
       isFetchingRef.current = false
     }
   }, [])
-
-  const scheduleNextPoll = useCallback(() => {
-    if (timerRef.current)
-      clearTimeout(timerRef.current)
-    if (inProgressRef.current) {
-      timerRef.current = setTimeout(async () => {
-        await fetchTasks()
-        scheduleNextPoll()
-      }, POLL_INTERVAL_MS)
-    }
-  }, [fetchTasks])
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -78,19 +67,39 @@ export function useCreatorTasks() {
   }, [fetchTasks])
 
   useEffect(() => {
-    inProgressRef.current = data.in_progress_count > 0
-    scheduleNextPoll()
+    if (data.in_progress_count <= 0)
+      return
+    const tick = () => {
+      timerRef.current = setTimeout(async () => {
+        await fetchTasks()
+        tick()
+      }, POLL_INTERVAL_MS)
+    }
+    tick()
     return () => {
       if (timerRef.current)
         clearTimeout(timerRef.current)
     }
-  }, [data.in_progress_count, scheduleNextPoll])
+  }, [data.in_progress_count, fetchTasks])
 
   const refresh = useCallback(async () => {
     setLoading(true)
     await fetchTasks()
     setLoading(false)
   }, [fetchTasks])
+
+  const replaceTask = useCallback((taskId: string, updated: CreatorTask) => {
+    setData((prev) => {
+      const prevStatus = prev.tasks.find(t => t.id === taskId)?.status
+      const delta
+        = Number(isInProgress(updated.status)) - Number(isInProgress(prevStatus))
+      return {
+        ...prev,
+        tasks: prev.tasks.map(t => (t.id === taskId ? updated : t)),
+        in_progress_count: prev.in_progress_count + delta,
+      }
+    })
+  }, [])
 
   const updateTask = useCallback(
     async (
@@ -99,18 +108,7 @@ export function useCreatorTasks() {
     ): Promise<CreatorTask | null> => {
       try {
         const updated = await updateCreatorTask(taskId, payload)
-        setData((prev) => {
-          const wasInProgress = isInProgress(
-            prev.tasks.find(t => t.id === taskId)?.status ?? '',
-          )
-          const nowInProgress = isInProgress(updated.status)
-          const delta = Number(nowInProgress) - Number(wasInProgress)
-          return {
-            ...prev,
-            tasks: prev.tasks.map(t => (t.id === taskId ? updated : t)),
-            in_progress_count: prev.in_progress_count + delta,
-          }
-        })
+        replaceTask(taskId, updated)
         return updated
       }
       catch (err: unknown) {
@@ -119,7 +117,7 @@ export function useCreatorTasks() {
         return null
       }
     },
-    [fetchTasks],
+    [fetchTasks, replaceTask],
   )
 
   const renameTask = useCallback(
@@ -144,7 +142,6 @@ export function useCreatorTasks() {
       await deleteCreatorTask(taskId)
       setData((prev) => {
         const task = prev.tasks.find(t => t.id === taskId)
-        const wasInProgress = isInProgress(task?.status ?? '')
         if (task?.conversation_id) {
           window.dispatchEvent(
             new CustomEvent('creator-task-deleted', {
@@ -156,9 +153,8 @@ export function useCreatorTasks() {
           ...prev,
           tasks: prev.tasks.filter(t => t.id !== taskId),
           total: prev.total - 1,
-          in_progress_count: wasInProgress
-            ? prev.in_progress_count - 1
-            : prev.in_progress_count,
+          in_progress_count:
+            prev.in_progress_count - Number(isInProgress(task?.status)),
         }
       })
       return true

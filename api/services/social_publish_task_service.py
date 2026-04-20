@@ -716,11 +716,16 @@ class SocialPublishTaskService:
         # forgot to populate the envelope would falsely tell the user their
         # video went live.
         if result.get("success") is True:
-            return self._terminal_transition(
+            updated = self._terminal_transition(
                 task,
                 status=SocialPublishTaskStatus.SUCCESS.value,
                 result_url=result.get("current_url"),
             )
+            # Mark the originating CreatorWork as published to this platform
+            # so the works list shows a「已发布至 xxx」badge.
+            if updated is not None and task.work_id:
+                self._mark_work_published(task.work_id, task.platform)
+            return updated
         # The Celery task completed but the upstream publish reported failure
         # — surface it as a Dify-side failure so the FE can show the message.
         upstream_status = str(result.get("status") or "")
@@ -783,6 +788,32 @@ class SocialPublishTaskService:
         if status == "timeout":
             return "upload_timeout"
         return "upload_failed"
+
+    def _mark_work_published(self, work_id: str, platform: str) -> None:
+        """Set CreatorWork.share_status to ``published_<platform>``.
+
+        Best-effort: a failure here must not break task finalization since
+        the publish itself already succeeded.
+        """
+        try:
+            new_status = f"published_{platform}"
+            work = db.session.execute(
+                db.select(CreatorWork).where(CreatorWork.id == work_id)
+            ).scalar_one_or_none()
+            if work is None:
+                logger.warning(
+                    "work %s not found while marking published_%s",
+                    work_id,
+                    platform,
+                )
+                return
+            work.share_status = new_status
+            db.session.commit()
+        except Exception:
+            logger.exception(
+                "failed to mark work %s as published_%s", work_id, platform
+            )
+            db.session.rollback()
 
     def _mark_account_expired(self, tenant_id: str, account_id: str) -> None:
         try:

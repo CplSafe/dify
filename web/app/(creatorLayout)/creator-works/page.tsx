@@ -19,14 +19,18 @@ type Work = {
 
 const shareStatusLabel: Record<string, string> = {
   draft: '草稿',
+  published_douyin: '已发布至抖音',
   published_tiktok: '已发布至抖音',
   published_xhs: '已发布至小红书',
+  published_ks: '已发布至快手',
 }
 
 const shareStatusColor: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-600',
+  published_douyin: 'bg-pink-100 text-pink-700',
   published_tiktok: 'bg-pink-100 text-pink-700',
   published_xhs: 'bg-red-100 text-red-700',
+  published_ks: 'bg-orange-100 text-orange-700',
 }
 
 export default function CreatorWorksPage() {

@@ -23,10 +23,11 @@ export default function TaskCenterDrawer({ onClose }: Props) {
     refresh()
   }, [refresh])
 
-  const inProgressTasks = data.tasks.filter(t =>
+  const tasks = data?.tasks ?? []
+  const inProgressTasks = tasks.filter(t =>
     ['pending', 'running', 'waiting_input'].includes(t.status),
   )
-  const completedTasks = data.tasks.filter(t =>
+  const completedTasks = tasks.filter(t =>
     ['completed', 'failed'].includes(t.status),
   )
 

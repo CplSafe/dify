@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import Button from '@/app/components/base/button'
 import { ScrollArea } from '@/app/components/base/ui/scroll-area'
 import { SocialPublishAccountList } from '@/app/components/creator/social-publish/account-list'
@@ -90,12 +90,16 @@ type Props = {
   show: boolean
   defaultTab?: CreatorSettingsTab
   onClose: () => void
+  // Optional: notify caller when the active tab changes so it can sync
+  // to URL state. When omitted the modal stays self-contained.
+  onTabChange?: (tab: CreatorSettingsTab) => void
 }
 
 export default function CreatorSettingsModal({
   show,
   defaultTab = 'account',
   onClose,
+  onTabChange,
 }: Props) {
   const { isCurrentWorkspaceOwner } = useAppContext()
   // Members see a reduced menu. Hiding instead of disabling keeps the UI
@@ -111,18 +115,29 @@ export default function CreatorSettingsModal({
   )
   const fallbackTab: CreatorSettingsTab
     = visibleMenuItems.find(m => m.key === defaultTab)?.key ?? 'account'
-  const [selectedTab, setSelectedTab]
+
+  // Internal state only used as fallback when caller doesn't drive tab
+  // selection via `onTabChange` (i.e. modal is "uncontrolled").
+  const [internalTab, setInternalTab]
     = useState<CreatorSettingsTab>(fallbackTab)
 
-  // Derive the rendered tab instead of syncing through an effect: if the
-  // user picked a tab that later becomes hidden (e.g. role downgrade,
-  // modal reopened with a different defaultTab) we silently fall back.
-  // A member opening the modal via "账户设置" must not land on whatever
-  // the previous owner session last picked.
-  const activeTab = visibleMenuItems.find(m => m.key === selectedTab)
-    ? selectedTab
-    : fallbackTab
+  // When caller passes `onTabChange`, the active tab is derived purely
+  // from `defaultTab` (URL-driven). Otherwise fall back to internal state.
+  const activeTab: CreatorSettingsTab = onTabChange
+    ? fallbackTab
+    : visibleMenuItems.find(m => m.key === internalTab)
+      ? internalTab
+      : fallbackTab
   const activeItem = visibleMenuItems.find(m => m.key === activeTab)
+
+  const handleSelectTab = useCallback(
+    (tab: CreatorSettingsTab) => {
+      if (onTabChange)
+        onTabChange(tab)
+      else setInternalTab(tab)
+    },
+    [onTabChange],
+  )
 
   return (
     <MenuDialog show={show} onClose={onClose}>
@@ -140,7 +155,7 @@ export default function CreatorSettingsModal({
               <button
                 key={item.key}
                 type="button"
-                onClick={() => setSelectedTab(item.key)}
+                onClick={() => handleSelectTab(item.key)}
                 className={cn(
                   'mb-0.5 flex h-[37px] w-full items-center rounded-lg p-1 pl-3 text-left',
                   activeTab === item.key

@@ -11,7 +11,7 @@ import {
   RiUserLine,
   RiWalletLine,
 } from '@remixicon/react'
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/app/components/base/ui/dropdown-menu'
 import { useAppContext } from '@/context/app-context'
-import { useRouter } from '@/next/navigation'
+import { usePathname, useRouter, useSearchParams } from '@/next/navigation'
 import { useLogout } from '@/service/use-common'
 import { cn } from '@/utils/classnames'
 import CreatorSettingsModal from './settings/creator-settings-modal'
@@ -42,16 +42,61 @@ export default function CreatorUserMenu({
   const { userProfile, isSystemAdmin, isCurrentWorkspaceOwner }
     = useAppContext()
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { mutateAsync: logout } = useLogout()
 
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [settingsTab, setSettingsTab] = useState<CreatorSettingsTab>('account')
+  // Derive settings modal state from the URL so refreshing the page
+  // keeps the user on whichever settings tab they were viewing.
+  // Example: /creator?settings=account → opens settings modal on
+  // the "account" tab.
+  const settingsParam = searchParams.get('settings')
+  const VALID_SETTINGS_TABS: readonly CreatorSettingsTab[] = useMemo(
+    () => [
+      'account',
+      'social-publish',
+      'members',
+      'balance',
+      'api-key',
+      'invitation',
+      'rebate',
+    ],
+    [],
+  )
+  const settingsTab: CreatorSettingsTab
+    = settingsParam
+      && (VALID_SETTINGS_TABS as readonly string[]).includes(settingsParam)
+      ? (settingsParam as CreatorSettingsTab)
+      : 'account'
+  const settingsOpen = Boolean(
+    settingsParam
+    && (VALID_SETTINGS_TABS as readonly string[]).includes(settingsParam),
+  )
+
   const [topupOpen, setTopupOpen] = useState(false)
 
-  const openSettings = (tab: CreatorSettingsTab) => {
-    setSettingsTab(tab)
-    setSettingsOpen(true)
-  }
+  const buildSettingsUrl = useCallback(
+    (tab: CreatorSettingsTab | null) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (tab)
+        params.set('settings', tab)
+      else params.delete('settings')
+      const qs = params.toString()
+      return qs ? `${pathname}?${qs}` : pathname
+    },
+    [pathname, searchParams],
+  )
+
+  const openSettings = useCallback(
+    (tab: CreatorSettingsTab) => {
+      router.push(buildSettingsUrl(tab))
+    },
+    [buildSettingsUrl, router],
+  )
+
+  const closeSettings = useCallback(() => {
+    router.push(buildSettingsUrl(null))
+  }, [buildSettingsUrl, router])
 
   const handleLogout = async () => {
     await logout()
@@ -172,7 +217,8 @@ export default function CreatorUserMenu({
       <CreatorSettingsModal
         show={settingsOpen}
         defaultTab={settingsTab}
-        onClose={() => setSettingsOpen(false)}
+        onClose={closeSettings}
+        onTabChange={openSettings}
       />
 
       <TopupModal open={topupOpen} onOpenChange={setTopupOpen} />

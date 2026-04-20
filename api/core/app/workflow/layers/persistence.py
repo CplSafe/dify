@@ -375,7 +375,12 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
 
             tokens = int(value)
             if tokens > 0:
-                self.graph_runtime_state.add_tokens(tokens)
+                # graph_runtime_state from layer base is a ReadOnly wrapper;
+                # reach through to the underlying mutable state to add tokens.
+                # Falls back to direct call if a future graphon version exposes
+                # add_tokens on the wrapper itself.
+                state = getattr(self.graph_runtime_state, "_state", None) or self.graph_runtime_state
+                state.add_tokens(tokens)
                 logger.debug(
                     "Extracted %d tokens from HTTP node %s (field: %s)",
                     tokens,

@@ -90,6 +90,16 @@ function FieldChip({
       ? `${option}（敬请期待）`
       : option
 
+  // Display value priority: user-picked > field default > placeholder.
+  // The chip always shows something so users see what the field currently
+  // resolves to, even before they touch it.
+  const displayValue
+    = (hasValue ? String(value) : (field.default as string | undefined)) ?? ''
+  const decoratedDisplay
+    = field.type === InputVarType.select && displayValue
+      ? decorateOption(field.variable, displayValue)
+      : displayValue
+
   return (
     <PortalToFollowElem
       open={open}
@@ -120,7 +130,7 @@ function FieldChip({
           <button
             type="button"
             className={cn(
-              'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-[0.92]',
+              'relative flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-all active:scale-[0.96]',
               hasValue
                 ? 'border-primary-600 bg-primary-50 text-primary-600'
                 : 'border-[#E9E9EB] text-[#4D4D54] hover:border-[#D1D1D6] hover:bg-[#F4F4F5]',
@@ -128,13 +138,16 @@ function FieldChip({
             aria-label={field.label}
             title={field.label}
           >
-            <Icon className="h-4 w-4" />
-            {hasValue && (
-              <span
-                className="pointer-events-none absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary-600 ring-2 ring-white"
-                aria-hidden="true"
-              />
-            )}
+            <Icon className="h-4 w-4 shrink-0" />
+            {decoratedDisplay
+              ? (
+                  <span className="max-w-[120px] truncate">{decoratedDisplay}</span>
+                )
+              : (
+                  <span className="max-w-[120px] truncate text-text-tertiary">
+                    {field.placeholder || field.label}
+                  </span>
+                )}
           </button>
         </Tooltip>
       </PortalToFollowElemTrigger>

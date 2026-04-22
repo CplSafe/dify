@@ -3,6 +3,7 @@
 import type { FC } from 'react'
 import { useCallback, useState } from 'react'
 import { toast } from '@/app/components/base/ui/toast'
+import { useRouter } from '@/next/navigation'
 import { createCreatorWork } from '@/service/creator-work'
 
 type SaveToWorksButtonProps = {
@@ -10,11 +11,19 @@ type SaveToWorksButtonProps = {
   fileType: 'image' | 'video'
 }
 
-const SaveToWorksButton: FC<SaveToWorksButtonProps> = ({ fileUrl, fileType }) => {
+const SaveToWorksButton: FC<SaveToWorksButtonProps> = ({
+  fileUrl,
+  fileType,
+}) => {
+  const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  const label = fileType === 'video' ? '保存视频' : '保存图片'
+  // Button label: 「保存视频/图片至发布作品」
+  // After saving, jump to the works page so the user immediately sees
+  // the new draft and can choose where to publish it.
+  const label
+    = fileType === 'video' ? '保存视频至发布作品' : '保存图片至发布作品'
 
   const handleSave = useCallback(async () => {
     if (saving || saved)
@@ -28,7 +37,8 @@ const SaveToWorksButton: FC<SaveToWorksButtonProps> = ({ fileUrl, fileType }) =>
         file_type: fileType,
       })
       setSaved(true)
-      toast.success('已保存到发布中心')
+      toast.success('已保存，正在跳转到发布作品...')
+      router.push('/creator-works')
     }
     catch {
       toast.error('保存失败，请重试')
@@ -36,7 +46,7 @@ const SaveToWorksButton: FC<SaveToWorksButtonProps> = ({ fileUrl, fileType }) =>
     finally {
       setSaving(false)
     }
-  }, [fileUrl, fileType, saving, saved])
+  }, [fileUrl, fileType, saving, saved, router])
 
   if (saved) {
     return (

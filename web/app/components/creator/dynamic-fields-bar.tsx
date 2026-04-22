@@ -11,6 +11,8 @@
  * FileFromLinkOrLocal upload flow.
  */
 import {
+  RiAspectRatioLine,
+  RiBuilding2Line,
   RiCheckLine,
   RiHashtag,
   RiInputField,
@@ -46,12 +48,31 @@ type Props = {
   onChange: (variable: string, value: any) => void
 }
 
-const ICON_FOR: Record<string, React.ComponentType<{ className?: string }>> = {
+type IconComp = React.ComponentType<{ className?: string }>
+
+const ICON_FOR: Record<string, IconComp> = {
   [InputVarType.textInput]: RiInputField,
   [InputVarType.textInputUnderscore]: RiInputField,
   [InputVarType.paragraph]: RiTextBlock,
   [InputVarType.select]: RiListCheck,
   [InputVarType.number]: RiHashtag,
+}
+
+// Variable-name overrides — use a more meaningful icon when we can guess
+// the field's purpose from its variable name. Falls back to ICON_FOR.
+const ICON_BY_VARIABLE: Record<string, IconComp> = {
+  industry: RiBuilding2Line,
+  item: RiAspectRatioLine, // 「选择比例」
+  ratio: RiAspectRatioLine,
+  aspect: RiAspectRatioLine,
+  size: RiAspectRatioLine,
+}
+
+const resolveIcon = (field: DynamicField): IconComp => {
+  const byVariable = ICON_BY_VARIABLE[field.variable.toLowerCase()]
+  if (byVariable)
+    return byVariable
+  return ICON_FOR[field.type] || RiInputField
 }
 
 const isTextLike = (t: InputVarType) =>
@@ -79,7 +100,7 @@ function FieldChip({
   onChange: (v: any) => void
 }) {
   const [open, setOpen] = useState(false)
-  const Icon = ICON_FOR[field.type] || RiInputField
+  const Icon = resolveIcon(field)
   const summary = summarizeValue(value)
   const hasValue = summary !== ''
 
@@ -192,27 +213,32 @@ function FieldChip({
             />
           )}
 
-          <div className="mt-2 flex justify-end gap-2">
-            {hasValue && (
+          {/* Footer is only shown for text-like inputs — select options
+              commit on click, so an extra「完成」button there would be
+              redundant and confusing. */}
+          {isTextLike(field.type) && (
+            <div className="mt-2 flex justify-end gap-2">
+              {hasValue && (
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-xs text-text-tertiary hover:bg-state-base-hover"
+                  onClick={() => {
+                    onChange('')
+                    setOpen(false)
+                  }}
+                >
+                  清除
+                </button>
+              )}
               <button
                 type="button"
-                className="rounded-md px-2 py-1 text-xs text-text-tertiary hover:bg-state-base-hover"
-                onClick={() => {
-                  onChange('')
-                  setOpen(false)
-                }}
+                className="rounded-md bg-primary-600 px-3 py-1 text-xs text-white hover:bg-primary-700"
+                onClick={() => setOpen(false)}
               >
-                清除
+                完成
               </button>
-            )}
-            <button
-              type="button"
-              className="rounded-md bg-primary-600 px-3 py-1 text-xs text-white hover:bg-primary-700"
-              onClick={() => setOpen(false)}
-            >
-              完成
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       </PortalToFollowElemContent>
     </PortalToFollowElem>

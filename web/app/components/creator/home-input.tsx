@@ -289,13 +289,13 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
       <button
         type="button"
         aria-label="上传文件"
-        title="上传文件"
         className={cn(
-          'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#E9E9EB] text-[#4D4D54] transition-all hover:border-[#D1D1D6] hover:bg-[#F4F4F5] active:scale-[0.92]',
+          'flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-[#E9E9EB] px-3 text-sm font-medium text-[#4D4D54] transition-all hover:border-[#D1D1D6] hover:bg-[#F4F4F5] active:scale-[0.96]',
           open && 'border-[#D1D1D6] bg-[#F4F4F5]',
         )}
       >
         <UploadIcon />
+        <span>上传</span>
       </button>
     )
   }, [])

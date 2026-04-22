@@ -11,6 +11,7 @@
  * FileFromLinkOrLocal upload flow.
  */
 import {
+  RiArrowDownSLine,
   RiAspectRatioLine,
   RiBuilding2Line,
   RiCheckLine,
@@ -90,6 +91,30 @@ const summarizeValue = (value: any): string => {
   return s.length > 12 ? `${s.slice(0, 10)}…` : s
 }
 
+// Small helper so the chip's text slot doesn't become a nested ternary
+// (which the ESLint multiline-ternary rule trips on).
+function ChipLabel({
+  display,
+  placeholder,
+  required,
+}: {
+  display: string
+  placeholder: string
+  required: boolean
+}) {
+  if (display) {
+    return <span className="max-w-[120px] truncate">{display}</span>
+  }
+  // Required-but-empty fields use a soft blue placeholder so users
+  // notice they still need to fill them in.
+  const colorClass = required ? 'text-[#4D80FF]' : 'text-text-tertiary'
+  return (
+    <span className={cn('max-w-[120px] truncate', colorClass)}>
+      {placeholder}
+    </span>
+  )
+}
+
 function FieldChip({
   field,
   value,
@@ -136,15 +161,17 @@ function FieldChip({
           aria-label={field.label}
         >
           <Icon className="h-4 w-4 shrink-0" />
-          {decoratedDisplay
-            ? (
-                <span className="max-w-[120px] truncate">{decoratedDisplay}</span>
-              )
-            : (
-                <span className="max-w-[120px] truncate text-text-tertiary">
-                  {field.placeholder || field.label}
-                </span>
-              )}
+          <ChipLabel
+            display={decoratedDisplay}
+            placeholder={field.placeholder || field.label}
+            required={!!field.required}
+          />
+          {/* Affordance: only select-type chips open a list, so only they
+              get a chevron — text/number/paragraph chips open a small
+              input panel instead. */}
+          {field.type === InputVarType.select && (
+            <RiArrowDownSLine className="h-4 w-4 shrink-0 opacity-60" />
+          )}
         </button>
       </PortalToFollowElemTrigger>
       <PortalToFollowElemContent className="z-[60]">

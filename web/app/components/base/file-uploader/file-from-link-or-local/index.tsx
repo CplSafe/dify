@@ -1,9 +1,6 @@
 import type { FileUpload } from '@/app/components/base/features/types'
 import { RiUploadCloud2Line } from '@remixicon/react'
-import {
-  memo,
-  useState,
-} from 'react'
+import { memo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Button from '@/app/components/base/button'
 import {
@@ -22,12 +19,17 @@ type FileFromLinkOrLocalProps = {
   showFromLocal?: boolean
   trigger: (open: boolean) => React.ReactNode
   fileConfig: FileUpload
+  // Direction the popover opens from the trigger. Defaults to 'top' to
+  // preserve existing call sites; pass 'bottom' for triggers that sit
+  // near the top of the page (e.g. creator home input bar).
+  placement?: 'top' | 'bottom'
 }
 const FileFromLinkOrLocal = ({
   showFromLink = true,
   showFromLocal = true,
   trigger,
   fileConfig,
+  placement = 'top',
 }: FileFromLinkOrLocalProps) => {
   const { t } = useTranslation()
   const files = useStore(s => s.files)
@@ -35,8 +37,11 @@ const FileFromLinkOrLocal = ({
   const [url, setUrl] = useState('')
   const [showError, setShowError] = useState(false)
   const { handleLoadFileFromLink } = useFile(fileConfig)
-  const disabled = !!fileConfig.number_limits && files.length >= fileConfig.number_limits
-  const fileLinkPlaceholder = t('fileUploader.pasteFileLinkInputPlaceholder', { ns: 'common' })
+  const disabled
+    = !!fileConfig.number_limits && files.length >= fileConfig.number_limits
+  const fileLinkPlaceholder = t('fileUploader.pasteFileLinkInputPlaceholder', {
+    ns: 'common',
+  })
   /* v8 ignore next -- fallback for a missing i18n key is not reliably testable under the current global translation mocks in the test DOM runtime. @preserve */
   const fileLinkPlaceholderText = fileLinkPlaceholder || ''
 
@@ -55,7 +60,7 @@ const FileFromLinkOrLocal = ({
 
   return (
     <PortalToFollowElem
-      placement="top"
+      placement={placement}
       offset={4}
       open={open}
       onOpenChange={setOpen}
@@ -65,66 +70,59 @@ const FileFromLinkOrLocal = ({
       </PortalToFollowElemTrigger>
       <PortalToFollowElemContent className="z-1001">
         <div className="w-[280px] rounded-xl border-[0.5px] border-components-panel-border bg-components-panel-bg-blur p-3 shadow-lg">
-          {
-            showFromLink && (
-              <>
-                <div className={cn(
+          {showFromLink && (
+            <>
+              <div
+                className={cn(
                   'flex h-8 items-center rounded-lg border border-components-input-border-active bg-components-input-bg-active p-1 shadow-xs',
                   showError && 'border-components-input-border-destructive',
                 )}
-                >
-                  <input
-                    className="mr-0.5 block grow appearance-none bg-transparent px-1 outline-hidden system-sm-regular"
-                    placeholder={fileLinkPlaceholderText}
-                    value={url}
-                    onChange={(e) => {
-                      setShowError(false)
-                      setUrl(e.target.value.trim())
-                    }}
-                    disabled={disabled}
-                  />
-                  <Button
-                    className="shrink-0"
-                    size="small"
-                    variant="primary"
-                    disabled={!url || disabled}
-                    onClick={handleSaveUrl}
-                  >
-                    {t('operation.ok', { ns: 'common' })}
-                  </Button>
-                </div>
-                {
-                  showError && (
-                    <div className="mt-0.5 text-text-destructive body-xs-regular">
-                      {t('fileUploader.pasteFileLinkInvalid', { ns: 'common' })}
-                    </div>
-                  )
-                }
-              </>
-            )
-          }
-          {
-            showFromLink && showFromLocal && (
-              <div className="flex h-7 items-center p-2 text-text-quaternary system-2xs-medium-uppercase">
-                <div className="mr-2 h-px w-[93px] bg-linear-to-l from-[rgba(16,24,40,0.08)]" />
-                OR
-                <div className="ml-2 h-px w-[93px] bg-linear-to-r from-[rgba(16,24,40,0.08)]" />
-              </div>
-            )
-          }
-          {
-            showFromLocal && (
-              <Button
-                className="relative w-full"
-                variant="secondary-accent"
-                disabled={disabled}
               >
-                <RiUploadCloud2Line className="mr-1 h-4 w-4" />
-                {t('fileUploader.uploadFromComputer', { ns: 'common' })}
-                <FileInput fileConfig={fileConfig} />
-              </Button>
-            )
-          }
+                <input
+                  className="mr-0.5 block grow appearance-none bg-transparent px-1 outline-hidden system-sm-regular"
+                  placeholder={fileLinkPlaceholderText}
+                  value={url}
+                  onChange={(e) => {
+                    setShowError(false)
+                    setUrl(e.target.value.trim())
+                  }}
+                  disabled={disabled}
+                />
+                <Button
+                  className="shrink-0"
+                  size="small"
+                  variant="primary"
+                  disabled={!url || disabled}
+                  onClick={handleSaveUrl}
+                >
+                  {t('operation.ok', { ns: 'common' })}
+                </Button>
+              </div>
+              {showError && (
+                <div className="mt-0.5 text-text-destructive body-xs-regular">
+                  {t('fileUploader.pasteFileLinkInvalid', { ns: 'common' })}
+                </div>
+              )}
+            </>
+          )}
+          {showFromLink && showFromLocal && (
+            <div className="flex h-7 items-center p-2 text-text-quaternary system-2xs-medium-uppercase">
+              <div className="mr-2 h-px w-[93px] bg-linear-to-l from-[rgba(16,24,40,0.08)]" />
+              OR
+              <div className="ml-2 h-px w-[93px] bg-linear-to-r from-[rgba(16,24,40,0.08)]" />
+            </div>
+          )}
+          {showFromLocal && (
+            <Button
+              className="relative w-full"
+              variant="secondary-accent"
+              disabled={disabled}
+            >
+              <RiUploadCloud2Line className="mr-1 h-4 w-4" />
+              {t('fileUploader.uploadFromComputer', { ns: 'common' })}
+              <FileInput fileConfig={fileConfig} />
+            </Button>
+          )}
         </div>
       </PortalToFollowElemContent>
     </PortalToFollowElem>

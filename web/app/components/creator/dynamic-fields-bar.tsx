@@ -169,7 +169,10 @@ function FieldChip({
         </button>
       </PortalToFollowElemTrigger>
       <PortalToFollowElemContent className="z-[60]">
-        <div className="w-[280px] rounded-xl border border-divider-subtle bg-components-panel-bg p-3 shadow-lg">
+        {/* Hard cap height + internal scroll so floating-ui never has to
+            flip the popover upward — keeps the chip → popover direction
+            consistent regardless of how many select options exist. */}
+        <div className="max-h-[320px] w-[280px] overflow-y-auto rounded-xl border border-divider-subtle bg-components-panel-bg p-3 shadow-lg">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-medium text-text-primary">
               {field.label}

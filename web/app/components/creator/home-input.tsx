@@ -378,6 +378,7 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
                 fileConfig={visionConfig as any}
                 showFromLocal
                 showFromLink
+                placement="bottom"
               />
             </div>
 

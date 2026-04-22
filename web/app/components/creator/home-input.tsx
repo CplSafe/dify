@@ -1,6 +1,7 @@
 'use client'
 /* eslint-disable ts/no-explicit-any, react/set-state-in-effect, tailwindcss/enforce-consistent-class-order -- TODO(wallet): preexisting issues tracked for a follow-up cleanup */
 
+import type { DynamicField } from './dynamic-fields-bar'
 import type { FileEntity } from '@/app/components/base/file-uploader/types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
@@ -11,9 +12,13 @@ import {
   FileContextProvider,
   useStore,
 } from '@/app/components/base/file-uploader/store'
-import { SupportUploadFileTypes } from '@/app/components/workflow/types'
+import {
+  InputVarType,
+  SupportUploadFileTypes,
+} from '@/app/components/workflow/types'
 import { TransferMethod } from '@/types/app'
 import { cn } from '@/utils/classnames'
+import DynamicFieldsBar from './dynamic-fields-bar'
 
 const TiktokIcon = () => (
   <svg
@@ -80,13 +85,6 @@ const StarIcon = () => (
   </svg>
 )
 
-type SelectFieldConfig = {
-  variable: string
-  label: string
-  defaultValue: string
-  options: string[]
-}
-
 export type HomeInputProps = {
   onSubmit: (
     text: string,
@@ -96,28 +94,79 @@ export type HomeInputProps = {
   appParams?: any
 }
 
-// Resolve every `select` field declared on the workflow start node,
-// preserving the configured order. Each becomes a labelled dropdown in
-// the creator input bar; previously only the first/industry was rendered.
-const resolveSelectFields = (appParams: any): SelectFieldConfig[] => {
-  const userInputForm = appParams?.user_input_form || []
-  const fields: SelectFieldConfig[] = []
+// Map a Dify start-node `user_input_form` entry to our DynamicField shape.
+// Each entry is an object like `{ select: {...} }` / `{ text-input: {...} }`
+// where the single key is the field type and the value is the config.
+const FIELD_TYPE_KEYS: InputVarType[] = [
+  InputVarType.textInput,
+  InputVarType.textInputUnderscore,
+  InputVarType.paragraph,
+  InputVarType.select,
+  InputVarType.number,
+  InputVarType.singleFile,
+  InputVarType.multiFiles,
+]
+
+const isFileType = (t: InputVarType) =>
+  t === InputVarType.singleFile || t === InputVarType.multiFiles
+
+const resolveAllFields = (
+  appParams: any,
+): { dynamic: DynamicField[], file: DynamicField[] } => {
+  const userInputForm: any[] = appParams?.user_input_form || []
+  const dynamic: DynamicField[] = []
+  const file: DynamicField[] = []
+
   for (const item of userInputForm) {
-    const sel = item?.select
-    if (!sel || !sel.variable)
+    if (!item || typeof item !== 'object')
       continue
-    const options
-      = Array.isArray(sel.options) && sel.options.length ? sel.options : []
-    if (options.length === 0)
+    let typeKey: InputVarType | undefined
+    let cfg: any
+    for (const k of FIELD_TYPE_KEYS) {
+      if (item[k]) {
+        typeKey = k
+        cfg = item[k]
+        break
+      }
+    }
+    if (!typeKey || !cfg?.variable)
       continue
-    fields.push({
-      variable: sel.variable,
-      label: sel.label || sel.variable,
-      defaultValue: sel.default || options[0],
-      options,
-    })
+
+    const field: DynamicField = {
+      variable: cfg.variable,
+      label: cfg.label || cfg.variable,
+      type: typeKey,
+      required: !!cfg.required,
+      default: cfg.default,
+      options: Array.isArray(cfg.options) ? cfg.options : undefined,
+      max_length: cfg.max_length,
+      placeholder: cfg.placeholder,
+      hint: cfg.hint,
+    }
+
+    if (isFileType(typeKey))
+      file.push(field)
+    else dynamic.push(field)
   }
-  return fields
+
+  return { dynamic, file }
+}
+
+const computeInitialValues = (fields: DynamicField[]) => {
+  const init: Record<string, any> = {}
+  for (const f of fields) {
+    if (f.type === InputVarType.select) {
+      const opts = f.options || []
+      init[f.variable] = (f.default as string) || opts[0] || ''
+    }
+    else if (f.type === InputVarType.number) {
+      init[f.variable] = f.default ?? ''
+    }
+    else {
+      init[f.variable] = (f.default as string) ?? ''
+    }
+  }
+  return init
 }
 
 function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
@@ -126,43 +175,55 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
   const [showTiktokInput, setShowTiktokInput] = useState(false)
   const files = useStore(state => state.files)
 
-  // All select-type fields declared on the workflow start node, in order.
-  const selectFields = useMemo(
-    () => resolveSelectFields(appParams),
+  // All non-file fields declared on the workflow start node (rendered
+  // inline as icon-button chips). File-type fields would otherwise
+  // duplicate the existing global upload control, so we currently still
+  // funnel files through the shared FileFromLinkOrLocal — this resolver
+  // returns them separately for future use.
+  const { dynamic: dynamicFields } = useMemo(
+    () => resolveAllFields(appParams),
     [appParams],
   )
 
-  // Map<variable, currentValue> for every dropdown the start node declares.
-  // Initialized lazily from defaults; rebuilt when the field set changes.
-  const [fieldValues, setFieldValues] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {}
-    for (const f of selectFields) init[f.variable] = f.defaultValue
-    return init
-  })
+  // Map<variable, currentValue> for every dynamic field. Initialized lazily
+  // from defaults and re-synced when the field set changes (workflow edited).
+  const [fieldValues, setFieldValues] = useState<Record<string, any>>(() =>
+    computeInitialValues(dynamicFields),
+  )
 
-  // Re-sync values when the start node's field set changes (e.g. user
-  // edits the workflow). Use a stable signature so this effect doesn't
-  // run on every render — the prior single-field hook had the same issue.
-  const fieldsSignature = selectFields
-    .map(f => `${f.variable}:${f.defaultValue}:${f.options.join(',')}`)
+  // Use a stable signature of fields so the effect only runs on real
+  // changes — including the array reference would loop infinitely.
+  const fieldsSignature = dynamicFields
+    .map(
+      f =>
+        `${f.variable}:${f.type}:${f.default ?? ''}:${(f.options || []).join(',')}`,
+    )
     .join('|')
   useEffect(() => {
     setFieldValues((prev) => {
-      const next: Record<string, string> = {}
-      for (const f of selectFields) {
-        // Preserve user's prior selection if still valid; otherwise fall
-        // back to the configured default.
+      const next: Record<string, any> = {}
+      for (const f of dynamicFields) {
         const existing = prev[f.variable]
-        next[f.variable] = f.options.includes(existing)
-          ? existing
-          : f.defaultValue
+        if (f.type === InputVarType.select) {
+          const opts = f.options || []
+          next[f.variable] = opts.includes(existing)
+            ? existing
+            : (f.default as string) || opts[0] || ''
+        }
+        else {
+          // Preserve previously typed text/number; fall back to default.
+          next[f.variable]
+            = existing !== undefined && existing !== ''
+              ? existing
+              : (f.default ?? '')
+        }
       }
       return next
     })
     // eslint-disable-next-line react/exhaustive-deps
   }, [fieldsSignature])
 
-  const setFieldValue = useCallback((variable: string, value: string) => {
+  const setFieldValue = useCallback((variable: string, value: any) => {
     setFieldValues(prev => ({ ...prev, [variable]: value }))
   }, [])
 
@@ -287,38 +348,11 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
 
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {selectFields.map((field) => {
-                // 「行业选择」(variable=industry) 业务上目前只支持「爱玛」，
-                // 其它选项展示为「敬请期待」；其他业务字段（如「选择比例」）
-                // 直接显示原始选项。
-                const isIndustry = field.variable === 'industry'
-                const currentValue
-                  = fieldValues[field.variable] ?? field.defaultValue
-                return (
-                  <div
-                    key={field.variable}
-                    className="flex items-center gap-2 rounded-xl border border-[#E9E9EB] px-3 py-2"
-                  >
-                    <span className="shrink-0 text-sm font-medium text-[#4D4D54]">
-                      {field.label}
-                    </span>
-                    <select
-                      value={currentValue}
-                      onChange={e =>
-                        setFieldValue(field.variable, e.target.value)}
-                      className="h-6 min-w-[120px] bg-transparent text-sm text-text-primary outline-none"
-                    >
-                      {field.options.map(option => (
-                        <option key={option} value={option}>
-                          {isIndustry && option !== '爱玛'
-                            ? `${option}（敬请期待）`
-                            : option}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )
-              })}
+              <DynamicFieldsBar
+                fields={dynamicFields}
+                values={fieldValues}
+                onChange={setFieldValue}
+              />
               <button
                 className={cn(
                   'flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all active:scale-[0.98]',

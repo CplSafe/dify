@@ -287,13 +287,15 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
   const renderUploadTrigger = useCallback((open: boolean) => {
     return (
       <button
+        type="button"
+        aria-label="上传文件"
+        title="上传文件"
         className={cn(
-          'flex items-center gap-2 rounded-xl border border-[#E9E9EB] px-4 py-2 text-sm font-medium text-[#4D4D54] transition-all hover:border-[#D1D1D6] hover:bg-[#F4F4F5] active:scale-[0.98]',
+          'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#E9E9EB] text-[#4D4D54] transition-all hover:border-[#D1D1D6] hover:bg-[#F4F4F5] active:scale-[0.92]',
           open && 'border-[#D1D1D6] bg-[#F4F4F5]',
         )}
       >
         <UploadIcon />
-        <span>上传</span>
       </button>
     )
   }, [])
@@ -346,24 +348,30 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
             />
           </div>
 
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="mt-4 flex items-start justify-between gap-3">
+            {/* Action chips: dynamic workflow inputs + tiktok URL toggle +
+                global file uploader. All chips are icon-only with hover
+                tooltips so many fields fit on one row; wraps if still too
+                wide. */}
+            <div className="flex flex-1 flex-wrap items-center gap-2">
               <DynamicFieldsBar
                 fields={dynamicFields}
                 values={fieldValues}
                 onChange={setFieldValue}
               />
               <button
+                type="button"
                 className={cn(
-                  'flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all active:scale-[0.98]',
+                  'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-[0.92]',
                   showTiktokInput
                     ? 'border-primary-600 bg-primary-50 text-primary-600'
                     : 'border-[#E9E9EB] text-[#4D4D54] hover:border-[#D1D1D6] hover:bg-[#F4F4F5]',
                 )}
+                aria-label="抖音商品 URL/ID"
+                title="抖音商品 URL/ID"
                 onClick={() => setShowTiktokInput(!showTiktokInput)}
               >
                 <TiktokIcon />
-                <span>抖音商品URL/ID</span>
               </button>
               <FileFromLinkOrLocal
                 trigger={renderUploadTrigger}

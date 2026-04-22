@@ -11,7 +11,6 @@
  * FileFromLinkOrLocal upload flow.
  */
 import {
-  RiArrowDownSLine,
   RiCheckLine,
   RiHashtag,
   RiInputField,
@@ -121,21 +120,21 @@ function FieldChip({
           <button
             type="button"
             className={cn(
-              'flex h-9 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-all active:scale-[0.98]',
+              'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-[0.92]',
               hasValue
                 ? 'border-primary-600 bg-primary-50 text-primary-600'
                 : 'border-[#E9E9EB] text-[#4D4D54] hover:border-[#D1D1D6] hover:bg-[#F4F4F5]',
             )}
             aria-label={field.label}
+            title={field.label}
           >
             <Icon className="h-4 w-4" />
-            <span className="max-w-[120px] truncate">{field.label}</span>
             {hasValue && (
-              <span className="ml-1 max-w-[80px] truncate rounded bg-white/70 px-1.5 py-0.5 text-xs">
-                {summary}
-              </span>
+              <span
+                className="pointer-events-none absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary-600 ring-2 ring-white"
+                aria-hidden="true"
+              />
             )}
-            <RiArrowDownSLine className="h-4 w-4 opacity-60" />
           </button>
         </Tooltip>
       </PortalToFollowElemTrigger>

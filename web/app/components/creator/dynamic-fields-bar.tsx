@@ -96,23 +96,13 @@ const summarizeValue = (value: any): string => {
 function ChipLabel({
   display,
   placeholder,
-  required,
 }: {
   display: string
   placeholder: string
-  required: boolean
 }) {
-  if (display) {
+  if (display)
     return <span className="max-w-[120px] truncate">{display}</span>
-  }
-  // Required-but-empty fields use a soft blue placeholder so users
-  // notice they still need to fill them in.
-  const colorClass = required ? 'text-[#4D80FF]' : 'text-text-tertiary'
-  return (
-    <span className={cn('max-w-[120px] truncate', colorClass)}>
-      {placeholder}
-    </span>
-  )
+  return <span className="max-w-[120px] truncate">{placeholder}</span>
 }
 
 function FieldChip({
@@ -149,14 +139,19 @@ function FieldChip({
     <PortalToFollowElem
       open={open}
       onOpenChange={setOpen}
-      placement="top-start"
+      placement="bottom-start"
       offset={6}
     >
       <PortalToFollowElemTrigger onClick={() => setOpen(o => !o)}>
         <button
           type="button"
           className={cn(
-            'relative flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-[#E9E9EB] px-3 text-sm font-medium text-[#4D4D54] transition-all hover:border-[#D1D1D6] hover:bg-[#F4F4F5] active:scale-[0.96]',
+            'relative flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-all active:scale-[0.96]',
+            // Required-but-empty fields color the whole chip (icon + text)
+            // soft blue so users notice they still need to fill them in.
+            field.required && !hasValue
+              ? 'border-[#4D80FF]/40 text-[#4D80FF] hover:border-[#4D80FF] hover:bg-[#4D80FF]/5'
+              : 'border-[#E9E9EB] text-[#4D4D54] hover:border-[#D1D1D6] hover:bg-[#F4F4F5]',
           )}
           aria-label={field.label}
         >
@@ -164,7 +159,6 @@ function FieldChip({
           <ChipLabel
             display={decoratedDisplay}
             placeholder={field.placeholder || field.label}
-            required={!!field.required}
           />
           {/* Affordance: only select-type chips open a list, so only they
               get a chevron — text/number/paragraph chips open a small

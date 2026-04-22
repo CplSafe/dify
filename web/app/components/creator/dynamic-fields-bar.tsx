@@ -139,7 +139,7 @@ function FieldChip({
     <PortalToFollowElem
       open={open}
       onOpenChange={setOpen}
-      placement="bottom-start"
+      placement="bottom"
       offset={6}
     >
       <PortalToFollowElemTrigger onClick={() => setOpen(o => !o)}>

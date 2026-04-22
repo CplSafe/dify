@@ -1,5 +1,5 @@
 'use client'
-/* eslint-disable ts/no-explicit-any, no-restricted-imports, tailwindcss/enforce-consistent-class-order, hyoban/prefer-tailwind-icons -- aligned with creator/home-input.tsx style; overlay primitives migration tracked in #32767 */
+/* eslint-disable ts/no-explicit-any, no-restricted-imports, hyoban/prefer-tailwind-icons -- aligned with creator/home-input.tsx style; overlay primitives migration tracked in #32767 */
 
 /**
  * Dynamic input bar for creator home — renders one icon button per
@@ -23,7 +23,6 @@ import {
   PortalToFollowElemContent,
   PortalToFollowElemTrigger,
 } from '@/app/components/base/portal-to-follow-elem'
-import Tooltip from '@/app/components/base/tooltip'
 import { InputVarType } from '@/app/components/workflow/types'
 import { cn } from '@/utils/classnames'
 
@@ -108,48 +107,24 @@ function FieldChip({
       offset={6}
     >
       <PortalToFollowElemTrigger onClick={() => setOpen(o => !o)}>
-        <Tooltip
-          popupContent={(
-            <div className="max-w-[240px]">
-              <div className="font-medium text-text-primary">{field.label}</div>
-              {field.hint && (
-                <div className="mt-1 text-xs text-text-tertiary">
-                  {field.hint}
-                </div>
-              )}
-              {hasValue && (
-                <div className="mt-1 text-xs text-text-secondary">
-                  当前:
-                  {' '}
-                  {String(value)}
-                </div>
-              )}
-            </div>
+        <button
+          type="button"
+          className={cn(
+            'relative flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-[#E9E9EB] px-3 text-sm font-medium text-[#4D4D54] transition-all hover:border-[#D1D1D6] hover:bg-[#F4F4F5] active:scale-[0.96]',
           )}
+          aria-label={field.label}
         >
-          <button
-            type="button"
-            className={cn(
-              'relative flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-all active:scale-[0.96]',
-              hasValue
-                ? 'border-primary-600 bg-primary-50 text-primary-600'
-                : 'border-[#E9E9EB] text-[#4D4D54] hover:border-[#D1D1D6] hover:bg-[#F4F4F5]',
-            )}
-            aria-label={field.label}
-            title={field.label}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            {decoratedDisplay
-              ? (
-                  <span className="max-w-[120px] truncate">{decoratedDisplay}</span>
-                )
-              : (
-                  <span className="max-w-[120px] truncate text-text-tertiary">
-                    {field.placeholder || field.label}
-                  </span>
-                )}
-          </button>
-        </Tooltip>
+          <Icon className="h-4 w-4 shrink-0" />
+          {decoratedDisplay
+            ? (
+                <span className="max-w-[120px] truncate">{decoratedDisplay}</span>
+              )
+            : (
+                <span className="max-w-[120px] truncate text-text-tertiary">
+                  {field.placeholder || field.label}
+                </span>
+              )}
+        </button>
       </PortalToFollowElemTrigger>
       <PortalToFollowElemContent className="z-[60]">
         <div className="w-[280px] rounded-xl border border-divider-subtle bg-components-panel-bg p-3 shadow-lg">

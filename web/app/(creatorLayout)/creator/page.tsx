@@ -265,7 +265,7 @@ export default function CreatorPage() {
         )}
       >
         {!showWorkspace && (
-          <div className="flex h-full w-full flex-col items-center justify-center pt-[10vh]">
+          <div className="flex h-full w-full flex-col items-center justify-start pt-[6vh]">
             <CreatorHomeInput
               appParams={homeAppParams}
               onSubmit={(text, files, inputs) => {

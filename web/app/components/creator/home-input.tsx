@@ -304,7 +304,7 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
     // Pull the whole hero (greeting + input bar) up so the input chips
     // sit closer to the page header — leaves more room below the chip
     // for the select dropdowns to open without flipping.
-    <div className="mx-auto w-full max-w-[720px] px-8 pb-8 pt-2">
+    <div className="mx-auto w-full max-w-[720px] px-8 pb-8">
       <div className="mb-8 text-center">
         <h1 className="flex items-center justify-center gap-2 text-[44px] font-bold tracking-tight text-text-primary">
           <span>Hi, 欢迎使用</span>

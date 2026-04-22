@@ -383,9 +383,9 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
             </div>
 
             <button
-              aria-label="提交"
+              aria-label="发送"
               className={cn(
-                'flex h-12 w-12 items-center justify-center rounded-full text-white shadow-sm transition-all active:scale-95',
+                'flex h-12 shrink-0 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-sm transition-all active:scale-95',
                 canSubmit && !hasUploadingFiles
                   ? 'cursor-pointer bg-gradient-to-br from-[#4D80FF] to-[#B98DFF] hover:shadow-md'
                   : 'cursor-not-allowed bg-text-disabled',
@@ -394,6 +394,7 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
               onClick={handleSubmit}
             >
               <StarIcon />
+              <span>发送</span>
             </button>
           </div>
         </div>

@@ -9,6 +9,9 @@ const enableCodeInspector = false
 
 const nextConfig: NextConfig = {
   basePath: env.NEXT_PUBLIC_BASE_PATH,
+  // Allow dev server to accept cross-origin requests from these IPs
+  // (LAN access during development).
+  allowedDevOrigins: ['192.168.0.19'],
   transpilePackages: [
     '@t3-oss/env-core',
     '@t3-oss/env-nextjs',
@@ -33,13 +36,15 @@ const nextConfig: NextConfig = {
       use: {
         loader: 'babel-loader',
         options: {
-          presets: [[
-            '@babel/preset-env',
-            {
-              targets: { browsers: ['ios >= 10', 'safari >= 10'] },
-              modules: false,
-            },
-          ]],
+          presets: [
+            [
+              '@babel/preset-env',
+              {
+                targets: { browsers: ['ios >= 10', 'safari >= 10'] },
+                modules: false,
+              },
+            ],
+          ],
           plugins: ['@babel/plugin-transform-class-static-block'],
         },
       },

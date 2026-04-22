@@ -80,7 +80,7 @@ const StarIcon = () => (
   </svg>
 )
 
-type IndustryFieldConfig = {
+type SelectFieldConfig = {
   variable: string
   label: string
   defaultValue: string
@@ -96,26 +96,28 @@ export type HomeInputProps = {
   appParams?: any
 }
 
-const resolveIndustryField = (appParams: any): IndustryFieldConfig | null => {
+// Resolve every `select` field declared on the workflow start node,
+// preserving the configured order. Each becomes a labelled dropdown in
+// the creator input bar; previously only the first/industry was rendered.
+const resolveSelectFields = (appParams: any): SelectFieldConfig[] => {
   const userInputForm = appParams?.user_input_form || []
-  const exact = userInputForm.find(
-    (item: any) => item?.select?.variable === 'industry',
-  )?.select
-  const field
-    = exact || userInputForm.find((item: any) => item?.select)?.select
-
-  if (!field)
-    return null
-
-  return {
-    variable: field.variable || 'industry',
-    label: field.label || '行业选择',
-    defaultValue: field.default || '爱玛',
-    options:
-      Array.isArray(field.options) && field.options.length
-        ? field.options
-        : ['爱玛'],
+  const fields: SelectFieldConfig[] = []
+  for (const item of userInputForm) {
+    const sel = item?.select
+    if (!sel || !sel.variable)
+      continue
+    const options
+      = Array.isArray(sel.options) && sel.options.length ? sel.options : []
+    if (options.length === 0)
+      continue
+    fields.push({
+      variable: sel.variable,
+      label: sel.label || sel.variable,
+      defaultValue: sel.default || options[0],
+      options,
+    })
   }
+  return fields
 }
 
 function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
@@ -123,18 +125,46 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
   const [tiktokUrl, setTiktokUrl] = useState('')
   const [showTiktokInput, setShowTiktokInput] = useState(false)
   const files = useStore(state => state.files)
-  const industryField = useMemo(
-    () => resolveIndustryField(appParams),
+
+  // All select-type fields declared on the workflow start node, in order.
+  const selectFields = useMemo(
+    () => resolveSelectFields(appParams),
     [appParams],
   )
-  const [industryValue, setIndustryValue] = useState(
-    industryField?.defaultValue || '爱玛',
-  )
 
+  // Map<variable, currentValue> for every dropdown the start node declares.
+  // Initialized lazily from defaults; rebuilt when the field set changes.
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {}
+    for (const f of selectFields) init[f.variable] = f.defaultValue
+    return init
+  })
+
+  // Re-sync values when the start node's field set changes (e.g. user
+  // edits the workflow). Use a stable signature so this effect doesn't
+  // run on every render — the prior single-field hook had the same issue.
+  const fieldsSignature = selectFields
+    .map(f => `${f.variable}:${f.defaultValue}:${f.options.join(',')}`)
+    .join('|')
   useEffect(() => {
-    if (industryField?.defaultValue)
-      setIndustryValue(industryField.defaultValue)
-  }, [industryField?.defaultValue])
+    setFieldValues((prev) => {
+      const next: Record<string, string> = {}
+      for (const f of selectFields) {
+        // Preserve user's prior selection if still valid; otherwise fall
+        // back to the configured default.
+        const existing = prev[f.variable]
+        next[f.variable] = f.options.includes(existing)
+          ? existing
+          : f.defaultValue
+      }
+      return next
+    })
+    // eslint-disable-next-line react/exhaustive-deps
+  }, [fieldsSignature])
+
+  const setFieldValue = useCallback((variable: string, value: string) => {
+    setFieldValues(prev => ({ ...prev, [variable]: value }))
+  }, [])
 
   const buildSubmitText = useCallback(() => {
     const content = value.trim()
@@ -156,13 +186,9 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
   const canSubmit = !!buildSubmitText() || files.length > 0
 
   const getSubmitInputs = useCallback(() => {
-    if (!industryField)
-      return {}
-
-    return {
-      [industryField.variable]: industryValue,
-    }
-  }, [industryField, industryValue])
+    // Submit every selected dropdown value keyed by its workflow variable.
+    return { ...fieldValues }
+  }, [fieldValues])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -261,24 +287,38 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
 
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {industryField && (
-                <div className="flex items-center gap-2 rounded-xl border border-[#E9E9EB] px-3 py-2">
-                  <span className="shrink-0 text-sm font-medium text-[#4D4D54]">
-                    {industryField.label}
-                  </span>
-                  <select
-                    value={industryValue}
-                    onChange={e => setIndustryValue(e.target.value)}
-                    className="h-6 min-w-[120px] bg-transparent text-sm text-text-primary outline-none"
+              {selectFields.map((field) => {
+                // 「行业选择」(variable=industry) 业务上目前只支持「爱玛」，
+                // 其它选项展示为「敬请期待」；其他业务字段（如「选择比例」）
+                // 直接显示原始选项。
+                const isIndustry = field.variable === 'industry'
+                const currentValue
+                  = fieldValues[field.variable] ?? field.defaultValue
+                return (
+                  <div
+                    key={field.variable}
+                    className="flex items-center gap-2 rounded-xl border border-[#E9E9EB] px-3 py-2"
                   >
-                    {industryField.options.map(option => (
-                      <option key={option} value={option}>
-                        {option === '爱玛' ? option : `${option}（敬请期待）`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+                    <span className="shrink-0 text-sm font-medium text-[#4D4D54]">
+                      {field.label}
+                    </span>
+                    <select
+                      value={currentValue}
+                      onChange={e =>
+                        setFieldValue(field.variable, e.target.value)}
+                      className="h-6 min-w-[120px] bg-transparent text-sm text-text-primary outline-none"
+                    >
+                      {field.options.map(option => (
+                        <option key={option} value={option}>
+                          {isIndustry && option !== '爱玛'
+                            ? `${option}（敬请期待）`
+                            : option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              })}
               <button
                 className={cn(
                   'flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all active:scale-[0.98]',

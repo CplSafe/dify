@@ -330,6 +330,7 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
 
         logger = logging.getLogger(__name__)
 
+        token_field_name: str = ""
         try:
             # Look up the node config from the workflow graph data
             graph_data = self._workflow_info.graph_data or {}
@@ -341,16 +342,27 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
                     break
 
             if not node_config:
+                logger.warning(
+                    "HTTP node %s: graph node config not found (graph has %d nodes)",
+                    event.node_id, len(nodes),
+                )
                 return
 
-            token_field_name: str = node_config.get("token_field_name", "") or ""
+            token_field_name = node_config.get("token_field_name", "") or ""
             if not token_field_name.strip():
+                # Node intentionally not configured for billing — silent.
                 return
 
             # Get the response body from node outputs
             outputs = event.node_run_result.outputs or {}
             body_raw = outputs.get("body")
             if not body_raw:
+                logger.warning(
+                    "HTTP node %s: empty body in outputs (keys=%s, in_loop=%s)",
+                    event.node_id,
+                    list(outputs.keys()),
+                    getattr(event, "in_loop_id", None),
+                )
                 return
 
             # Parse body as JSON (it may already be a dict or a JSON string)
@@ -359,6 +371,12 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
             elif isinstance(body_raw, dict):
                 body = body_raw
             else:
+                logger.warning(
+                    "HTTP node %s: body has unexpected type %s (in_loop=%s)",
+                    event.node_id,
+                    type(body_raw).__name__,
+                    getattr(event, "in_loop_id", None),
+                )
                 return
 
             # Walk the dot-separated path to extract the token value
@@ -371,6 +389,13 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
                     break
 
             if value is None:
+                logger.warning(
+                    "HTTP node %s: field=%s missing from body (top-level keys=%s, in_loop=%s)",
+                    event.node_id,
+                    token_field_name,
+                    list(body.keys()) if isinstance(body, dict) else type(body).__name__,
+                    getattr(event, "in_loop_id", None),
+                )
                 return
 
             tokens = int(value)

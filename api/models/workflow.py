@@ -2072,3 +2072,52 @@ class WorkflowPauseReason(DefaultFieldsMixin, Base):
             return SchedulingPause(message=self.message)
         else:
             raise AssertionError(f"Unknown pause reason type: {self.type_}")
+
+
+# ---------------------------------------------------------------------------
+# Workflow rerun overrides (chatflow node-level rerun)
+# ---------------------------------------------------------------------------
+#
+# When a creator user rewinds a chatflow message and edits a node's input
+# or output, we persist the override here instead of mutating the original
+# `workflow_node_executions` row. The rerun service then:
+#   - reads the overrides for the target message
+#   - rebuilds a VariablePool from ancestor node outputs (originals + overrides)
+#   - re-runs the workflow starting from the rewind node
+#
+# Two override kinds:
+#   * 'input'  — replaces the upstream value the node receives. The rerun
+#                starts AT this node, which executes with the new input.
+#   * 'output' — replaces what the node produced. The rerun starts at the
+#                node's downstream successor; this node itself is skipped.
+
+
+class WorkflowRerunOverrideKind(StrEnum):
+    INPUT = "input"
+    OUTPUT = "output"
+
+
+class WorkflowRerunOverride(Base):
+    """Per-message override of a single node's input or output for rerun."""
+
+    __tablename__ = "workflow_rerun_overrides"
+    __table_args__ = (
+        sa.PrimaryKeyConstraint("id", name="workflow_rerun_override_pkey"),
+        sa.Index("workflow_rerun_override_message_node_idx", "message_id", "node_id"),
+        sa.Index("workflow_rerun_override_run_idx", "workflow_run_id"),
+    )
+
+    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()))
+    message_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    workflow_run_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    node_id: Mapped[str] = mapped_column(sa.String(255), nullable=False)
+    override_kind: Mapped[str] = mapped_column(sa.String(16), nullable=False)
+    override_data: Mapped[dict] = mapped_column(sa.JSON, nullable=False)
+    created_by: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime, server_default=sa.func.current_timestamp(), nullable=False
+    )
+
+    @property
+    def kind_enum(self) -> WorkflowRerunOverrideKind:
+        return WorkflowRerunOverrideKind(self.override_kind)

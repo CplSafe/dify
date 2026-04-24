@@ -183,6 +183,172 @@ class WorkflowRerunService:
             pool, ancestor_executions=_DictExecAdapter.from_plan(plan)
         )
 
+    # ------------------------------------------------------------------ override CRUD
+    #
+    # Overrides are scoped to (message_id, node_id, kind). At most one row
+    # per (message, node, kind). Storing them in a dedicated table (instead
+    # of mutating workflow_node_executions) preserves the original run
+    # data so the user can compare before/after, audit, and undo.
+
+    @classmethod
+    def list_overrides(
+        cls,
+        *,
+        tenant_id: str,
+        app_id: str,
+        message_id: str,
+    ) -> list[WorkflowRerunOverride]:
+        """Return every override saved on `message_id`, oldest-first."""
+        # Reuse the message guard so callers get a consistent 404/403 surface.
+        cls._load_message(tenant_id=tenant_id, app_id=app_id, message_id=message_id)
+        return cls._load_overrides(message_id=message_id)
+
+    @classmethod
+    def upsert_override(
+        cls,
+        *,
+        tenant_id: str,
+        app_id: str,
+        message_id: str,
+        node_id: str,
+        kind: str,
+        data: Mapping[str, Any],
+        actor_id: str,
+    ) -> WorkflowRerunOverride:
+        """Create or replace the (message, node, kind) override.
+
+        Replaces the existing row entirely (no merge) — see
+        `populate_pool_from_executions` for the rationale.
+
+        Raises:
+            RerunValidationError: invalid kind, unknown node, node inside
+                a Loop/Iteration, or node didn't actually execute in the
+                source run (can't override a node that never ran).
+        """
+        if kind not in {
+            WorkflowRerunOverrideKind.INPUT.value,
+            WorkflowRerunOverrideKind.OUTPUT.value,
+        }:
+            raise RerunValidationError(
+                f"invalid kind: {kind!r}; expected 'input' or 'output'"
+            )
+        if not isinstance(data, Mapping):
+            raise RerunValidationError("override data must be a JSON object")
+
+        message = cls._load_message(
+            tenant_id=tenant_id, app_id=app_id, message_id=message_id
+        )
+        run = cls._load_run(message=message, tenant_id=tenant_id, app_id=app_id)
+        workflow = cls._load_workflow(
+            workflow_id=run.workflow_id, tenant_id=tenant_id
+        )
+        cls._validate_node_for_override(
+            graph_dict=workflow.graph_dict or {},
+            run_id=str(run.id),
+            node_id=node_id,
+        )
+
+        existing = db.session.execute(
+            select(WorkflowRerunOverride)
+            .where(WorkflowRerunOverride.message_id == str(message.id))
+            .where(WorkflowRerunOverride.node_id == node_id)
+            .where(WorkflowRerunOverride.override_kind == kind)
+        ).scalar_one_or_none()
+
+        if existing is None:
+            override = WorkflowRerunOverride(
+                message_id=str(message.id),
+                workflow_run_id=str(run.id),
+                node_id=node_id,
+                override_kind=kind,
+                override_data=dict(data),
+                created_by=actor_id,
+            )
+            db.session.add(override)
+        else:
+            existing.override_data = dict(data)
+            # `created_by` intentionally not updated — first author wins;
+            # audit trail can grow later if we ever need it.
+            override = existing
+
+        db.session.commit()
+        return override
+
+    @classmethod
+    def delete_override(
+        cls,
+        *,
+        tenant_id: str,
+        app_id: str,
+        message_id: str,
+        node_id: str,
+        kind: str | None = None,
+    ) -> int:
+        """Remove the override(s) on a (message, node[, kind]) tuple.
+
+        When `kind` is omitted we drop both 'input' and 'output' overrides
+        for that node — what the UI's "reset to original" button does.
+
+        Returns:
+            Number of rows deleted.
+        """
+        cls._load_message(tenant_id=tenant_id, app_id=app_id, message_id=message_id)
+
+        stmt = (
+            select(WorkflowRerunOverride)
+            .where(WorkflowRerunOverride.message_id == message_id)
+            .where(WorkflowRerunOverride.node_id == node_id)
+        )
+        if kind is not None:
+            if kind not in {
+                WorkflowRerunOverrideKind.INPUT.value,
+                WorkflowRerunOverrideKind.OUTPUT.value,
+            }:
+                raise RerunValidationError(
+                    f"invalid kind: {kind!r}; expected 'input' or 'output'"
+                )
+            stmt = stmt.where(WorkflowRerunOverride.override_kind == kind)
+
+        rows = db.session.execute(stmt).scalars().all()
+        for row in rows:
+            db.session.delete(row)
+        db.session.commit()
+        return len(rows)
+
+    @classmethod
+    def _validate_node_for_override(
+        cls, *, graph_dict: Mapping[str, Any], run_id: str, node_id: str
+    ) -> None:
+        """Reject overrides on nodes that can't sensibly be edited.
+
+        Mirrors the rewind validation: the node must exist, must NOT be
+        inside a Loop/Iteration container, and must have actually executed
+        successfully in the source run (otherwise the user is editing a
+        ghost — there's no original output to reuse downstream).
+        """
+        node_ids = {n.get("id") for n in graph_dict.get("nodes", []) or []}
+        if node_id not in node_ids:
+            raise RerunValidationError(
+                f"node {node_id!r} not found in workflow graph"
+            )
+        if is_node_inside_loop_or_iteration(graph_dict, node_id):
+            raise RerunValidationError(
+                f"node {node_id!r} sits inside a loop/iteration container; "
+                "only top-level nodes can be edited for rerun"
+            )
+        executed = db.session.execute(
+            select(WorkflowNodeExecutionModel.id)
+            .where(WorkflowNodeExecutionModel.workflow_run_id == run_id)
+            .where(WorkflowNodeExecutionModel.node_id == node_id)
+            .where(WorkflowNodeExecutionModel.status == "succeeded")
+            .limit(1)
+        ).scalar_one_or_none()
+        if executed is None:
+            raise RerunValidationError(
+                f"node {node_id!r} has no successful execution in run "
+                f"{run_id!r}; cannot override"
+            )
+
     # ------------------------------------------------------------------ helpers
 
     @classmethod

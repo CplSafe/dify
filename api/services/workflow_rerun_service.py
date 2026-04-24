@@ -246,6 +246,7 @@ class WorkflowRerunService:
             graph_dict=workflow.graph_dict or {},
             run_id=str(run.id),
             node_id=node_id,
+            kind=kind,
         )
 
         existing = db.session.execute(
@@ -317,7 +318,12 @@ class WorkflowRerunService:
 
     @classmethod
     def _validate_node_for_override(
-        cls, *, graph_dict: Mapping[str, Any], run_id: str, node_id: str
+        cls,
+        *,
+        graph_dict: Mapping[str, Any],
+        run_id: str,
+        node_id: str,
+        kind: str | None = None,
     ) -> None:
         """Reject overrides on nodes that can't sensibly be edited.
 
@@ -325,9 +331,18 @@ class WorkflowRerunService:
         inside a Loop/Iteration container, and must have actually executed
         successfully in the source run (otherwise the user is editing a
         ghost — there's no original output to reuse downstream).
+
+        When `kind` is provided, also enforces the per-node permission
+        flags `allow_user_edit_input` / `allow_user_edit_output` set in
+        the workflow editor — this prevents the API from being called
+        directly to bypass the canvas opt-in.
         """
-        node_ids = {n.get("id") for n in graph_dict.get("nodes", []) or []}
-        if node_id not in node_ids:
+        node_cfg: Mapping[str, Any] | None = None
+        for n in graph_dict.get("nodes", []) or []:
+            if n.get("id") == node_id:
+                node_cfg = n
+                break
+        if node_cfg is None:
             raise RerunValidationError(
                 f"node {node_id!r} not found in workflow graph"
             )
@@ -336,6 +351,18 @@ class WorkflowRerunService:
                 f"node {node_id!r} sits inside a loop/iteration container; "
                 "only top-level nodes can be edited for rerun"
             )
+        if kind is not None:
+            data = node_cfg.get("data") or {}
+            allow_key = (
+                "allow_user_edit_input"
+                if kind == WorkflowRerunOverrideKind.INPUT.value
+                else "allow_user_edit_output"
+            )
+            if not data.get(allow_key):
+                raise RerunValidationError(
+                    f"node {node_id!r} does not allow user-edit of {kind!r}; "
+                    f"enable the toggle in the workflow editor first"
+                )
         executed = db.session.execute(
             select(WorkflowNodeExecutionModel.id)
             .where(WorkflowNodeExecutionModel.workflow_run_id == run_id)

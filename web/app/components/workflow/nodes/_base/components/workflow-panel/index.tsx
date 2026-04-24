@@ -1,10 +1,7 @@
 import type { FC, ReactNode } from 'react'
 import type { SimpleSubscription } from '@/app/components/plugins/plugin-detail-panel/subscription-list'
 import type { Node } from '@/app/components/workflow/types'
-import {
-  RiCloseLine,
-  RiPlayLargeLine,
-} from '@remixicon/react'
+import { RiCloseLine, RiPlayLargeLine } from '@remixicon/react'
 import { debounce } from 'es-toolkit/compat'
 import * as React from 'react'
 import {
@@ -68,6 +65,7 @@ import ErrorHandleOnPanel from '../error-handle/error-handle-on-panel'
 import HelpLink from '../help-link'
 import NextStep from '../next-step'
 import PanelOperator from '../panel-operator'
+import RerunPermissionsPanel from '../rerun-permissions'
 import RetryOnPanel from '../retry/retry-on-panel'
 import { DescriptionInput, TitleInput } from '../title-description-input'
 import {
@@ -90,17 +88,16 @@ type BasePanelProps = {
   data: Node['data']
 }
 
-const BasePanel: FC<BasePanelProps> = ({
-  id,
-  data,
-  children,
-}) => {
+const BasePanel: FC<BasePanelProps> = ({ id, data, children }) => {
   const { t } = useTranslation()
   const language = useLanguage()
-  const { showMessageLogModal } = useAppStore(useShallow(state => ({
-    showMessageLogModal: state.showMessageLogModal,
-  })))
-  const isSingleRunning = data._singleRunningStatus === NodeRunningStatus.Running
+  const { showMessageLogModal } = useAppStore(
+    useShallow(state => ({
+      showMessageLogModal: state.showMessageLogModal,
+    })),
+  )
+  const isSingleRunning
+    = data._singleRunningStatus === NodeRunningStatus.Running
 
   const showSingleRunPanel = useStore(s => s.showSingleRunPanel)
   const workflowCanvasWidth = useStore(s => s.workflowCanvasWidth)
@@ -113,27 +110,35 @@ const BasePanel: FC<BasePanelProps> = ({
   const reservedCanvasWidth = 400 // Reserve the minimum visible width for the canvas
 
   const maxNodePanelWidth = useMemo(
-    () => getMaxNodePanelWidth(workflowCanvasWidth, otherPanelWidth, reservedCanvasWidth),
+    () =>
+      getMaxNodePanelWidth(
+        workflowCanvasWidth,
+        otherPanelWidth,
+        reservedCanvasWidth,
+      ),
     [workflowCanvasWidth, otherPanelWidth],
   )
 
-  const updateNodePanelWidth = useCallback((width: number, source: 'user' | 'system' = 'user') => {
-    const newValue = clampNodePanelWidth(width, maxNodePanelWidth)
+  const updateNodePanelWidth = useCallback(
+    (width: number, source: 'user' | 'system' = 'user') => {
+      const newValue = clampNodePanelWidth(width, maxNodePanelWidth)
 
-    if (source === 'user')
-      localStorage.setItem('workflow-node-panel-width', `${newValue}`)
+      if (source === 'user')
+        localStorage.setItem('workflow-node-panel-width', `${newValue}`)
 
-    setNodePanelWidth(newValue)
-  }, [maxNodePanelWidth, setNodePanelWidth])
+      setNodePanelWidth(newValue)
+    },
+    [maxNodePanelWidth, setNodePanelWidth],
+  )
 
-  const handleResize = useCallback((width: number) => {
-    updateNodePanelWidth(width, 'user')
-  }, [updateNodePanelWidth])
+  const handleResize = useCallback(
+    (width: number) => {
+      updateNodePanelWidth(width, 'user')
+    },
+    [updateNodePanelWidth],
+  )
 
-  const {
-    triggerRef,
-    containerRef,
-  } = useResizePanel({
+  const { triggerRef, containerRef } = useResizePanel({
     direction: 'horizontal',
     triggerDirection: 'left',
     minWidth: 400,
@@ -146,31 +151,45 @@ const BasePanel: FC<BasePanelProps> = ({
   })
 
   useEffect(() => {
-    const compressedWidth = getCompressedNodePanelWidth(nodePanelWidth, workflowCanvasWidth, otherPanelWidth, reservedCanvasWidth)
+    const compressedWidth = getCompressedNodePanelWidth(
+      nodePanelWidth,
+      workflowCanvasWidth,
+      otherPanelWidth,
+      reservedCanvasWidth,
+    )
     if (compressedWidth !== undefined)
       debounceUpdate(compressedWidth)
   }, [nodePanelWidth, otherPanelWidth, workflowCanvasWidth, debounceUpdate])
 
   const { handleNodeSelect } = useNodesInteractions()
   const { nodesReadOnly } = useNodesReadOnly()
-  const { availableNextBlocks } = useAvailableBlocks(data.type, data.isInIteration || data.isInLoop)
+  const { availableNextBlocks } = useAvailableBlocks(
+    data.type,
+    data.isInIteration || data.isInLoop,
+  )
   const toolIcon = useToolIcon(data)
 
   const { saveStateToHistory } = useWorkflowHistory()
 
-  const {
-    handleNodeDataUpdate,
-    handleNodeDataUpdateWithSyncDraft,
-  } = useNodeDataUpdate()
+  const { handleNodeDataUpdate, handleNodeDataUpdateWithSyncDraft }
+    = useNodeDataUpdate()
 
-  const handleTitleBlur = useCallback((title: string) => {
-    handleNodeDataUpdateWithSyncDraft({ id, data: { title } })
-    saveStateToHistory(WorkflowHistoryEvent.NodeTitleChange, { nodeId: id })
-  }, [handleNodeDataUpdateWithSyncDraft, id, saveStateToHistory])
-  const handleDescriptionChange = useCallback((desc: string) => {
-    handleNodeDataUpdateWithSyncDraft({ id, data: { desc } })
-    saveStateToHistory(WorkflowHistoryEvent.NodeDescriptionChange, { nodeId: id })
-  }, [handleNodeDataUpdateWithSyncDraft, id, saveStateToHistory])
+  const handleTitleBlur = useCallback(
+    (title: string) => {
+      handleNodeDataUpdateWithSyncDraft({ id, data: { title } })
+      saveStateToHistory(WorkflowHistoryEvent.NodeTitleChange, { nodeId: id })
+    },
+    [handleNodeDataUpdateWithSyncDraft, id, saveStateToHistory],
+  )
+  const handleDescriptionChange = useCallback(
+    (desc: string) => {
+      handleNodeDataUpdateWithSyncDraft({ id, data: { desc } })
+      saveStateToHistory(WorkflowHistoryEvent.NodeDescriptionChange, {
+        nodeId: id,
+      })
+    },
+    [handleNodeDataUpdateWithSyncDraft, id, saveStateToHistory],
+  )
 
   const isChildNode = !!(data.isInIteration || data.isInLoop)
   const isSupportSingleRun = canRunBySingle(data.type, isChildNode)
@@ -184,29 +203,34 @@ const BasePanel: FC<BasePanelProps> = ({
       hasClickRunning.current = true
       setIsPaused(false)
     }
-    else if (data._isSingleRun && data._singleRunningStatus === undefined && hasClickRunning) {
+    else if (
+      data._isSingleRun
+      && data._singleRunningStatus === undefined
+      && hasClickRunning
+    ) {
       setIsPaused(true)
       hasClickRunning.current = false
     }
   }, [data])
 
-  const updateNodeRunningStatus = useCallback((status: NodeRunningStatus) => {
-    handleNodeDataUpdate({
-      id,
-      data: {
-        ...data,
-        _singleRunningStatus: status,
-      },
-    })
-  }, [handleNodeDataUpdate, id, data])
+  const updateNodeRunningStatus = useCallback(
+    (status: NodeRunningStatus) => {
+      handleNodeDataUpdate({
+        id,
+        data: {
+          ...data,
+          _singleRunningStatus: status,
+        },
+      })
+    },
+    [handleNodeDataUpdate, id, data],
+  )
 
   useEffect(() => {
     hasClickRunning.current = false
   }, [id])
 
-  const {
-    nodesMap,
-  } = useNodesMetaData()
+  const { nodesMap } = useNodesMetaData()
 
   const configsMap = useHooksStore(s => s.configsMap)
   const {
@@ -251,19 +275,34 @@ const BasePanel: FC<BasePanelProps> = ({
 
     if (pendingSingleRun.action === 'run')
       handleSingleRun()
-    else
-      handleStop()
+    else handleStop()
 
     setPendingSingleRun(undefined)
   }, [pendingSingleRun, id, handleSingleRun, handleStop, setPendingSingleRun])
 
   const logParams = useLogs()
-  const passedLogParams = useMemo(() => [BlockEnum.Tool, BlockEnum.Agent, BlockEnum.Iteration, BlockEnum.Loop].includes(data.type) ? logParams : {}, [data.type, logParams])
+  const passedLogParams = useMemo(
+    () =>
+      [
+        BlockEnum.Tool,
+        BlockEnum.Agent,
+        BlockEnum.Iteration,
+        BlockEnum.Loop,
+      ].includes(data.type)
+        ? logParams
+        : {},
+    [data.type, logParams],
+  )
 
   const storeBuildInTools = useStore(s => s.buildInTools)
   const { data: buildInTools } = useAllBuiltInTools()
   const currToolCollection = useMemo(
-    () => getCurrentToolCollection(buildInTools, storeBuildInTools, data.provider_id),
+    () =>
+      getCurrentToolCollection(
+        buildInTools,
+        storeBuildInTools,
+        data.provider_id,
+      ),
     [buildInTools, storeBuildInTools, data.provider_id],
   )
   const needsToolAuth = useMemo(() => {
@@ -271,8 +310,13 @@ const BasePanel: FC<BasePanelProps> = ({
   }, [data.type, currToolCollection?.allow_delete])
 
   // only fetch trigger plugins when the node is a trigger plugin
-  const { data: triggerPlugins = [] } = useAllTriggerPlugins(data.type === BlockEnum.TriggerPlugin)
-  const currentTriggerPlugin = useMemo(() => getCurrentTriggerPlugin(data, triggerPlugins), [data, triggerPlugins])
+  const { data: triggerPlugins = [] } = useAllTriggerPlugins(
+    data.type === BlockEnum.TriggerPlugin,
+  )
+  const currentTriggerPlugin = useMemo(
+    () => getCurrentTriggerPlugin(data, triggerPlugins),
+    [data, triggerPlugins],
+  )
   const { setDetail } = usePluginStore()
 
   useEffect(() => {
@@ -280,13 +324,15 @@ const BasePanel: FC<BasePanelProps> = ({
       setDetail({
         name: currentTriggerPlugin.label[language],
         plugin_id: currentTriggerPlugin.plugin_id || '',
-        plugin_unique_identifier: currentTriggerPlugin.plugin_unique_identifier || '',
+        plugin_unique_identifier:
+          currentTriggerPlugin.plugin_unique_identifier || '',
         id: currentTriggerPlugin.id,
         provider: currentTriggerPlugin.name,
         declaration: {
           trigger: {
             subscription_schema: currentTriggerPlugin.subscription_schema || [],
-            subscription_constructor: currentTriggerPlugin.subscription_constructor,
+            subscription_constructor:
+              currentTriggerPlugin.subscription_constructor,
           },
         },
       })
@@ -295,16 +341,22 @@ const BasePanel: FC<BasePanelProps> = ({
 
   const dataSourceList = useStore(s => s.dataSourceList)
 
-  const currentDataSource = useMemo(() => getCurrentDataSource(data, dataSourceList), [data, dataSourceList])
+  const currentDataSource = useMemo(
+    () => getCurrentDataSource(data, dataSourceList),
+    [data, dataSourceList],
+  )
 
-  const handleAuthorizationItemClick = useCallback((credential_id: string) => {
-    handleNodeDataUpdateWithSyncDraft({
-      id,
-      data: {
-        credential_id,
-      },
-    })
-  }, [handleNodeDataUpdateWithSyncDraft, id])
+  const handleAuthorizationItemClick = useCallback(
+    (credential_id: string) => {
+      handleNodeDataUpdateWithSyncDraft({
+        id,
+        data: {
+          credential_id,
+        },
+      })
+    },
+    [handleNodeDataUpdateWithSyncDraft, id],
+  )
 
   const { setShowAccountSettingModal } = useModalContext()
 
@@ -312,19 +364,20 @@ const BasePanel: FC<BasePanelProps> = ({
     setShowAccountSettingModal({ payload: ACCOUNT_SETTING_TAB.DATA_SOURCE })
   }, [setShowAccountSettingModal])
 
-  const {
-    appendNodeInspectVars,
-  } = useInspectVarsCrud()
+  const { appendNodeInspectVars } = useInspectVarsCrud()
 
-  const handleSubscriptionChange = useCallback((v: SimpleSubscription, callback?: () => void) => {
-    handleNodeDataUpdateWithSyncDraft(
-      { id, data: { subscription_id: v.id } },
-      {
-        sync: true,
-        callback: { onSettled: callback },
-      },
-    )
-  }, [handleNodeDataUpdateWithSyncDraft, id])
+  const handleSubscriptionChange = useCallback(
+    (v: SimpleSubscription, callback?: () => void) => {
+      handleNodeDataUpdateWithSyncDraft(
+        { id, data: { subscription_id: v.id } },
+        {
+          sync: true,
+          callback: { onSettled: callback },
+        },
+      )
+    },
+    [handleNodeDataUpdateWithSyncDraft, id],
+  )
 
   const readmeEntranceComponent = useMemo(() => {
     let pluginDetail
@@ -342,30 +395,35 @@ const BasePanel: FC<BasePanelProps> = ({
       default:
         break
     }
-    return !pluginDetail ? null : <ReadmeEntrance pluginDetail={pluginDetail as any} className="mt-auto" />
+    return !pluginDetail
+      ? null
+      : (
+          <ReadmeEntrance pluginDetail={pluginDetail as any} className="mt-auto" />
+        )
   }, [data.type, currToolCollection, currentDataSource, currentTriggerPlugin])
 
-  const selectedNode = useMemo(() => ({
-    id,
-    data,
-  }) as Node, [id, data])
+  const selectedNode = useMemo(
+    () =>
+      ({
+        id,
+        data,
+      }) as Node,
+    [id, data],
+  )
   if (logParams.showSpecialResultPanel) {
     return (
-      <div className={cn(
-        'relative mr-1  h-full',
-      )}
-      >
+      <div className={cn('relative mr-1  h-full')}>
         <div
           ref={containerRef}
-          className={cn('flex h-full flex-col rounded-2xl border-[0.5px] border-components-panel-border bg-components-panel-bg shadow-lg', showSingleRunPanel ? 'overflow-hidden' : 'overflow-y-auto')}
+          className={cn(
+            'flex h-full flex-col rounded-2xl border-[0.5px] border-components-panel-border bg-components-panel-bg shadow-lg',
+            showSingleRunPanel ? 'overflow-hidden' : 'overflow-y-auto',
+          )}
           style={{
             width: `${nodePanelWidth}px`,
           }}
         >
-          <PanelWrap
-            nodeName={data.title}
-            onHide={hideSingleRun}
-          >
+          <PanelWrap nodeName={data.title} onHide={hideSingleRun}>
             <div className="h-0 grow overflow-y-auto pb-4">
               <SpecialResultPanel {...passedLogParams} />
             </div>
@@ -391,13 +449,13 @@ const BasePanel: FC<BasePanelProps> = ({
     })
 
     return (
-      <div className={cn(
-        'relative mr-1  h-full',
-      )}
-      >
+      <div className={cn('relative mr-1  h-full')}>
         <div
           ref={containerRef}
-          className={cn('flex h-full flex-col rounded-2xl border-[0.5px] border-components-panel-border bg-components-panel-bg shadow-lg', showSingleRunPanel ? 'overflow-hidden' : 'overflow-y-auto')}
+          className={cn(
+            'flex h-full flex-col rounded-2xl border-[0.5px] border-components-panel-border bg-components-panel-bg shadow-lg',
+            showSingleRunPanel ? 'overflow-hidden' : 'overflow-y-auto',
+          )}
           style={{
             width: `${nodePanelWidth}px`,
           }}
@@ -414,12 +472,15 @@ const BasePanel: FC<BasePanelProps> = ({
                   onRun={handleRunWithParams}
                   {...singleRunParams!}
                   {...passedLogParams}
-                  existVarValuesInForms={getExistVarValuesInForms(singleRunParams?.forms as any)}
-                  filteredExistVarForms={getFilteredExistVarForms(singleRunParams?.forms as any)}
+                  existVarValuesInForms={getExistVarValuesInForms(
+                    singleRunParams?.forms as any,
+                  )}
+                  filteredExistVarForms={getFilteredExistVarForms(
+                    singleRunParams?.forms as any,
+                  )}
                   handleAfterHumanInputStepRun={handleAfterCustomSingleRun}
                 />
               )}
-
         </div>
       </div>
     )
@@ -429,7 +490,8 @@ const BasePanel: FC<BasePanelProps> = ({
     <div
       className={cn(
         'relative mr-1 h-full',
-        showMessageLogModal && 'absolute z-0 mr-2 w-[400px] overflow-hidden rounded-2xl border-[0.5px] border-components-panel-border shadow-lg transition-all',
+        showMessageLogModal
+        && 'absolute z-0 mr-2 w-[400px] overflow-hidden rounded-2xl border-[0.5px] border-components-panel-border shadow-lg transition-all',
       )}
       style={{
         right: !showMessageLogModal ? '0' : `${otherPanelWidth}px`,
@@ -443,7 +505,10 @@ const BasePanel: FC<BasePanelProps> = ({
       </div>
       <div
         ref={containerRef}
-        className={cn('flex h-full flex-col rounded-2xl border-[0.5px] border-components-panel-border bg-components-panel-bg shadow-lg transition-[width] ease-linear', showSingleRunPanel ? 'overflow-hidden' : 'overflow-y-auto')}
+        className={cn(
+          'flex h-full flex-col rounded-2xl border-[0.5px] border-components-panel-border bg-components-panel-bg shadow-lg transition-[width] ease-linear',
+          showSingleRunPanel ? 'overflow-hidden' : 'overflow-y-auto',
+        )}
         style={{
           width: `${nodePanelWidth}px`,
         }}
@@ -456,36 +521,32 @@ const BasePanel: FC<BasePanelProps> = ({
               toolIcon={toolIcon}
               size="md"
             />
-            <TitleInput
-              value={data.title || ''}
-              onBlur={handleTitleBlur}
-            />
+            <TitleInput value={data.title || ''} onBlur={handleTitleBlur} />
             <div className="flex shrink-0 items-center text-text-tertiary">
-              {
-                isSupportSingleRun && !nodesReadOnly && (
-                  <Tooltip
-                    popupContent={t('panel.runThisStep', { ns: 'workflow' })}
-                    popupClassName="mr-1"
-                    disabled={isSingleRunning}
+              {isSupportSingleRun && !nodesReadOnly && (
+                <Tooltip
+                  popupContent={t('panel.runThisStep', { ns: 'workflow' })}
+                  popupClassName="mr-1"
+                  disabled={isSingleRunning}
+                >
+                  <div
+                    className="mr-1 flex h-6 w-6 cursor-pointer items-center justify-center rounded-md hover:bg-state-base-hover"
+                    onClick={() => {
+                      if (isSingleRunning)
+                        handleStop()
+                      else handleSingleRun()
+                    }}
                   >
-                    <div
-                      className="mr-1 flex h-6 w-6 cursor-pointer items-center justify-center rounded-md hover:bg-state-base-hover"
-                      onClick={() => {
-                        if (isSingleRunning)
-                          handleStop()
-                        else
-                          handleSingleRun()
-                      }}
-                    >
-                      {
-                        isSingleRunning
-                          ? <Stop className="h-4 w-4 text-text-tertiary" />
-                          : <RiPlayLargeLine className="h-4 w-4 text-text-tertiary" />
-                      }
-                    </div>
-                  </Tooltip>
-                )
-              }
+                    {isSingleRunning
+                      ? (
+                          <Stop className="h-4 w-4 text-text-tertiary" />
+                        )
+                      : (
+                          <RiPlayLargeLine className="h-4 w-4 text-text-tertiary" />
+                        )}
+                  </div>
+                </Tooltip>
+              )}
               <HelpLink nodeType={data.type} />
               <PanelOperator id={id} data={data} showHelpLink={false} />
               <div className="mx-3 h-3.5 w-px bg-divider-regular" />
@@ -503,78 +564,58 @@ const BasePanel: FC<BasePanelProps> = ({
               onChange={handleDescriptionChange}
             />
           </div>
-          {
-            needsToolAuth && (
-              <PluginAuth
-                className="px-4 pb-2"
-                pluginPayload={{
-                  provider: currToolCollection?.name || '',
-                  providerType: currToolCollection?.type || '',
-                  category: AuthCategory.tool,
-                  detail: currToolCollection as any,
-                }}
-              >
-                <div className="flex items-center justify-between pl-4 pr-3">
-                  <Tab
-                    value={tabType}
-                    onChange={setTabType}
-                  />
-                  <AuthorizedInNode
-                    pluginPayload={{
-                      provider: currToolCollection?.name || '',
-                      providerType: currToolCollection?.type || '',
-                      category: AuthCategory.tool,
-                      detail: currToolCollection as any,
-                    }}
-                    onAuthorizationItemClick={handleAuthorizationItemClick}
-                    credentialId={data.credential_id}
-                  />
-                </div>
-              </PluginAuth>
-            )
-          }
-          {
-            !!currentDataSource && (
-              <PluginAuthInDataSourceNode
-                onJumpToDataSourcePage={handleJumpToDataSourcePage}
-                isAuthorized={currentDataSource.is_authorized}
-              >
-                <div className="flex items-center justify-between pl-4 pr-3">
-                  <Tab
-                    value={tabType}
-                    onChange={setTabType}
-                  />
-                  <AuthorizedInDataSourceNode
-                    onJumpToDataSourcePage={handleJumpToDataSourcePage}
-                    authorizationsNum={3}
-                  />
-                </div>
-              </PluginAuthInDataSourceNode>
-            )
-          }
-          {
-            currentTriggerPlugin && (
-              <TriggerSubscription
-                subscriptionIdSelected={data.subscription_id}
-                onSubscriptionChange={handleSubscriptionChange}
-              >
-                <Tab
-                  value={tabType}
-                  onChange={setTabType}
-                />
-              </TriggerSubscription>
-            )
-          }
-          {
-            !needsToolAuth && !currentDataSource && !currentTriggerPlugin && (
+          {needsToolAuth && (
+            <PluginAuth
+              className="px-4 pb-2"
+              pluginPayload={{
+                provider: currToolCollection?.name || '',
+                providerType: currToolCollection?.type || '',
+                category: AuthCategory.tool,
+                detail: currToolCollection as any,
+              }}
+            >
               <div className="flex items-center justify-between pl-4 pr-3">
-                <Tab
-                  value={tabType}
-                  onChange={setTabType}
+                <Tab value={tabType} onChange={setTabType} />
+                <AuthorizedInNode
+                  pluginPayload={{
+                    provider: currToolCollection?.name || '',
+                    providerType: currToolCollection?.type || '',
+                    category: AuthCategory.tool,
+                    detail: currToolCollection as any,
+                  }}
+                  onAuthorizationItemClick={handleAuthorizationItemClick}
+                  credentialId={data.credential_id}
                 />
               </div>
-            )
-          }
+            </PluginAuth>
+          )}
+          {!!currentDataSource && (
+            <PluginAuthInDataSourceNode
+              onJumpToDataSourcePage={handleJumpToDataSourcePage}
+              isAuthorized={currentDataSource.is_authorized}
+            >
+              <div className="flex items-center justify-between pl-4 pr-3">
+                <Tab value={tabType} onChange={setTabType} />
+                <AuthorizedInDataSourceNode
+                  onJumpToDataSourcePage={handleJumpToDataSourcePage}
+                  authorizationsNum={3}
+                />
+              </div>
+            </PluginAuthInDataSourceNode>
+          )}
+          {currentTriggerPlugin && (
+            <TriggerSubscription
+              subscriptionIdSelected={data.subscription_id}
+              onSubscriptionChange={handleSubscriptionChange}
+            >
+              <Tab value={tabType} onChange={setTabType} />
+            </TriggerSubscription>
+          )}
+          {!needsToolAuth && !currentDataSource && !currentTriggerPlugin && (
+            <div className="flex items-center justify-between pl-4 pr-3">
+              <Tab value={tabType} onChange={setTabType} />
+            </div>
+          )}
           <Split />
         </div>
         {tabType === TabType.settings && (
@@ -594,35 +635,22 @@ const BasePanel: FC<BasePanelProps> = ({
               })}
             </div>
             <Split />
-            {
-              hasRetryNode(data.type) && (
-                <RetryOnPanel
-                  id={id}
-                  data={data}
-                />
-              )
-            }
-            {
-              hasErrorHandleNode(data.type) && (
-                <ErrorHandleOnPanel
-                  id={id}
-                  data={data}
-                />
-              )
-            }
-            {
-              !!availableNextBlocks.length && (
-                <div className="border-t-[0.5px] border-divider-regular p-4">
-                  <div className="system-sm-semibold-uppercase mb-1 flex items-center text-text-secondary">
-                    {t('panel.nextStep', { ns: 'workflow' }).toLocaleUpperCase()}
-                  </div>
-                  <div className="system-xs-regular mb-2 text-text-tertiary">
-                    {t('panel.addNextStep', { ns: 'workflow' })}
-                  </div>
-                  <NextStep selectedNode={selectedNode} />
+            {hasRetryNode(data.type) && <RetryOnPanel id={id} data={data} />}
+            {hasErrorHandleNode(data.type) && (
+              <ErrorHandleOnPanel id={id} data={data} />
+            )}
+            <RerunPermissionsPanel id={id} data={data} />
+            {!!availableNextBlocks.length && (
+              <div className="border-t-[0.5px] border-divider-regular p-4">
+                <div className="system-sm-semibold-uppercase mb-1 flex items-center text-text-secondary">
+                  {t('panel.nextStep', { ns: 'workflow' }).toLocaleUpperCase()}
                 </div>
-              )
-            }
+                <div className="system-xs-regular mb-2 text-text-tertiary">
+                  {t('panel.addNextStep', { ns: 'workflow' })}
+                </div>
+                <NextStep selectedNode={selectedNode} />
+              </div>
+            )}
             {readmeEntranceComponent}
           </div>
         )}
@@ -642,7 +670,6 @@ const BasePanel: FC<BasePanelProps> = ({
             {...passedLogParams}
           />
         )}
-
       </div>
     </div>
   )

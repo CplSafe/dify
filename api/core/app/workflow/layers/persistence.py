@@ -94,6 +94,13 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
         self._node_execution_cache: dict[str, WorkflowNodeExecution] = {}
         self._node_snapshots: dict[str, _NodeRuntimeSnapshot] = {}
         self._node_sequence: int = 0
+        # Independent counter for HTTP-node tokens. graphon's runtime
+        # `total_tokens` accumulator misses HTTP nodes intermittently in
+        # loop contexts (root cause unclear — likely event-ordering race
+        # between graph engine and layer notification). We mirror the same
+        # add_tokens calls into this counter so completion stats can fall
+        # back to it when runtime_state lost the data.
+        self._http_tokens_accumulated: int = 0
 
     # ------------------------------------------------------------------
     # GraphEngineLayer lifecycle
@@ -408,13 +415,17 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
                 before = getattr(state, "total_tokens", 0)
                 state.add_tokens(tokens)
                 after = getattr(state, "total_tokens", 0)
+                # Mirror the addition into our own counter — survives even
+                # if runtime_state's value gets clobbered by other layers.
+                self._http_tokens_accumulated += tokens
                 logger.info(
-                    "HTTP node %s tokens extracted: +%d (field=%s, total %d→%d)",
+                    "HTTP node %s tokens extracted: +%d (field=%s, runtime %d→%d, mirror=%d)",
                     event.node_id,
                     tokens,
                     token_field_name,
                     before,
                     after,
+                    self._http_tokens_accumulated,
                 )
         except (json.JSONDecodeError, ValueError, TypeError, KeyError) as exc:
             logger.warning(
@@ -462,7 +473,28 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
         if update_finished:
             execution.finished_at = naive_utc_now()
         runtime_state = self.graph_runtime_state
-        execution.total_tokens = runtime_state.total_tokens
+        runtime_total = runtime_state.total_tokens
+        # Detect the lost-token bug: if our HTTP-token mirror has more
+        # tokens than runtime_state ended up with, runtime lost some
+        # add_tokens writes (likely because another layer wrote
+        # execution.total_tokens earlier). In that case rebuild the
+        # final number from (runtime LLM portion) + (mirrored HTTP).
+        if self._http_tokens_accumulated > 0 and runtime_total < self._http_tokens_accumulated:
+            import logging
+            _logger = logging.getLogger(__name__)
+            _logger.warning(
+                "runtime total_tokens=%d < mirrored HTTP tokens=%d; "
+                "falling back to mirror+%d (runtime LLM portion)",
+                runtime_total, self._http_tokens_accumulated,
+                max(runtime_total - self._http_tokens_accumulated, 0),
+            )
+            # Treat any tokens already in runtime_total as LLM-side and
+            # add the mirrored HTTP total. If runtime kept some HTTP
+            # tokens, this would double-count, but the guard above
+            # ensures runtime < mirror so that case is impossible here.
+            execution.total_tokens = runtime_total + self._http_tokens_accumulated
+        else:
+            execution.total_tokens = runtime_total
         execution.total_steps = runtime_state.node_run_steps
         execution.outputs = execution.outputs or runtime_state.outputs
         execution.exceptions_count = runtime_state.exceptions_count

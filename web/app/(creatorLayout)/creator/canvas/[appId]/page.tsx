@@ -7,6 +7,7 @@ import CanvasRuntime from '@/app/components/canvas-runtime'
 import RuntimeInput from '@/app/components/canvas-runtime/runtime-input'
 import { useRuntimeStore } from '@/app/components/canvas-runtime/runtime-store'
 import SaveCanvasDialog from '@/app/components/canvas-runtime/save-canvas-dialog'
+import TopupModal from '@/app/components/creator/wallet/topup-modal'
 import { useParams, useRouter, useSearchParams } from '@/next/navigation'
 import {
   fetchCanvasAppParameters,
@@ -17,6 +18,58 @@ import { getUserCanvasSnapshot } from '@/service/user-canvases'
 
 type InstalledAppListResp = {
   installed_apps: ExploreInstalledApp[]
+}
+
+// Parse a system message and turn `[label](url)` markdown-style links
+// into clickable spans. When the URL points at the balance / topup page
+// we swap the link out for a "充值" button that opens TopupModal in
+// place — keeps the user on the canvas instead of losing their state.
+function renderSystemMessage(text: string, openTopup: () => void) {
+  const parts: Array<string | { label: string, href: string }> = []
+  const linkRe = /\[([^\]]+)\]\(([^)]+)\)/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  // eslint-disable-next-line no-cond-assign
+  while ((match = linkRe.exec(text)) !== null) {
+    if (match.index > lastIndex)
+      parts.push(text.slice(lastIndex, match.index))
+    parts.push({ label: match[1], href: match[2] })
+    lastIndex = linkRe.lastIndex
+  }
+  if (lastIndex < text.length)
+    parts.push(text.slice(lastIndex))
+
+  return parts.map((part, i) => {
+    if (typeof part === 'string')
+      return <span key={i}>{part}</span>
+    const isBalance
+      = part.href.includes('/balance')
+        || part.href.includes('/wallet')
+        || part.href.includes('/topup')
+    if (isBalance) {
+      return (
+        <button
+          key={i}
+          type="button"
+          onClick={openTopup}
+          className="inline-flex items-center rounded-md bg-components-button-primary-bg px-2 py-0.5 system-xs-medium text-text-primary-on-surface hover:bg-components-button-primary-bg-hover"
+        >
+          点击「充值」
+        </button>
+      )
+    }
+    return (
+      <a
+        key={i}
+        href={part.href}
+        target="_blank"
+        rel="noreferrer"
+        className="text-text-accent underline"
+      >
+        {part.label}
+      </a>
+    )
+  })
 }
 
 /**
@@ -63,6 +116,10 @@ const CanvasRuntimePage = () => {
   const handleOpenSave = useCallback(() => setSaveOpen(true), [])
   const handleCloseSave = useCallback(() => setSaveOpen(false), [])
   const [snapshotExpired, setSnapshotExpired] = useState(false)
+  // System message banner can carry a [充值] link from balance-check
+  // middleware. Detect it and surface as an inline TopupModal trigger
+  // instead of routing the user to a different page.
+  const [topupOpen, setTopupOpen] = useState(false)
   // Plain chatflow message answer (event: message). Surfaced as a
   // banner above the canvas so users see middleware bailouts (balance
   // checks, gating, etc.) and ad-hoc LLM replies even when no workflow
@@ -351,11 +408,11 @@ const CanvasRuntimePage = () => {
       {messageAnswer && (
         <div className="border-b border-components-panel-border bg-components-panel-bg px-4 py-3">
           <div className="mb-1 system-2xs-medium-uppercase text-text-tertiary">
-            来自后端的消息
+            来自系统的消息
             {!messageEnded && '（接收中…）'}
           </div>
           <div className="system-sm-regular whitespace-pre-wrap text-text-primary">
-            {messageAnswer}
+            {renderSystemMessage(messageAnswer, () => setTopupOpen(true))}
           </div>
         </div>
       )}
@@ -372,6 +429,7 @@ const CanvasRuntimePage = () => {
         sourceRunId={workflowRunId}
         onClose={handleCloseSave}
       />
+      <TopupModal open={topupOpen} onOpenChange={setTopupOpen} />
     </div>
   )
 }

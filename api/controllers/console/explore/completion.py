@@ -46,9 +46,13 @@ from .. import console_ns
 
 logger = logging.getLogger(__name__)
 # Owner sees a top-up CTA because they control the workspace wallet.
-_INSUFFICIENT_OWNER_BALANCE_MESSAGE = "余额不足，请先前往[充值页](/creator/balance)处理后再继续生成。"
+_INSUFFICIENT_OWNER_BALANCE_MESSAGE = (
+    "工作区余额不足，本次生成无法启动。[充值](/creator/balance)后即可继续。"
+)
 # Members can't top up the workspace pool themselves — they must ask the owner.
-_INSUFFICIENT_MEMBER_BALANCE_MESSAGE = "您的额度不足，请联系工作区所有者为您分配额度或充值。"
+_INSUFFICIENT_MEMBER_BALANCE_MESSAGE = (
+    "你的可用额度不足，本次生成无法启动。请联系工作区所有者为你分配额度或为工作区充值。"
+)
 
 
 def _creator_marketplace_balance_reason(app_id: str, account: Account, tenant_id: str) -> str | None:

@@ -164,6 +164,7 @@ from .billing import billing, compliance
 
 # Import creator controllers
 from .creator import api_key, balance, marketplace, works
+from .creator import canvases as creator_canvases
 
 # Import datasets controllers
 from .datasets import (

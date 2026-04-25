@@ -2121,3 +2121,34 @@ class WorkflowRerunOverride(Base):
     @property
     def kind_enum(self) -> WorkflowRerunOverrideKind:
         return WorkflowRerunOverrideKind(self.override_kind)
+
+
+class UserCanvas(Base):
+    """User's named pointer to a successful workflow_run.
+
+    Saved canvases re-derive their node graph + per-node IO from
+    `workflow_runs` and `workflow_node_executions` on open. We
+    intentionally don't FK `source_run_id` so a deleted run leaves the
+    row visible (with a "snapshot expired" placeholder) instead of
+    silently disappearing on the user.
+    """
+
+    __tablename__ = "user_canvases"
+    __table_args__ = (
+        sa.PrimaryKeyConstraint("id", name="user_canvas_pkey"),
+        sa.Index("user_canvas_owner_created_idx", "owner_id", sa.text("created_at DESC")),
+        sa.Index("user_canvas_tenant_app_idx", "tenant_id", "app_id"),
+    )
+
+    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()))
+    tenant_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    app_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    owner_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    title: Mapped[str] = mapped_column(sa.String(200), nullable=False)
+    source_run_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime, server_default=sa.func.current_timestamp(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime, server_default=sa.func.current_timestamp(), nullable=False
+    )

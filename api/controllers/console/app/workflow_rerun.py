@@ -25,11 +25,6 @@ from services.workflow_rerun_service import (
     WorkflowRerunService,
 )
 
-# RerunBusyError is consumed by the M7 streaming dispatcher when it actually
-# holds the rerun lock; keep the import live so M7 doesn't have to revisit
-# this file just to add it.
-_BUSY_ERROR_FOR_M7 = RerunBusyError
-
 
 def _serialize_override(row) -> dict:
     """Project a WorkflowRerunOverride row into a JSON-safe dict."""
@@ -145,6 +140,63 @@ class ChatflowRerunOverridesApi(Resource):
             return {"error": str(exc)}, 400
 
         return _serialize_override(override), 200
+
+
+@console_ns.route("/apps/<uuid:app_id>/messages/<uuid:message_id>/rerun-from/dispatch")
+class ChatflowRerunDispatchApi(Resource):
+    """Kick off the actual rerun for a chatflow message.
+
+    M7 entry point — holds the per-message lock for the duration of the
+    run so two tabs can't dispatch the same rerun in parallel. The
+    chatflow generator hookup itself is not wired yet (see
+    WorkflowRerunService.dispatch); this endpoint exists so the surface
+    (lock, 409, plan validation) is in place.
+    """
+
+    @setup_required
+    @login_required
+    @account_initialization_required
+    @get_app_model(mode=[AppMode.ADVANCED_CHAT])
+    def post(self, app_model: App, message_id):
+        body = request.get_json(silent=True) or {}
+        node_id = (body.get("node_id") or "").strip()
+        kind = (body.get("kind") or "input").strip()
+
+        if not node_id:
+            return {"error": "node_id is required"}, 400
+
+        try:
+            plan = WorkflowRerunService.prepare(
+                tenant_id=str(app_model.tenant_id),
+                app_id=str(app_model.id),
+                message_id=str(message_id),
+                rewind_node_id=node_id,
+                rewind_kind=kind,
+            )
+        except RerunValidationError as exc:
+            return {"error": str(exc)}, 400
+
+        try:
+            WorkflowRerunService.dispatch(plan=plan, actor_id=str(current_user.id))
+        except RerunBusyError as exc:
+            return {"error": str(exc), "code": "rerun_busy"}, 409
+        except NotImplementedError as exc:
+            # Surface the M7 stub state explicitly so the UI can fall back
+            # to the "edit saved, please re-send" path until the generator
+            # hookup lands.
+            return {
+                "error": str(exc),
+                "code": "rerun_dispatch_not_ready",
+                "plan": {
+                    "start_node_id": plan.start_node_id,
+                    "rewind_node_id": plan.rewind_node_id,
+                    "rewind_kind": plan.rewind_kind,
+                    "ancestor_node_ids": sorted(plan.ancestor_outputs.keys()),
+                    "overrides_applied": plan.overrides_applied,
+                },
+            }, 501
+
+        return {"status": "started"}, 200
 
 
 @console_ns.route(

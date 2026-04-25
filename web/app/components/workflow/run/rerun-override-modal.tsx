@@ -15,6 +15,7 @@ import CodeEditor from '@/app/components/workflow/nodes/_base/components/editor/
 import { CodeLanguage } from '@/app/components/workflow/nodes/code/types'
 import {
   deleteChatflowRerunOverride,
+  dispatchChatflowRerun,
   prepareChatflowRerun,
   upsertChatflowRerunOverride,
 } from '@/service/debug'
@@ -116,12 +117,30 @@ const RerunOverrideModal: FC<RerunOverrideModalProps> = ({
         kind,
         data: parsed,
       })
-      // Validate the resulting rerun plan synchronously so the user sees
-      // any "node is inside a loop" / permission errors right here instead
-      // of after closing the modal.
+      // Validate the rerun plan first — surfaces loop/permission errors
+      // before we hit dispatch.
       await prepareChatflowRerun({ appId, messageId, nodeId, kind })
-      onConfirmed?.({ nodeId, kind, data: parsed })
-      onClose()
+      // Try to actually dispatch. The endpoint returns 501
+      // (rerun_dispatch_not_ready) until the chatflow generator hookup
+      // lands; treat that as a soft success: the override is saved and
+      // the user can re-send the conversation turn to apply it.
+      try {
+        await dispatchChatflowRerun({ appId, messageId, nodeId, kind })
+        onConfirmed?.({ nodeId, kind, data: parsed })
+        onClose()
+      }
+      catch (dispatchErr: unknown) {
+        const msg
+          = dispatchErr instanceof Error
+            ? dispatchErr.message
+            : String(dispatchErr)
+        if (msg.includes('rerun_dispatch_not_ready') || msg.includes('501')) {
+          onConfirmed?.({ nodeId, kind, data: parsed })
+          onClose()
+          return
+        }
+        throw dispatchErr
+      }
     }
     catch (e: unknown) {
       setError(e instanceof Error ? e.message : '保存失败，请重试')

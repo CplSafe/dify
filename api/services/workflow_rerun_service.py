@@ -227,6 +227,49 @@ class WorkflowRerunService:
         return bool(redis_client.exists(f"chatflow_rerun_lock:{message_id}"))
 
     @classmethod
+    def dispatch(
+        cls,
+        *,
+        plan: RerunPlan,
+        actor_id: str,
+    ):
+        """Run the chatflow forward from `plan.start_node_id`.
+
+        M7 wires the lock + plan handoff but the actual chatflow
+        generator integration intentionally lives in a follow-up.
+        Reasons it isn't done here:
+
+          * AdvancedChatAppGenerator owns Pipeline/AppRunner setup and
+            does not currently accept an externally-built RerunPlan.
+            Rewiring it touches Pipeline, AppRunner, and the generator
+            entry points — out of scope for the chatflow-rerun MVP.
+          * The MVP uses the M2 override + M1 prepare round-trip to
+            persist user edits; the visible behaviour from the user's
+            perspective is "edit saved, click rerun" which the UI can
+            satisfy by re-sending the original conversation turn while
+            the override is in place.
+
+        This stub exists so the controller and frontend can wire up the
+        full surface (lock, 409 handling, plan validation) today, and
+        the generator hookup drops in here without surface changes.
+        """
+        with _message_rerun_lock(plan.source_message_id):
+            logger.info(
+                "chatflow_rerun_dispatch invoked: message=%s start_node=%s "
+                "ancestors=%d overrides=%d actor=%s",
+                plan.source_message_id,
+                plan.start_node_id,
+                len(plan.ancestor_outputs),
+                len(plan.overrides_applied),
+                actor_id,
+            )
+            raise NotImplementedError(
+                "chatflow rerun dispatch is not yet wired into "
+                "AdvancedChatAppGenerator; the rerun plan and lock are "
+                "ready — generator hookup is tracked separately."
+            )
+
+    @classmethod
     def seed_pool(cls, plan: RerunPlan, pool: Any) -> int:
         """Populate `pool` (a VariablePool) with the plan's ancestor data.
 

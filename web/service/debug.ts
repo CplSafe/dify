@@ -174,6 +174,41 @@ export const prepareChatflowRerun = ({
   )
 }
 
+// M7 dispatch endpoint. Returns 501 (not_ready) until the chatflow
+// generator hookup lands; the UI degrades to "saved, please re-send".
+export type ChatflowRerunDispatchResult
+  = | { status: 'started' }
+    | {
+      code: 'rerun_dispatch_not_ready'
+      error: string
+      plan: {
+        start_node_id: string
+        rewind_node_id: string
+        rewind_kind: ChatflowRerunKind
+        ancestor_node_ids: string[]
+        overrides_applied: Record<string, unknown>
+      }
+    }
+
+export const dispatchChatflowRerun = ({
+  appId,
+  messageId,
+  nodeId,
+  kind,
+}: {
+  appId: string
+  messageId: string
+  nodeId: string
+  kind: ChatflowRerunKind
+}) => {
+  return post<ChatflowRerunDispatchResult>(
+    `/apps/${appId}/messages/${messageId}/rerun-from/dispatch`,
+    {
+      body: { node_id: nodeId, kind },
+    },
+  )
+}
+
 export type ChatflowRerunOverride = {
   id: string
   message_id: string

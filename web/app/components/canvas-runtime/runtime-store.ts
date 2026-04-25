@@ -60,6 +60,20 @@ export type SSEEvent
     type: 'workflow_finished'
     workflowRunId: string
   }
+  | {
+    // Plain assistant text — chatflow sends these as `event: message`
+    // chunks. Used for both LLM answers AND middleware bailouts (e.g.
+    // a balance-check returning "余额不足，请充值"), so the canvas needs
+    // to surface it even when no workflow node ever runs.
+    type: 'message'
+    text: string
+    // `append` (default) concatenates onto the running answer.
+    // `replace` swaps the buffer (for message_replace events).
+    mode?: 'append' | 'replace'
+  }
+  | {
+    type: 'message_end'
+  }
 
 // CR1 encodes pause reason as `user_edit:<node_id>:<kinds>` where
 // kinds is a comma-joined list of "input" / "output". CR6 parses it
@@ -87,6 +101,12 @@ type RuntimeState = {
   pausedNodeIds: string[]
   // Per-paused-node metadata extracted from the SSE pause reasons.
   pausedKinds: Record<string, PausedNodeKinds>
+  // Plain assistant message accumulated from `event: message` chunks.
+  // Surfaced as a banner above the canvas — covers LLM answers and
+  // middleware bailouts (e.g. balance checks) that never start a
+  // workflow run.
+  messageAnswer: string
+  messageEnded: boolean
   // For diagnostic only — exposed in the toolbar.
   lastEventAt: number | null
 
@@ -104,6 +124,8 @@ const _initialState = {
   visibleOrder: [] as string[],
   pausedNodeIds: [] as string[],
   pausedKinds: {} as Record<string, PausedNodeKinds>,
+  messageAnswer: '',
+  messageEnded: false,
   lastEventAt: null as number | null,
 }
 
@@ -259,6 +281,26 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         pausedKinds: {},
         lastEventAt: now,
       })
+      return
+    }
+
+    if (event.type === 'message') {
+      // Append (or replace) the running answer buffer. Surfaced by the
+      // page as a banner so users see middleware bailouts (e.g. balance
+      // checks) and ad-hoc LLM answers even when no workflow node fires.
+      const { messageAnswer } = get()
+      const next
+        = event.mode === 'replace' ? event.text : `${messageAnswer}${event.text}`
+      set({
+        messageAnswer: next,
+        messageEnded: false,
+        lastEventAt: now,
+      })
+      return
+    }
+
+    if (event.type === 'message_end') {
+      set({ messageEnded: true, lastEventAt: now })
     }
   },
 

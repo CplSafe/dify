@@ -63,6 +63,12 @@ const CanvasRuntimePage = () => {
   const handleOpenSave = useCallback(() => setSaveOpen(true), [])
   const handleCloseSave = useCallback(() => setSaveOpen(false), [])
   const [snapshotExpired, setSnapshotExpired] = useState(false)
+  // Plain chatflow message answer (event: message). Surfaced as a
+  // banner above the canvas so users see middleware bailouts (balance
+  // checks, gating, etc.) and ad-hoc LLM replies even when no workflow
+  // node ever fires.
+  const messageAnswer = useRuntimeStore(s => s.messageAnswer)
+  const messageEnded = useRuntimeStore(s => s.messageEnded)
   // Chatflow's file_upload + system_parameters merged into the shape
   // RuntimeInput → FileFromLinkOrLocal expects (`{...file_upload,
   // fileUploadConfig: system_parameters}`). useFile() inside the
@@ -154,9 +160,16 @@ const CanvasRuntimePage = () => {
           files: payload.files,
         },
         {
-          // Required IOnData; we don't need streaming text inside the
-          // canvas runtime so just discard it.
-          onData: () => {},
+          // chatflow `event: message` chunks. Could be an LLM answer or
+          // a middleware bailout (e.g. balance check returning 余额不足).
+          // Either way we want it on screen, so push into the store as
+          // an append-mode message event.
+          onData: (chunk) => {
+            applyEvent({ type: 'message', text: chunk, mode: 'append' })
+          },
+          onMessageEnd: () => {
+            applyEvent({ type: 'message_end' })
+          },
           onCompleted: () => {},
           onError: (err) => {
             console.error('[canvas-runtime] chatflow error', err)
@@ -333,6 +346,17 @@ const CanvasRuntimePage = () => {
       {snapshotExpired && (
         <div className="border-state-warning-border border-b bg-state-warning-hover px-4 py-2 system-xs-regular text-text-warning-secondary">
           该画布的运行数据已过期或被清理，无法重现节点。仍可在底部输入框开始一次新的运行。
+        </div>
+      )}
+      {messageAnswer && (
+        <div className="border-b border-components-panel-border bg-components-panel-bg px-4 py-3">
+          <div className="mb-1 system-2xs-medium-uppercase text-text-tertiary">
+            来自后端的消息
+            {!messageEnded && '（接收中…）'}
+          </div>
+          <div className="system-sm-regular whitespace-pre-wrap text-text-primary">
+            {messageAnswer}
+          </div>
         </div>
       )}
       <CanvasRuntime

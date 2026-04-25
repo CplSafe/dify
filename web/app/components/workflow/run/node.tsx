@@ -344,7 +344,7 @@ const NodePanel: FC<Props> = ({
                 />
               </div>
             )}
-            <NodeRerunActions nodeId={nodeInfo.node_id} />
+            <NodeRerunActions nodeInfo={nodeInfo} />
           </div>
         )}
       </div>

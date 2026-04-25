@@ -6,7 +6,7 @@ import type {
 } from './base'
 import type { ChatPromptConfig, CompletionPromptConfig } from '@/models/debug'
 import type { AppModeEnum, ModelModeType } from '@/types/app'
-import { get, post, ssePost } from './base'
+import { del, get, post, put, ssePost } from './base'
 
 type BasicAppFirstRes = {
   prompt: string
@@ -171,5 +171,54 @@ export const prepareChatflowRerun = ({
     {
       body: { node_id: nodeId, kind },
     },
+  )
+}
+
+export type ChatflowRerunOverride = {
+  id: string
+  message_id: string
+  workflow_run_id: string
+  node_id: string
+  kind: ChatflowRerunKind
+  data: Record<string, unknown>
+  created_by: string
+  created_at: string | null
+}
+
+export const upsertChatflowRerunOverride = ({
+  appId,
+  messageId,
+  nodeId,
+  kind,
+  data,
+}: {
+  appId: string
+  messageId: string
+  nodeId: string
+  kind: ChatflowRerunKind
+  data: Record<string, unknown>
+}) => {
+  return put<ChatflowRerunOverride>(
+    `/apps/${appId}/messages/${messageId}/rerun-overrides`,
+    {
+      body: { node_id: nodeId, kind, data },
+    },
+  )
+}
+
+export const deleteChatflowRerunOverride = ({
+  appId,
+  messageId,
+  nodeId,
+  kind,
+}: {
+  appId: string
+  messageId: string
+  nodeId: string
+  kind?: ChatflowRerunKind
+}) => {
+  const search = kind ? `?kind=${kind}` : ''
+  return del<{ deleted: number }>(
+    `/apps/${appId}/messages/${messageId}/rerun-overrides/${encodeURIComponent(nodeId)}${search}`,
   )
 }

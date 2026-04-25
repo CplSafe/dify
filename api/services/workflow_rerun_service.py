@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from itertools import starmap
 from typing import Any
@@ -32,6 +33,7 @@ from core.workflow.rerun.graph_topology import (
     is_node_inside_loop_or_iteration,
 )
 from extensions.ext_database import db
+from extensions.ext_redis import redis_client
 from models.model import Conversation, Message
 from models.workflow import (
     Workflow,
@@ -46,6 +48,44 @@ logger = logging.getLogger(__name__)
 
 class RerunValidationError(ValueError):
     """Raised when a rerun request fails preconditions."""
+
+
+class RerunBusyError(RuntimeError):
+    """Raised when a rerun is already in progress for the same message.
+
+    Surfaced as HTTP 409 by the controller. The lock is held in Redis
+    keyed by message_id so the protection works across api/celery
+    workers — a single user clicking 'rerun' on two browser tabs at
+    once will get one success and one 409.
+    """
+
+
+_RERUN_LOCK_TTL_SECONDS = 600  # 10 min — long enough for the slowest video gen
+
+
+@contextmanager
+def _message_rerun_lock(message_id: str):
+    """Acquire (and auto-release) a Redis lock for the given message.
+
+    Lock is best-effort cleaned on context exit. If the worker crashes
+    mid-rerun, the TTL guarantees the lock self-expires so the user
+    isn't permanently blocked.
+    """
+    key = f"chatflow_rerun_lock:{message_id}"
+    acquired = redis_client.set(key, "1", nx=True, ex=_RERUN_LOCK_TTL_SECONDS)
+    if not acquired:
+        raise RerunBusyError(
+            f"a rerun for message {message_id!r} is already in progress; "
+            "please wait for it to finish or retry in a few minutes"
+        )
+    try:
+        yield
+    finally:
+        try:
+            redis_client.delete(key)
+        except Exception:
+            # Lock release is best-effort — TTL is the safety net.
+            logger.warning("failed to release rerun lock %s", key, exc_info=True)
 
 
 @dataclass
@@ -171,6 +211,20 @@ class WorkflowRerunService:
             rewind_node_id=rewind_node_id,
             rewind_kind=rewind_kind,
         )
+
+    @classmethod
+    def acquire_rerun_lock(cls, message_id: str):
+        """Public hook so the M7 streaming dispatcher (or tests) can hold
+        the lock around the actual rerun execution. Use as a context
+        manager: ``with WorkflowRerunService.acquire_rerun_lock(mid): ...``
+        """
+        return _message_rerun_lock(message_id)
+
+    @classmethod
+    def is_rerun_in_progress(cls, message_id: str) -> bool:
+        """Non-destructive check used by the UI to grey out the rerun
+        button while another tab/user is mid-rerun on the same message."""
+        return bool(redis_client.exists(f"chatflow_rerun_lock:{message_id}"))
 
     @classmethod
     def seed_pool(cls, plan: RerunPlan, pool: Any) -> int:

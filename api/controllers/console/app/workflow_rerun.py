@@ -20,9 +20,15 @@ from libs.login import current_user, login_required
 from models import App
 from models.model import AppMode
 from services.workflow_rerun_service import (
+    RerunBusyError,
     RerunValidationError,
     WorkflowRerunService,
 )
+
+# RerunBusyError is consumed by the M7 streaming dispatcher when it actually
+# holds the rerun lock; keep the import live so M7 doesn't have to revisit
+# this file just to add it.
+_BUSY_ERROR_FOR_M7 = RerunBusyError
 
 
 def _serialize_override(row) -> dict:
@@ -79,6 +85,9 @@ class ChatflowRerunPrepareApi(Resource):
                 for nid, outputs in plan.ancestor_outputs.items()
             },
             "overrides_applied": plan.overrides_applied,
+            # Non-blocking advisory: the UI greys out the rerun button when
+            # a concurrent rerun already holds the lock on this message.
+            "is_busy": WorkflowRerunService.is_rerun_in_progress(str(message_id)),
         }, 200
 
 

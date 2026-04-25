@@ -4,6 +4,8 @@
 import type { InstalledApp as ExploreInstalledApp } from '@/models/explore'
 import { useCallback, useEffect, useState } from 'react'
 import CanvasRuntime from '@/app/components/canvas-runtime'
+import RuntimeInput from '@/app/components/canvas-runtime/runtime-input'
+import { useRuntimeStore } from '@/app/components/canvas-runtime/runtime-store'
 import { useParams, useRouter } from '@/next/navigation'
 import { fetchInstalledAppList } from '@/service/explore'
 
@@ -32,6 +34,21 @@ const CanvasRuntimePage = () => {
   const goBack = useCallback(() => {
     router.push('/creator')
   }, [router])
+
+  // Hooks below must run on every render regardless of authState, so they
+  // sit above the early returns. The submit handler synthesises a reset
+  // event on the runtime store; real SSE dispatch lands in CR6.
+  const applyEvent = useRuntimeStore(s => s.applyEvent)
+  const handleSubmit = useCallback(
+    (payload: { text: string, files: unknown[] }) => {
+      applyEvent({
+        type: 'workflow_started',
+        workflowRunId: `pending-${Date.now()}`,
+      })
+      console.warn('[canvas-runtime] CR5 submit (no SSE wired yet)', payload)
+    },
+    [applyEvent],
+  )
 
   useEffect(() => {
     if (!appId) {
@@ -91,11 +108,15 @@ const CanvasRuntimePage = () => {
     )
   }
 
-  // CR4 mounts the runtime canvas. CR5 will inject the bottom input as
-  // a child; CR6 will mount paused-node portals; CR7 wires onSave.
+  // CR5 wires the bottom input as a CanvasRuntime child so it floats
+  // above the ReactFlow surface without intercepting pan/zoom events.
+  // CR6 will mount paused-node portals; CR7 wires onSave for the
+  // toolbar's "保存为画布".
   return (
     <div className="flex h-full flex-col">
-      <CanvasRuntime />
+      <CanvasRuntime>
+        <RuntimeInput onSubmit={handleSubmit} />
+      </CanvasRuntime>
     </div>
   )
 }

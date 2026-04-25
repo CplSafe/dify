@@ -69,6 +69,18 @@ const CanvasRuntimePage = () => {
         if (cancelled)
           return
         if (snap.expired) {
+          // FIX12: reset the runtime store before bailing out, otherwise
+          // a previously-replayed canvas (or a fresh chat run) leaves
+          // its nodes/edges visible under the "snapshot expired" banner
+          // and the user sees stale state that doesn't match the URL.
+          applyEvent({
+            type: 'workflow_started',
+            workflowRunId: snap.canvas.source_run_id,
+          })
+          applyEvent({
+            type: 'workflow_finished',
+            workflowRunId: snap.canvas.source_run_id,
+          })
           setSnapshotExpired(true)
           return
         }

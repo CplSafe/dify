@@ -13,6 +13,9 @@ import {
 import { Handle, Position } from 'reactflow'
 import BlockIcon from '@/app/components/workflow/block-icon'
 import { cn } from '@/utils/classnames'
+import { useRuntimeContext } from './runtime-context'
+import RuntimePauseActions from './runtime-pause-actions'
+import { useRuntimeStore } from './runtime-store'
 
 const STATUS_BORDER: Record<NodeRuntimeStatus, string> = {
   pending: 'border-divider-subtle',
@@ -63,10 +66,18 @@ const StatusBadge: FC<{ status: NodeRuntimeStatus }> = ({ status }) => {
  * concerns to keep status rendering trivial to test.
  */
 const RuntimeNodeComponent: FC<NodeProps<RuntimeNode>> = ({ data }) => {
+  const ctx = useRuntimeContext()
+  const pausedKinds = useRuntimeStore(s => s.pausedKinds[data.id])
+  // Show inline pause CTAs only for user_edit pauses; human_input pauses
+  // surface their own form via the existing chatflow infrastructure.
+  const showPauseActions
+    = data.status === 'paused'
+      && pausedKinds?.source === 'user_edit'
+      && ctx?.appId
   return (
     <div
       className={cn(
-        'min-w-[180px] rounded-xl border-[1.5px] px-3 py-2 shadow-sm transition-colors',
+        'min-w-[200px] rounded-xl border-[1.5px] px-3 py-2 shadow-sm transition-colors',
         STATUS_BORDER[data.status],
         STATUS_BG[data.status],
       )}
@@ -89,6 +100,13 @@ const RuntimeNodeComponent: FC<NodeProps<RuntimeNode>> = ({ data }) => {
         <div className="mt-1 system-xs-regular text-text-destructive">
           {data.error}
         </div>
+      )}
+      {showPauseActions && pausedKinds && ctx && (
+        <RuntimePauseActions
+          appId={ctx.appId}
+          node={data}
+          kinds={pausedKinds}
+        />
       )}
       <Handle type="source" position={Position.Right} className="opacity-0" />
     </div>

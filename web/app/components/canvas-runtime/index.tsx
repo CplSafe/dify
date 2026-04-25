@@ -9,6 +9,7 @@ import ReactFlow, {
   MiniMap,
   ReactFlowProvider,
 } from 'reactflow'
+import { RuntimeContext } from './runtime-context'
 import RuntimeNodeComponent from './runtime-node'
 import { useRuntimeStore } from './runtime-store'
 import RuntimeToolbar from './toolbar'
@@ -19,6 +20,9 @@ const NODE_TYPES = {
 }
 
 type CanvasRuntimeProps = {
+  // CR6 needs the appId to call resume / rerun endpoints from inside
+  // node-level pause CTAs.
+  appId: string
   // CR7 will pass through; CR4 forwards as-is.
   onSave?: () => void
   // CR5 will mount its bottom-centred input as a child so it sits above
@@ -103,10 +107,13 @@ const CanvasRuntimeInner = ({ onSave, children }: CanvasRuntimeProps) => {
 }
 
 const CanvasRuntime = (props: CanvasRuntimeProps) => {
+  const ctx = useMemo(() => ({ appId: props.appId }), [props.appId])
   return (
-    <ReactFlowProvider>
-      <CanvasRuntimeInner {...props} />
-    </ReactFlowProvider>
+    <RuntimeContext value={ctx}>
+      <ReactFlowProvider>
+        <CanvasRuntimeInner {...props} />
+      </ReactFlowProvider>
+    </RuntimeContext>
   )
 }
 

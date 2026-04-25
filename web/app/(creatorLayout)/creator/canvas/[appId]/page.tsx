@@ -7,6 +7,7 @@ import CanvasRuntime from '@/app/components/canvas-runtime'
 import RuntimeInput from '@/app/components/canvas-runtime/runtime-input'
 import { useRuntimeStore } from '@/app/components/canvas-runtime/runtime-store'
 import { useParams, useRouter } from '@/next/navigation'
+import { runChatflowOnCanvas } from '@/service/canvas-runtime'
 import { fetchInstalledAppList } from '@/service/explore'
 
 type InstalledAppListResp = {
@@ -36,18 +37,92 @@ const CanvasRuntimePage = () => {
   }, [router])
 
   // Hooks below must run on every render regardless of authState, so they
-  // sit above the early returns. The submit handler synthesises a reset
-  // event on the runtime store; real SSE dispatch lands in CR6.
+  // sit above the early returns. CR6 wires the actual chatflow SSE:
+  // run → events → store; pause + resume rides on the existing CR1
+  // backend infrastructure.
   const applyEvent = useRuntimeStore(s => s.applyEvent)
+  const setMessageId = useRuntimeStore(s => s.setMessageId)
   const handleSubmit = useCallback(
     (payload: { text: string, files: unknown[] }) => {
+      if (!appId)
+        return
+      // Reset the canvas before each new run.
       applyEvent({
         type: 'workflow_started',
         workflowRunId: `pending-${Date.now()}`,
       })
-      console.warn('[canvas-runtime] CR5 submit (no SSE wired yet)', payload)
+      setMessageId(null)
+      runChatflowOnCanvas(
+        appId,
+        {
+          query: payload.text,
+          // Inputs are empty for canvas runtime today — start-node vars
+          // are set at chatflow author time. CR5+ will surface required
+          // inputs into the bottom dock when there are any.
+          inputs: {},
+          files: payload.files,
+        },
+        {
+          // Required IOnData; we don't need streaming text inside the
+          // canvas runtime so just discard it.
+          onData: () => {},
+          onCompleted: () => {},
+          onError: (err) => {
+            console.error('[canvas-runtime] chatflow error', err)
+          },
+          onWorkflowStarted: (resp) => {
+            applyEvent({
+              type: 'workflow_started',
+              workflowRunId: resp.workflow_run_id,
+            })
+            if (resp.message_id)
+              setMessageId(resp.message_id)
+          },
+          onNodeStarted: (resp) => {
+            const data = resp.data
+            applyEvent({
+              type: 'node_started',
+              nodeId: data.node_id,
+              nodeType: data.node_type as string,
+              title: data.title,
+              inputs: data.inputs as Record<string, unknown>,
+              predecessorNodeId: data.predecessor_node_id || undefined,
+            })
+          },
+          onNodeFinished: (resp) => {
+            const data = resp.data
+            applyEvent({
+              type: 'node_finished',
+              nodeId: data.node_id,
+              outputs: data.outputs,
+              status: data.status === 'succeeded' ? 'succeeded' : 'failed',
+              error: data.error || undefined,
+            })
+          },
+          onWorkflowPaused: (resp) => {
+            applyEvent({
+              type: 'workflow_paused',
+              pausedNodeIds: resp.data.paused_nodes ?? [],
+              // Reasons can arrive as either strings or {reason: string}
+              // objects depending on the backend payload version; coerce
+              // to strings so the parser only needs to handle one shape.
+              reasons: (resp.data.reasons ?? []).map((r: unknown) =>
+                typeof r === 'string'
+                  ? r
+                  : ((r as { reason?: string })?.reason ?? ''),
+              ),
+            })
+          },
+          onWorkflowFinished: (resp) => {
+            applyEvent({
+              type: 'workflow_finished',
+              workflowRunId: resp.workflow_run_id,
+            })
+          },
+        },
+      )
     },
-    [applyEvent],
+    [appId, applyEvent, setMessageId],
   )
 
   useEffect(() => {
@@ -114,7 +189,7 @@ const CanvasRuntimePage = () => {
   // toolbar's "保存为画布".
   return (
     <div className="flex h-full flex-col">
-      <CanvasRuntime>
+      <CanvasRuntime appId={appId!}>
         <RuntimeInput onSubmit={handleSubmit} />
       </CanvasRuntime>
     </div>

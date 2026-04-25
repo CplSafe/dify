@@ -184,11 +184,21 @@ class WorkflowRerunService:
             start_node_id = rewind_node_id
         else:  # OUTPUT
             downstream = find_downstream_node(graph_dict, rewind_node_id)
-            # FIX11: a paused leaf node is still resumable — there's no
-            # next node to execute, but graphon will simply emit
-            # workflow_finished. Use empty start_node_id as the sentinel;
-            # dispatch / seed_pool already tolerate empty ancestor sets.
-            start_node_id = downstream or ""
+            if downstream is None:
+                # FIX11/FIX13: a paused leaf is still resumable — graphon
+                # will just walk the run to workflow_finished. But on a
+                # terminated run (succeeded/failed/stopped) there's no
+                # WorkflowPause row to revive, so dispatch would
+                # silently no-op. Reject those upfront.
+                if str(run.status) != "paused":
+                    raise RerunValidationError(
+                        f"node {rewind_node_id!r} has no downstream node — "
+                        "cannot rewind on its output unless the run is paused "
+                        "at this node"
+                    )
+                start_node_id = ""
+            else:
+                start_node_id = downstream
 
         # Pull ancestor execution rows (only successfully-completed ones).
         # When start_node_id is empty (leaf-resume case from FIX11) there

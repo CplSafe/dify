@@ -47,6 +47,7 @@ const CanvasRuntimePage = () => {
   const applyEvent = useRuntimeStore(s => s.applyEvent)
   const setMessageId = useRuntimeStore(s => s.setMessageId)
   const workflowRunId = useRuntimeStore(s => s.workflowRunId)
+  const resetRuntime = useRuntimeStore(s => s.reset)
   const [saveOpen, setSaveOpen] = useState(false)
   const handleOpenSave = useCallback(() => setSaveOpen(true), [])
   const handleCloseSave = useCallback(() => setSaveOpen(false), [])
@@ -69,18 +70,13 @@ const CanvasRuntimePage = () => {
         if (cancelled)
           return
         if (snap.expired) {
-          // FIX12: reset the runtime store before bailing out, otherwise
-          // a previously-replayed canvas (or a fresh chat run) leaves
-          // its nodes/edges visible under the "snapshot expired" banner
-          // and the user sees stale state that doesn't match the URL.
-          applyEvent({
-            type: 'workflow_started',
-            workflowRunId: snap.canvas.source_run_id,
-          })
-          applyEvent({
-            type: 'workflow_finished',
-            workflowRunId: snap.canvas.source_run_id,
-          })
+          // FIX12 + FIX14: reset the runtime store completely before
+          // showing the banner. Use store.reset() rather than synthesising
+          // workflow_started/finished events — those would leave
+          // workflowRunId set and the toolbar's "保存为画布" button would
+          // re-enable for a snapshot whose source_run is gone, then
+          // createUserCanvas() would fail server-side.
+          resetRuntime()
           setSnapshotExpired(true)
           return
         }
@@ -118,7 +114,7 @@ const CanvasRuntimePage = () => {
     return () => {
       cancelled = true
     }
-  }, [applyEvent, authState, canvasIdParam])
+  }, [applyEvent, authState, canvasIdParam, resetRuntime])
   const handleSubmit = useCallback(
     (payload: { text: string, files: unknown[] }) => {
       if (!appId)

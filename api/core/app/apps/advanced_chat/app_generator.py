@@ -41,6 +41,7 @@ from core.app.apps.message_based_app_queue_manager import MessageBasedAppQueueMa
 from core.app.entities.app_invoke_entities import AdvancedChatAppGenerateEntity, InvokeFrom, UserFrom
 from core.app.entities.task_entities import ChatbotAppBlockingResponse, ChatbotAppStreamResponse
 from core.app.layers.pause_state_persist_layer import PauseStateLayerConfig, PauseStatePersistenceLayer
+from core.app.layers.user_edit_pause_layer import UserEditPauseLayer
 from core.helper.trace_id_helper import extract_external_trace_id_from_args
 from core.ops.ops_trace_manager import TraceQueueManager
 from core.prompt.utils.get_thread_messages_length import get_thread_messages_length
@@ -513,6 +514,14 @@ class AdvancedChatAppGenerator(MessageBasedAppGenerator):
                         state_owner_user_id=pause_state_config.state_owner_user_id,
                     )
                 )
+
+            # CR1: pause the run after any node whose canvas data has the
+            # `allow_user_edit_input/output` flag set, so the canvas runtime
+            # UI can let the user edit and resume. Reads flags off the
+            # workflow draft graph snapshot once at construction time.
+            graph_layers.append(
+                UserEditPauseLayer(graph_dict=workflow.graph_dict or {}),
+            )
 
             # new thread with request context and contextvars
             context = contextvars.copy_context()

@@ -232,42 +232,46 @@ class WorkflowRerunService:
         *,
         plan: RerunPlan,
         actor_id: str,
-    ):
-        """Run the chatflow forward from `plan.start_node_id`.
+    ) -> str:
+        """Resume a paused chatflow from `plan.start_node_id`.
 
-        M7 wires the lock + plan handoff but the actual chatflow
-        generator integration intentionally lives in a follow-up.
-        Reasons it isn't done here:
+        CR1 wiring: the chatflow is expected to already be in `paused`
+        state (UserEditPauseLayer halted it after the rewind node
+        finished). We just enqueue the existing celery resume task —
+        graphon's PauseStatePersistenceLayer rehydrates the saved
+        runtime state and the engine continues from where it stopped.
 
-          * AdvancedChatAppGenerator owns Pipeline/AppRunner setup and
-            does not currently accept an externally-built RerunPlan.
-            Rewiring it touches Pipeline, AppRunner, and the generator
-            entry points — out of scope for the chatflow-rerun MVP.
-          * The MVP uses the M2 override + M1 prepare round-trip to
-            persist user edits; the visible behaviour from the user's
-            perspective is "edit saved, click rerun" which the UI can
-            satisfy by re-sending the original conversation turn while
-            the override is in place.
+        Overrides previously persisted via the M2 endpoints are *not*
+        re-applied here — they were applied to the rewind node's outputs
+        before pause via the variable pool / node execution row. A future
+        iteration can splice override data into the deserialized runtime
+        state for output-kind overrides on already-finished nodes; for
+        now the contract is "edit, then resume from the same paused
+        state".
 
-        This stub exists so the controller and frontend can wire up the
-        full surface (lock, 409 handling, plan validation) today, and
-        the generator hookup drops in here without surface changes.
+        Returns the workflow_run_id that was resumed.
         """
+        # Local imports to avoid circular dependency with the human input
+        # service (which imports celery tasks that import models).
+        from sqlalchemy.orm import sessionmaker
+
+        from services.human_input_service import HumanInputService
+
         with _message_rerun_lock(plan.source_message_id):
             logger.info(
-                "chatflow_rerun_dispatch invoked: message=%s start_node=%s "
-                "ancestors=%d overrides=%d actor=%s",
+                "chatflow_rerun_dispatch invoked: message=%s run=%s "
+                "rewind_node=%s start_node=%s ancestors=%d overrides=%d actor=%s",
                 plan.source_message_id,
+                plan.source_run_id,
+                plan.rewind_node_id,
                 plan.start_node_id,
                 len(plan.ancestor_outputs),
                 len(plan.overrides_applied),
                 actor_id,
             )
-            raise NotImplementedError(
-                "chatflow rerun dispatch is not yet wired into "
-                "AdvancedChatAppGenerator; the rerun plan and lock are "
-                "ready — generator hookup is tracked separately."
-            )
+            session_factory = sessionmaker(bind=db.engine, expire_on_commit=False)
+            HumanInputService(session_factory=session_factory).enqueue_resume(plan.source_run_id)
+            return plan.source_run_id
 
     @classmethod
     def seed_pool(cls, plan: RerunPlan, pool: Any) -> int:

@@ -120,27 +120,11 @@ const RerunOverrideModal: FC<RerunOverrideModalProps> = ({
       // Validate the rerun plan first — surfaces loop/permission errors
       // before we hit dispatch.
       await prepareChatflowRerun({ appId, messageId, nodeId, kind })
-      // Try to actually dispatch. The endpoint returns 501
-      // (rerun_dispatch_not_ready) until the chatflow generator hookup
-      // lands; treat that as a soft success: the override is saved and
-      // the user can re-send the conversation turn to apply it.
-      try {
-        await dispatchChatflowRerun({ appId, messageId, nodeId, kind })
-        onConfirmed?.({ nodeId, kind, data: parsed })
-        onClose()
-      }
-      catch (dispatchErr: unknown) {
-        const msg
-          = dispatchErr instanceof Error
-            ? dispatchErr.message
-            : String(dispatchErr)
-        if (msg.includes('rerun_dispatch_not_ready') || msg.includes('501')) {
-          onConfirmed?.({ nodeId, kind, data: parsed })
-          onClose()
-          return
-        }
-        throw dispatchErr
-      }
+      // CR1: dispatch resumes the paused chatflow run via celery; the
+      // engine continues from the editable node onward.
+      await dispatchChatflowRerun({ appId, messageId, nodeId, kind })
+      onConfirmed?.({ nodeId, kind, data: parsed })
+      onClose()
     }
     catch (e: unknown) {
       setError(e instanceof Error ? e.message : '保存失败，请重试')

@@ -174,21 +174,12 @@ export const prepareChatflowRerun = ({
   )
 }
 
-// M7 dispatch endpoint. Returns 501 (not_ready) until the chatflow
-// generator hookup lands; the UI degrades to "saved, please re-send".
-export type ChatflowRerunDispatchResult
-  = | { status: 'started' }
-    | {
-      code: 'rerun_dispatch_not_ready'
-      error: string
-      plan: {
-        start_node_id: string
-        rewind_node_id: string
-        rewind_kind: ChatflowRerunKind
-        ancestor_node_ids: string[]
-        overrides_applied: Record<string, unknown>
-      }
-    }
+// CR1 dispatch endpoint. Resumes the paused chatflow run via the
+// celery worker; returns immediately once the resume is enqueued.
+export type ChatflowRerunDispatchResult = {
+  status: 'started' | 'resumed'
+  workflow_run_id: string
+}
 
 export const dispatchChatflowRerun = ({
   appId,
@@ -205,6 +196,28 @@ export const dispatchChatflowRerun = ({
     `/apps/${appId}/messages/${messageId}/rerun-from/dispatch`,
     {
       body: { node_id: nodeId, kind },
+    },
+  )
+}
+
+// CR1 "继续" button: resume from a paused node without saving any new
+// override. Same celery resume path as dispatch — the user just decided
+// the rewind node's input/output is fine as-is.
+export const resumeChatflowFromNode = ({
+  appId,
+  messageId,
+  nodeId,
+  kind,
+}: {
+  appId: string
+  messageId: string
+  nodeId: string
+  kind?: ChatflowRerunKind
+}) => {
+  return post<ChatflowRerunDispatchResult>(
+    `/apps/${appId}/messages/${messageId}/resume-from/${encodeURIComponent(nodeId)}`,
+    {
+      body: kind ? { kind } : {},
     },
   )
 }

@@ -9,7 +9,7 @@ import { useRuntimeStore } from '@/app/components/canvas-runtime/runtime-store'
 import SaveCanvasDialog from '@/app/components/canvas-runtime/save-canvas-dialog'
 import { useParams, useRouter, useSearchParams } from '@/next/navigation'
 import { runChatflowOnCanvas } from '@/service/canvas-runtime'
-import { fetchInstalledAppList } from '@/service/explore'
+import { fetchInstalledAppList, fetchTrialAppParams } from '@/service/explore'
 import { getUserCanvasSnapshot } from '@/service/user-canvases'
 
 type InstalledAppListResp = {
@@ -52,6 +52,13 @@ const CanvasRuntimePage = () => {
   const handleOpenSave = useCallback(() => setSaveOpen(true), [])
   const handleCloseSave = useCallback(() => setSaveOpen(false), [])
   const [snapshotExpired, setSnapshotExpired] = useState(false)
+  // Chatflow's file_upload + system_parameters merged into the shape
+  // RuntimeInput → FileFromLinkOrLocal expects (`{...file_upload,
+  // fileUploadConfig: system_parameters}`). useFile() inside the
+  // uploader assumes this object exists and reads `.fileUploadConfig`,
+  // so passing undefined crashes. Fetch + remember per-app.
+  // eslint-disable-next-line ts/no-explicit-any
+  const [fileConfig, setFileConfig] = useState<any>(null)
 
   // FIX4: when ?canvas_id=… is present, replay the saved snapshot
   // into the runtime store as a sequence of synthetic SSE events so
@@ -230,6 +237,37 @@ const CanvasRuntimePage = () => {
     }
   }, [appId])
 
+  // Fetch the chatflow's file_upload + system_parameters once auth is OK,
+  // build the {fileUploadConfig} shape that FileFromLinkOrLocal needs.
+  useEffect(() => {
+    if (!appId || authState !== 'ok')
+      return
+    let cancelled = false;
+    (async () => {
+      try {
+        // eslint-disable-next-line ts/no-explicit-any
+        const params = (await fetchTrialAppParams(appId)) as any
+        if (cancelled)
+          return
+        setFileConfig({
+          ...(params?.file_upload ?? {}),
+          fileUploadConfig: params?.system_parameters ?? {},
+        })
+      }
+      catch (err) {
+        console.warn('[canvas-runtime] failed to load app params', err)
+        if (cancelled)
+          return
+        // Fall back to an empty-but-shape-correct object so the uploader
+        // doesn't crash; the file-size limits will resolve to defaults.
+        setFileConfig({ fileUploadConfig: {} })
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [appId, authState])
+
   if (authState === 'checking') {
     return (
       <div className="flex h-full items-center justify-center text-text-tertiary">
@@ -277,7 +315,7 @@ const CanvasRuntimePage = () => {
         onSave={handleOpenSave}
         saveDisabled={!workflowRunId}
       >
-        <RuntimeInput onSubmit={handleSubmit} />
+        <RuntimeInput onSubmit={handleSubmit} fileConfig={fileConfig} />
       </CanvasRuntime>
       <SaveCanvasDialog
         open={saveOpen}

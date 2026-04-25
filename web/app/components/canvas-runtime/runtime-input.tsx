@@ -104,6 +104,12 @@ const RuntimeInputInner: FC<RuntimeInputProps> = ({
     setShowSlash(null)
   }, [canSubmit, clearFiles, files, onSubmit, text])
 
+  // Cast once so the JSX guards below can use proper truthiness checks
+  // without TS narrowing the result of `?.fileUploadConfig` to `unknown`.
+  // eslint-disable-next-line ts/no-explicit-any
+  const fileConfigSafe = fileConfig as any
+  const fileConfigReady = !!(fileConfigSafe && fileConfigSafe.fileUploadConfig)
+
   const renderUploadTrigger = useCallback(
     (_open: boolean) => (
       <button
@@ -141,10 +147,9 @@ const RuntimeInputInner: FC<RuntimeInputProps> = ({
             ))}
           </div>
         )}
-        {files.length > 0 && (
+        {files.length > 0 && fileConfigReady && (
           <div className="mb-2">
-            {/* eslint-disable-next-line ts/no-explicit-any -- shared with FileFromLinkOrLocal below */}
-            <FileListInChatInput fileConfig={fileConfig as any} />
+            <FileListInChatInput fileConfig={fileConfigSafe} />
           </div>
         )}
         <textarea
@@ -161,17 +166,22 @@ const RuntimeInputInner: FC<RuntimeInputProps> = ({
           )}
         />
         <div className="mt-2 flex items-center justify-between">
-          <FileFromLinkOrLocal
-            trigger={renderUploadTrigger}
-            // The fileConfig type from features comes through several
-            // any-typed layers in the file uploader; the cast keeps
-            // CR5 unblocked without leaking unsafe types outward.
-            // eslint-disable-next-line ts/no-explicit-any
-            fileConfig={fileConfig as any}
-            showFromLocal
-            showFromLink
-            placement="top"
-          />
+          {/* useFile() crashes when fileConfig is undefined or missing
+              .fileUploadConfig — gate the uploader so the page renders
+              cleanly while the parent is still fetching app params. */}
+          {fileConfigReady
+            ? (
+                <FileFromLinkOrLocal
+                  trigger={renderUploadTrigger}
+                  fileConfig={fileConfigSafe}
+                  showFromLocal
+                  showFromLink
+                  placement="top"
+                />
+              )
+            : (
+                <span className="h-9 w-9" />
+              )}
           <button
             type="button"
             aria-label="发送"

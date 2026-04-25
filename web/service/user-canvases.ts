@@ -1,5 +1,8 @@
 import { del, get, patch, post } from '@/service/base'
 
+const CANVASES_URL = '/creator/canvases'
+const canvasUrl = (canvasId: string) => `${CANVASES_URL}/${canvasId}`
+
 export type UserCanvas = {
   id: string
   tenant_id: string
@@ -22,8 +25,21 @@ export type CreateUserCanvasBody = {
   source_run_id: string
 }
 
-const CANVASES_URL = '/creator/canvases'
-const canvasUrl = (canvasId: string) => `${CANVASES_URL}/${canvasId}`
+export type CanvasSnapshotNode = {
+  node_id: string
+  node_type: string
+  title: string
+  predecessor_node_id: string | null
+  inputs: Record<string, unknown> | null
+  outputs: Record<string, unknown> | null
+  status: string
+  error: string | null
+}
+
+export type CanvasSnapshotResponse = {
+  canvas: UserCanvas
+  nodes: CanvasSnapshotNode[]
+}
 
 export const listUserCanvases = (params?: { app_id?: string }) =>
   get<UserCanvasListResponse>(CANVASES_URL, { params })
@@ -36,3 +52,6 @@ export const renameUserCanvas = (canvasId: string, title: string) =>
 
 export const deleteUserCanvas = (canvasId: string) =>
   del<{ deleted: number }>(canvasUrl(canvasId))
+
+export const getUserCanvasSnapshot = (canvasId: string) =>
+  get<CanvasSnapshotResponse>(`${canvasUrl(canvasId)}/snapshot`)

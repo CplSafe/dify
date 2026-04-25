@@ -7,9 +7,10 @@ import CanvasRuntime from '@/app/components/canvas-runtime'
 import RuntimeInput from '@/app/components/canvas-runtime/runtime-input'
 import { useRuntimeStore } from '@/app/components/canvas-runtime/runtime-store'
 import SaveCanvasDialog from '@/app/components/canvas-runtime/save-canvas-dialog'
-import { useParams, useRouter } from '@/next/navigation'
+import { useParams, useRouter, useSearchParams } from '@/next/navigation'
 import { runChatflowOnCanvas } from '@/service/canvas-runtime'
 import { fetchInstalledAppList } from '@/service/explore'
+import { getUserCanvasSnapshot } from '@/service/user-canvases'
 
 type InstalledAppListResp = {
   installed_apps: ExploreInstalledApp[]
@@ -28,7 +29,9 @@ type InstalledAppListResp = {
 const CanvasRuntimePage = () => {
   const params = useParams<{ appId: string }>()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const appId = params?.appId
+  const canvasIdParam = searchParams?.get('canvas_id') ?? null
   const [authState, setAuthState] = useState<'checking' | 'ok' | 'forbidden'>(
     'checking',
   )
@@ -47,6 +50,54 @@ const CanvasRuntimePage = () => {
   const [saveOpen, setSaveOpen] = useState(false)
   const handleOpenSave = useCallback(() => setSaveOpen(true), [])
   const handleCloseSave = useCallback(() => setSaveOpen(false), [])
+
+  // FIX4: when ?canvas_id=… is present, replay the saved snapshot
+  // into the runtime store as a sequence of synthetic SSE events so
+  // the user sees the same canvas state they saved earlier. Real chat
+  // dispatch still works on top of the replayed canvas.
+  useEffect(() => {
+    if (!canvasIdParam || authState !== 'ok')
+      return
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getUserCanvasSnapshot(canvasIdParam)
+        if (cancelled)
+          return
+        applyEvent({
+          type: 'workflow_started',
+          workflowRunId: snap.canvas.source_run_id,
+        })
+        for (const node of snap.nodes) {
+          applyEvent({
+            type: 'node_started',
+            nodeId: node.node_id,
+            nodeType: node.node_type,
+            title: node.title || node.node_id,
+            inputs: node.inputs ?? undefined,
+            predecessorNodeId: node.predecessor_node_id || undefined,
+          })
+          applyEvent({
+            type: 'node_finished',
+            nodeId: node.node_id,
+            outputs: node.outputs ?? undefined,
+            status: node.status === 'succeeded' ? 'succeeded' : 'failed',
+            error: node.error ?? undefined,
+          })
+        }
+        applyEvent({
+          type: 'workflow_finished',
+          workflowRunId: snap.canvas.source_run_id,
+        })
+      }
+      catch (err) {
+        console.warn('[canvas-runtime] failed to load saved canvas', err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [applyEvent, authState, canvasIdParam])
   const handleSubmit = useCallback(
     (payload: { text: string, files: unknown[] }) => {
       if (!appId)

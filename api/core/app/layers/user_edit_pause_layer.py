@@ -75,6 +75,12 @@ class UserEditPauseLayer(GraphEngineLayer):
     def on_event(self, event: GraphEngineEvent) -> None:
         if not isinstance(event, NodeRunSucceededEvent):
             return
+        # Skip nodes inside iteration / loop containers — pausing the
+        # outer chatflow on every loop tick would deadlock the run, and
+        # the M1 prepare path explicitly rejects rewind targets that
+        # sit inside a container anyway.
+        if event.in_iteration_id or event.in_loop_id:
+            return
         node_id = event.node_id
         if node_id in self._paused_once:
             return

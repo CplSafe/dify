@@ -114,6 +114,13 @@ class UserCanvasService:
             raise CanvasValidationError(
                 f"workflow_run {source_run_id!r} not found for this app"
             )
+        # Only finished runs are worth saving — running/paused/failed
+        # snapshots would reopen as half-rendered or broken canvases.
+        if run.status != "succeeded":
+            raise CanvasValidationError(
+                f"workflow_run is in status {run.status!r}; only succeeded "
+                "runs can be saved as canvases"
+            )
 
         # Quota check.
         existing_count = (

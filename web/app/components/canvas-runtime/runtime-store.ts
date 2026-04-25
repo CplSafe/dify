@@ -243,18 +243,45 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
 
     if (event.type === 'workflow_finished') {
       // Clear pause markers — finishing implies all pauses resolved.
-      set({ pausedNodeIds: [], pausedKinds: {}, lastEventAt: now })
+      // Also flip any lingering 'paused' nodes back to 'succeeded' so
+      // the canvas doesn't keep showing the orange badge on nodes that
+      // have moved on (the engine doesn't re-emit node_finished for
+      // nodes that were already finished before the pause).
+      const { nodes, pausedNodeIds } = get()
+      const nextNodes = { ...nodes }
+      for (const id of pausedNodeIds) {
+        if (nextNodes[id]?.status === 'paused')
+          nextNodes[id] = { ...nextNodes[id], status: 'succeeded' }
+      }
+      set({
+        nodes: nextNodes,
+        pausedNodeIds: [],
+        pausedKinds: {},
+        lastEventAt: now,
+      })
     }
   },
 
   setMessageId: messageId => set({ messageId }),
 
   clearPause: (nodeId) => {
-    const { pausedNodeIds, pausedKinds } = get()
+    // Flip the node back to 'succeeded' alongside dropping its pause
+    // metadata. The engine's pause point is always *after* a successful
+    // node finish, so 'succeeded' is the truthful state to restore.
+    // If the resumed run later re-runs this node it will emit a fresh
+    // node_started which overwrites this anyway.
+    const { nodes, pausedNodeIds, pausedKinds } = get()
     const nextIds = pausedNodeIds.filter(id => id !== nodeId)
     const nextKinds = { ...pausedKinds }
     delete nextKinds[nodeId]
-    set({ pausedNodeIds: nextIds, pausedKinds: nextKinds })
+    const nextNodes = { ...nodes }
+    if (nextNodes[nodeId]?.status === 'paused')
+      nextNodes[nodeId] = { ...nextNodes[nodeId], status: 'succeeded' }
+    set({
+      nodes: nextNodes,
+      pausedNodeIds: nextIds,
+      pausedKinds: nextKinds,
+    })
   },
 
   reset: () => set({ ..._initialState }),

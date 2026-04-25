@@ -237,17 +237,13 @@ class WorkflowRerunService:
 
         CR1 wiring: the chatflow is expected to already be in `paused`
         state (UserEditPauseLayer halted it after the rewind node
-        finished). We just enqueue the existing celery resume task —
-        graphon's PauseStatePersistenceLayer rehydrates the saved
-        runtime state and the engine continues from where it stopped.
-
-        Overrides previously persisted via the M2 endpoints are *not*
-        re-applied here — they were applied to the rewind node's outputs
-        before pause via the variable pool / node execution row. A future
-        iteration can splice override data into the deserialized runtime
-        state for output-kind overrides on already-finished nodes; for
-        now the contract is "edit, then resume from the same paused
-        state".
+        finished). FIX2: before kicking off the celery resume task we
+        splice any pending overrides for the rewind node into the
+        serialized `WorkflowResumptionContext` so that when the engine
+        rehydrates `GraphRuntimeState`, the variable_pool already
+        reflects the user's edits. Without this, the modal's
+        "保存并准备重跑" was a no-op — the run would just resume on the
+        original outputs.
 
         Returns the workflow_run_id that was resumed.
         """
@@ -269,9 +265,99 @@ class WorkflowRerunService:
                 len(plan.overrides_applied),
                 actor_id,
             )
+            cls._apply_overrides_to_paused_state(plan)
             session_factory = sessionmaker(bind=db.engine, expire_on_commit=False)
             HumanInputService(session_factory=session_factory).enqueue_resume(plan.source_run_id)
             return plan.source_run_id
+
+    @classmethod
+    def _apply_overrides_to_paused_state(cls, plan: RerunPlan) -> None:
+        """Splice user-supplied overrides into the paused run's storage state.
+
+        Steps:
+          1. Locate the WorkflowPause row for the source run.
+          2. Load the JSON state object from storage.
+          3. Reconstruct GraphRuntimeState, push overrides onto its
+             variable_pool via the public `add` API.
+          4. Re-serialize and overwrite the same storage object.
+
+        No-op when the plan has no overrides to apply, so this is safe
+        to call on every dispatch.
+        """
+        if not plan.overrides_applied:
+            return
+        # Local imports — graphon + storage shouldn't pollute the module
+        # top-level (slow + creates import cycles for tests).
+        from graphon.runtime.graph_runtime_state import GraphRuntimeState
+
+        from core.app.layers.pause_state_persist_layer import (
+            WorkflowResumptionContext,
+        )
+        from extensions.ext_storage import storage
+        from models.workflow import WorkflowPause
+
+        pause_row = db.session.execute(
+            select(WorkflowPause).where(WorkflowPause.workflow_run_id == plan.source_run_id)
+        ).scalar_one_or_none()
+        if pause_row is None:
+            logger.warning(
+                "no WorkflowPause row for run %s — skipping override splice",
+                plan.source_run_id,
+            )
+            return
+
+        try:
+            raw = storage.load(pause_row.state_object_key)
+        except Exception:
+            logger.exception(
+                "failed to load paused state for run %s",
+                plan.source_run_id,
+            )
+            return
+
+        try:
+            context = WorkflowResumptionContext.loads(raw.decode())
+            state = GraphRuntimeState.from_snapshot(context.serialized_graph_runtime_state)
+        except Exception:
+            logger.exception(
+                "failed to deserialize paused state for run %s",
+                plan.source_run_id,
+            )
+            return
+
+        # Apply each override onto the variable_pool. Output overrides
+        # write to (node_id, key); input overrides also write to the
+        # rewind node's own selector since the next node consumes them
+        # exactly the same way (variable_pool lookups are agnostic to
+        # whether a value originated from the node's input or output).
+        applied = 0
+        for node_id, payload in plan.overrides_applied.items():
+            data = payload.get("data") or {}
+            if not isinstance(data, Mapping):
+                continue
+            for key, value in data.items():
+                state.variable_pool.add([node_id, key], value)
+                applied += 1
+
+        # Re-serialize and overwrite. Storage adapter expects bytes.
+        new_context = WorkflowResumptionContext(
+            serialized_graph_runtime_state=state.dumps(),
+            generate_entity=context.generate_entity,
+        )
+        try:
+            storage.save(pause_row.state_object_key, new_context.dumps().encode())
+        except Exception:
+            logger.exception(
+                "failed to persist override-spliced state for run %s",
+                plan.source_run_id,
+            )
+            return
+
+        logger.info(
+            "spliced %d override variable(s) into paused state for run %s",
+            applied,
+            plan.source_run_id,
+        )
 
     @classmethod
     def seed_pool(cls, plan: RerunPlan, pool: Any) -> int:
@@ -512,12 +598,15 @@ class WorkflowRerunService:
             raise RerunValidationError(f"workflow_run {run_id!r} not found")
         if str(run.tenant_id) != tenant_id or str(run.app_id) != app_id:
             raise RerunValidationError("workflow_run does not belong to caller")
-        # MVP: only allow rerun on terminated runs — re-running a still-paused
-        # run would race with the resume task.
-        if run.status not in {"succeeded", "failed", "stopped"}:
+        # `paused` is allowed because CR1's resume / dispatch endpoints
+        # explicitly target a still-paused run (UserEditPauseLayer halted it
+        # at an editable node and the user is now choosing to continue or
+        # edit + continue). The Redis lock in `_message_rerun_lock` keeps
+        # double-resume requests from racing the celery task.
+        if run.status not in {"succeeded", "failed", "stopped", "paused"}:
             raise RerunValidationError(
                 f"workflow_run is in status {run.status!r}; rerun only allowed "
-                "on terminated runs"
+                "on terminated or paused runs"
             )
         return run
 

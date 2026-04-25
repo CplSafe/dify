@@ -1,10 +1,11 @@
 """Creator canvases endpoints (canvas-runtime CR2).
 
-GET    /creator/canvases               — list current user's canvases (newest first)
-POST   /creator/canvases               — save a successful workflow run as a named canvas
-GET    /creator/canvases/<id>          — fetch a single canvas (owner-scoped)
-PATCH  /creator/canvases/<id>          — rename
-DELETE /creator/canvases/<id>          — delete
+GET    /creator/canvases                       — list current user's canvases (newest first)
+POST   /creator/canvases                       — save a successful workflow run as a named canvas
+GET    /creator/canvases/<id>                  — fetch a single canvas (owner-scoped)
+GET    /creator/canvases/<id>/snapshot         — fetch canvas + replayable node executions
+PATCH  /creator/canvases/<id>                  — rename
+DELETE /creator/canvases/<id>                  — delete
 
 Owner + tenant isolation is enforced inside `UserCanvasService` so the
 controller can't be tricked by spoofed body fields.
@@ -21,6 +22,7 @@ from controllers.console.wraps import account_initialization_required, setup_req
 from extensions.ext_database import db
 from libs.login import current_account_with_tenant, login_required
 from models.model import App
+from models.workflow import WorkflowNodeExecutionModel
 from services.user_canvas_service import (
     CanvasNotFoundError,
     CanvasQuotaExceededError,
@@ -149,3 +151,51 @@ class CreatorCanvasItemApi(Resource):
         except CanvasNotFoundError:
             return {"error": "canvas not found"}, 404
         return {"deleted": 1}, 200
+
+
+@console_ns.route("/creator/canvases/<string:canvas_id>/snapshot")
+class CreatorCanvasSnapshotApi(Resource):
+    """Replay payload for a saved canvas.
+
+    Returns the canvas metadata plus the full ordered list of node
+    executions from the underlying `workflow_run`. The frontend feeds
+    this into the runtime store as a sequence of synthetic
+    `node_started` + `node_finished` events to repaint the saved
+    canvas without actually running the chatflow again.
+    """
+
+    @setup_required
+    @login_required
+    @account_initialization_required
+    def get(self, canvas_id):
+        current_user, current_tenant_id = current_account_with_tenant()
+        try:
+            canvas = UserCanvasService.get_for_owner(
+                tenant_id=current_tenant_id,
+                owner_id=str(current_user.id),
+                canvas_id=canvas_id,
+            )
+        except CanvasNotFoundError:
+            return {"error": "canvas not found"}, 404
+
+        rows = db.session.execute(
+            select(WorkflowNodeExecutionModel)
+            .where(WorkflowNodeExecutionModel.workflow_run_id == canvas.source_run_id)
+            .where(WorkflowNodeExecutionModel.tenant_id == current_tenant_id)
+            .order_by(WorkflowNodeExecutionModel.index.asc())
+        ).scalars().all()
+
+        nodes = [
+            {
+                "node_id": r.node_id,
+                "node_type": r.node_type,
+                "title": r.title,
+                "predecessor_node_id": r.predecessor_node_id,
+                "inputs": r.inputs_dict,
+                "outputs": r.outputs_dict,
+                "status": str(r.status),
+                "error": r.error,
+            }
+            for r in rows
+        ]
+        return {"canvas": _serialize(canvas), "nodes": nodes}, 200

@@ -39,6 +39,10 @@ export type CanvasSnapshotNode = {
 export type CanvasSnapshotResponse = {
   canvas: UserCanvas
   nodes: CanvasSnapshotNode[]
+  // FIX8: true when the underlying workflow_run has been GC'd; nodes
+  // will be empty and the UI should show an explicit "snapshot expired"
+  // state instead of a blank successful canvas.
+  expired: boolean
 }
 
 export const listUserCanvases = (params?: { app_id?: string }) =>

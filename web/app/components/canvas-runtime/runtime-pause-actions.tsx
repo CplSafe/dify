@@ -44,13 +44,16 @@ const RuntimePauseActions: FC<RuntimePauseActionsProps> = ({
     setError(null)
     setResuming(true)
     try {
-      // kind defaults server-side to "input" — the choice between input
-      // and output only matters when an override is in play.
+      // FIX10: explicitly send kind='output' so prepare() picks the
+      // downstream node as start_node_id. The user-facing "继续" means
+      // "this paused node's output is fine, go on to the next node";
+      // 'input' would re-anchor on the paused node itself, which the
+      // resume path can't actually replay.
       await resumeChatflowFromNode({
         appId,
         messageId,
         nodeId: node.id,
-        kind: 'input',
+        kind: 'output',
       })
       // Optimistically clear the pause marker; the SSE workflow_finished
       // (or the next node_started) will reconcile the real state.
@@ -71,9 +74,7 @@ const RuntimePauseActions: FC<RuntimePauseActionsProps> = ({
   }, [clearPause, node.id])
 
   const initialData = (
-    editKind === 'input'
-      ? (node.inputs ?? {})
-      : (node.outputs ?? {})
+    editKind === 'input' ? (node.inputs ?? {}) : (node.outputs ?? {})
   ) as Record<string, unknown>
 
   return (
@@ -91,11 +92,19 @@ const RuntimePauseActions: FC<RuntimePauseActionsProps> = ({
         >
           {resuming ? '继续中…' : '继续'}
         </button>
+        {/*
+          FIX10: input-kind edits cannot apply to a paused-resume path.
+          The engine's pause point sits *after* the node finished, so a
+          resume continues on the next node and never re-feeds the
+          edited input back into the paused node. The button stays
+          rendered (so users discover the capability) but disabled,
+          with a tooltip-style title explaining the constraint.
+        */}
         {kinds.allowInput && (
           <button
             type="button"
-            onClick={() => setEditKind('input')}
-            disabled={resuming || !messageId}
+            disabled
+            title="暂停状态下无法编辑输入：当前节点已运行结束，恢复时会从下一节点继续。请改用『编辑输出并继续』。"
             className="rounded-md border border-components-button-secondary-border bg-components-button-secondary-bg px-2 py-1 system-xs-medium text-text-secondary hover:bg-components-button-secondary-bg-hover disabled:cursor-not-allowed disabled:opacity-50"
             data-testid={`runtime-pause-edit-input-${node.id}`}
           >

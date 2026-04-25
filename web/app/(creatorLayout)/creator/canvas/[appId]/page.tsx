@@ -50,11 +50,15 @@ const CanvasRuntimePage = () => {
   const [saveOpen, setSaveOpen] = useState(false)
   const handleOpenSave = useCallback(() => setSaveOpen(true), [])
   const handleCloseSave = useCallback(() => setSaveOpen(false), [])
+  const [snapshotExpired, setSnapshotExpired] = useState(false)
 
   // FIX4: when ?canvas_id=… is present, replay the saved snapshot
   // into the runtime store as a sequence of synthetic SSE events so
   // the user sees the same canvas state they saved earlier. Real chat
   // dispatch still works on top of the replayed canvas.
+  // FIX9: surface an inline "snapshot expired" banner when the source
+  // workflow_run has been GC'd (server returns expired:true with empty
+  // nodes); skip the replay in that case.
   useEffect(() => {
     if (!canvasIdParam || authState !== 'ok')
       return
@@ -64,6 +68,11 @@ const CanvasRuntimePage = () => {
         const snap = await getUserCanvasSnapshot(canvasIdParam)
         if (cancelled)
           return
+        if (snap.expired) {
+          setSnapshotExpired(true)
+          return
+        }
+        setSnapshotExpired(false)
         applyEvent({
           type: 'workflow_started',
           workflowRunId: snap.canvas.source_run_id,
@@ -250,6 +259,11 @@ const CanvasRuntimePage = () => {
   // store; the toolbar disables itself when there's nothing to save.
   return (
     <div className="flex h-full flex-col">
+      {snapshotExpired && (
+        <div className="border-state-warning-border border-b bg-state-warning-hover px-4 py-2 system-xs-regular text-text-warning-secondary">
+          该画布的运行数据已过期或被清理，无法重现节点。仍可在底部输入框开始一次新的运行。
+        </div>
+      )}
       <CanvasRuntime
         appId={appId!}
         onSave={handleOpenSave}

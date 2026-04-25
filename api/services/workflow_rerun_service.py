@@ -60,6 +60,23 @@ class RerunBusyError(RuntimeError):
     """
 
 
+class RerunPausedMismatchError(ValueError):
+    """Raised when a paused-resume dispatch targets a node that didn't
+    actually cause the current pause, OR when a kind ('input') is
+    incompatible with the paused-resume code path.
+
+    Surfaced as HTTP 400 by the controller. Why it matters:
+      * If we accepted a non-paused node as `rewind_node_id`, we'd
+        splice an override into the variable_pool but resume from the
+        actual pause point — the override would silently end up at the
+        wrong selector relative to where execution continues.
+      * Input overrides require the edited node itself to re-execute,
+        but the paused state is already past that node. Resume
+        continues with the *next* node, so an input edit would never
+        actually be consumed by the node it was meant for.
+    """
+
+
 _RERUN_LOCK_TTL_SECONDS = 600  # 10 min — long enough for the slowest video gen
 
 
@@ -265,10 +282,66 @@ class WorkflowRerunService:
                 len(plan.overrides_applied),
                 actor_id,
             )
+            # FIX7: input overrides require re-executing the edited node,
+            # but paused-resume continues *after* the pause point so the
+            # edit would never reach the node that owns it. Reject early
+            # with a clear message instead of silently corrupting state.
+            if plan.rewind_kind == WorkflowRerunOverrideKind.INPUT.value:
+                raise RerunPausedMismatchError(
+                    "input-kind overrides cannot be applied to a paused run "
+                    "via resume; edit the node's output instead, or wait for "
+                    "the run to fully terminate before rerunning"
+                )
+            # FIX7: also confirm the rewind node is actually the one the
+            # engine paused on. Without this, dispatch would splice the
+            # override at the requested selector but resume from a different
+            # node, putting the override in the wrong place.
+            cls._verify_rewind_matches_paused_node(plan)
             cls._apply_overrides_to_paused_state(plan)
             session_factory = sessionmaker(bind=db.engine, expire_on_commit=False)
             HumanInputService(session_factory=session_factory).enqueue_resume(plan.source_run_id)
             return plan.source_run_id
+
+    @classmethod
+    def _verify_rewind_matches_paused_node(cls, plan: RerunPlan) -> None:
+        """Reject dispatches whose rewind_node_id isn't a current pause point."""
+        from graphon.runtime.graph_runtime_state import GraphRuntimeState
+
+        from core.app.layers.pause_state_persist_layer import (
+            WorkflowResumptionContext,
+        )
+        from extensions.ext_storage import storage
+        from models.workflow import WorkflowPause
+
+        pause_row = db.session.execute(
+            select(WorkflowPause).where(WorkflowPause.workflow_run_id == plan.source_run_id)
+        ).scalar_one_or_none()
+        if pause_row is None:
+            # No pause row → run isn't actually paused. The run.status
+            # check upstream already covers terminated runs (succeeded /
+            # failed / stopped) — nothing to verify here.
+            return
+        try:
+            raw = storage.load(pause_row.state_object_key)
+            context = WorkflowResumptionContext.loads(raw.decode())
+            state = GraphRuntimeState.from_snapshot(context.serialized_graph_runtime_state)
+        except Exception:
+            logger.exception(
+                "failed to inspect paused state for run %s during rewind check",
+                plan.source_run_id,
+            )
+            # Fail closed — better to refuse than to splice into the wrong place.
+            raise RerunPausedMismatchError(
+                "could not verify paused state; please retry after the "
+                "previous resume completes"
+            )
+        paused_nodes = set(state.get_paused_nodes())
+        if plan.rewind_node_id not in paused_nodes:
+            raise RerunPausedMismatchError(
+                f"rewind node {plan.rewind_node_id!r} is not the paused node "
+                f"(current pause: {sorted(paused_nodes)!r}); resume can only "
+                "continue from the node that actually paused"
+            )
 
     @classmethod
     def _apply_overrides_to_paused_state(cls, plan: RerunPlan) -> None:

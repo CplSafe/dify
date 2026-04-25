@@ -22,7 +22,7 @@ from controllers.console.wraps import account_initialization_required, setup_req
 from extensions.ext_database import db
 from libs.login import current_account_with_tenant, login_required
 from models.model import App
-from models.workflow import WorkflowNodeExecutionModel
+from models.workflow import WorkflowNodeExecutionModel, WorkflowRun
 from services.user_canvas_service import (
     CanvasNotFoundError,
     CanvasQuotaExceededError,
@@ -178,6 +178,22 @@ class CreatorCanvasSnapshotApi(Resource):
         except CanvasNotFoundError:
             return {"error": "canvas not found"}, 404
 
+        # FIX8: distinguish "snapshot expired" (the source workflow_run
+        # has been GC'd) from "snapshot has no nodes" (a degenerate but
+        # valid run). UserCanvas intentionally doesn't FK source_run_id
+        # so this can happen for older canvases.
+        run_exists = db.session.execute(
+            select(WorkflowRun.id)
+            .where(WorkflowRun.id == canvas.source_run_id)
+            .where(WorkflowRun.tenant_id == current_tenant_id)
+        ).scalar_one_or_none() is not None
+        if not run_exists:
+            return {
+                "canvas": _serialize(canvas),
+                "nodes": [],
+                "expired": True,
+            }, 200
+
         rows = db.session.execute(
             select(WorkflowNodeExecutionModel)
             .where(WorkflowNodeExecutionModel.workflow_run_id == canvas.source_run_id)
@@ -198,4 +214,4 @@ class CreatorCanvasSnapshotApi(Resource):
             }
             for r in rows
         ]
-        return {"canvas": _serialize(canvas), "nodes": nodes}, 200
+        return {"canvas": _serialize(canvas), "nodes": nodes, "expired": False}, 200

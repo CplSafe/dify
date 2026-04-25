@@ -21,6 +21,7 @@ from models import App
 from models.model import AppMode
 from services.workflow_rerun_service import (
     RerunBusyError,
+    RerunPausedMismatchError,
     RerunValidationError,
     WorkflowRerunService,
 )
@@ -184,6 +185,8 @@ class ChatflowRerunDispatchApi(Resource):
             )
         except RerunBusyError as exc:
             return {"error": str(exc), "code": "rerun_busy"}, 409
+        except RerunPausedMismatchError as exc:
+            return {"error": str(exc), "code": "rerun_paused_mismatch"}, 400
 
         return {"status": "started", "workflow_run_id": workflow_run_id}, 200
 
@@ -197,7 +200,12 @@ class ChatflowResumeFromNodeApi(Resource):
     This is the canvas-runtime "继续" button: the user looked at the
     paused node's input/output and decided no edit was needed.
 
-    Body (optional): {kind: 'input'|'output'}  (default: 'input')
+    Body (optional): {kind: 'input'|'output'}  (default: 'output')
+
+    Default is 'output' because the user-facing "继续" means "this paused
+    node's output is fine, go on to the next node" — input-kind would
+    require re-executing the paused node, which the resume path can't do
+    (it always continues *after* the pause point). FIX7 enforces this.
 
     Same lock + resume path as the dispatch endpoint, just with a
     name that matches the user-facing action.
@@ -209,7 +217,7 @@ class ChatflowResumeFromNodeApi(Resource):
     @get_app_model(mode=[AppMode.ADVANCED_CHAT])
     def post(self, app_model: App, message_id, node_id):
         body = request.get_json(silent=True) or {}
-        kind = (body.get("kind") or "input").strip()
+        kind = (body.get("kind") or "output").strip()
 
         try:
             plan = WorkflowRerunService.prepare(
@@ -228,6 +236,8 @@ class ChatflowResumeFromNodeApi(Resource):
             )
         except RerunBusyError as exc:
             return {"error": str(exc), "code": "rerun_busy"}, 409
+        except RerunPausedMismatchError as exc:
+            return {"error": str(exc), "code": "rerun_paused_mismatch"}, 400
 
         return {"status": "resumed", "workflow_run_id": workflow_run_id}, 200
 

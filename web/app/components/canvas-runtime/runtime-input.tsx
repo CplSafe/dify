@@ -1,6 +1,6 @@
 'use client'
 
-import type { FC, KeyboardEvent } from 'react'
+import type { FC, KeyboardEvent, ReactNode } from 'react'
 import type { FileEntity } from '@/app/components/base/file-uploader/types'
 import { RiAttachment2, RiSendPlane2Fill } from '@remixicon/react'
 import { useCallback, useMemo, useRef, useState } from 'react'
@@ -28,6 +28,10 @@ type RuntimeInputProps = {
   onSubmit: (payload: RuntimeInputSubmitPayload) => void
   disabled?: boolean
   placeholder?: string
+  // Optional slot above the textarea for the start-node user_input_form.
+  // Page passes the rendered <RuntimeStartVars /> so this component
+  // doesn't need to know about chatflow internals.
+  startSlot?: ReactNode
 }
 
 // Minimal slash-menu placeholder. Real entries (素材/提示词/图/视频/音频)
@@ -48,6 +52,7 @@ const RuntimeInputInner: FC<RuntimeInputProps> = ({
   onSubmit,
   disabled,
   placeholder = '描述你想要生成的内容…  支持 @ 引用素材，/ 唤起命令',
+  startSlot,
 }) => {
   const [text, setText] = useState('')
   const [showSlash, setShowSlash] = useState<'@' | '/' | null>(null)
@@ -152,6 +157,7 @@ const RuntimeInputInner: FC<RuntimeInputProps> = ({
             <FileListInChatInput fileConfig={fileConfigSafe} />
           </div>
         )}
+        {startSlot}
         <textarea
           ref={textareaRef}
           value={text}

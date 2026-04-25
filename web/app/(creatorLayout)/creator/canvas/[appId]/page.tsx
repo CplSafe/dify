@@ -1,12 +1,16 @@
 'use client'
 /* eslint-disable react/set-state-in-effect -- single-shot auth probe; Suspense not warranted for CR3 shell */
 
+import type { StartVarValues } from '@/app/components/canvas-runtime/start-vars-helpers'
 import type { InstalledApp as ExploreInstalledApp } from '@/models/explore'
+import type { UserInputFormItem } from '@/types/app'
 import { useCallback, useEffect, useState } from 'react'
 import CanvasRuntime from '@/app/components/canvas-runtime'
 import RuntimeInput from '@/app/components/canvas-runtime/runtime-input'
+import RuntimeStartVars from '@/app/components/canvas-runtime/runtime-start-vars'
 import { useRuntimeStore } from '@/app/components/canvas-runtime/runtime-store'
 import SaveCanvasDialog from '@/app/components/canvas-runtime/save-canvas-dialog'
+import { buildDefaultStartVars } from '@/app/components/canvas-runtime/start-vars-helpers'
 import TopupModal from '@/app/components/creator/wallet/topup-modal'
 import { useParams, useRouter, useSearchParams } from '@/next/navigation'
 import {
@@ -133,6 +137,12 @@ const CanvasRuntimePage = () => {
   // so passing undefined crashes. Fetch + remember per-app.
   // eslint-disable-next-line ts/no-explicit-any
   const [fileConfig, setFileConfig] = useState<any>(null)
+  // chatflow start-node user_input_form (industry / ratio / …). The
+  // engine rejects the run with "<var> is required in input form" when
+  // any required field is missing, so we render these inline above the
+  // bottom textarea and merge into `inputs` on submit.
+  const [startVarsForm, setStartVarsForm] = useState<UserInputFormItem[]>([])
+  const [startVarValues, setStartVarValues] = useState<StartVarValues>({})
 
   // FIX4: when ?canvas_id=… is present, replay the saved snapshot
   // into the runtime store as a sequence of synthetic SSE events so
@@ -200,6 +210,32 @@ const CanvasRuntimePage = () => {
     (payload: { text: string, files: unknown[] }) => {
       if (!installedAppId)
         return
+      // Required-field check for start vars. The engine would otherwise
+      // 500 with "<var> is required in input form" before any node runs.
+      const missing: { variable: string, label: string }[] = []
+      for (const raw of startVarsForm) {
+        const f
+          = 'text-input' in raw
+            ? raw['text-input']
+            : 'paragraph' in raw
+              ? raw.paragraph
+              : 'select' in raw
+                ? raw.select
+                : null
+        if (!f || !f.required)
+          continue
+        if (!(startVarValues[f.variable] ?? '').trim())
+          missing.push({ variable: f.variable, label: f.label || f.variable })
+      }
+      if (missing.length > 0) {
+        applyEvent({
+          type: 'message',
+          mode: 'replace',
+          text: `请先填写必填项：${missing.map(f => f.label || f.variable).join('、')}`,
+        })
+        applyEvent({ type: 'message_end' })
+        return
+      }
       // Reset the canvas before each new run.
       applyEvent({
         type: 'workflow_started',
@@ -210,10 +246,7 @@ const CanvasRuntimePage = () => {
         installedAppId,
         {
           query: payload.text,
-          // Inputs are empty for canvas runtime today — start-node vars
-          // are set at chatflow author time. CR5+ will surface required
-          // inputs into the bottom dock when there are any.
-          inputs: {},
+          inputs: startVarValues,
           files: payload.files,
         },
         {
@@ -283,7 +316,7 @@ const CanvasRuntimePage = () => {
         },
       )
     },
-    [installedAppId, applyEvent, setMessageId],
+    [installedAppId, applyEvent, setMessageId, startVarsForm, startVarValues],
   )
 
   useEffect(() => {
@@ -341,6 +374,7 @@ const CanvasRuntimePage = () => {
         const params = (await fetchCanvasAppParameters(installedAppId)) as {
           file_upload?: Record<string, unknown>
           system_parameters?: Record<string, unknown>
+          user_input_form?: UserInputFormItem[]
         }
         if (cancelled)
           return
@@ -348,6 +382,9 @@ const CanvasRuntimePage = () => {
           ...(params?.file_upload ?? {}),
           fileUploadConfig: params?.system_parameters ?? {},
         })
+        const form = params?.user_input_form ?? []
+        setStartVarsForm(form)
+        setStartVarValues(buildDefaultStartVars(form))
       }
       catch (err) {
         console.warn('[canvas-runtime] failed to load app params', err)
@@ -356,6 +393,8 @@ const CanvasRuntimePage = () => {
         // Fall back to an empty-but-shape-correct object so the uploader
         // doesn't crash; the file-size limits will resolve to defaults.
         setFileConfig({ fileUploadConfig: {} })
+        setStartVarsForm([])
+        setStartVarValues({})
       }
     })()
     return () => {
@@ -421,7 +460,17 @@ const CanvasRuntimePage = () => {
         onSave={handleOpenSave}
         saveDisabled={!workflowRunId}
       >
-        <RuntimeInput onSubmit={handleSubmit} fileConfig={fileConfig} />
+        <RuntimeInput
+          onSubmit={handleSubmit}
+          fileConfig={fileConfig}
+          startSlot={(
+            <RuntimeStartVars
+              form={startVarsForm}
+              values={startVarValues}
+              onChange={setStartVarValues}
+            />
+          )}
+        />
       </CanvasRuntime>
       <SaveCanvasDialog
         open={saveOpen}

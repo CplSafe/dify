@@ -4,8 +4,8 @@ Each row is a user's named pointer to a successful workflow_run; the
 snapshot data itself (nodes, inputs/outputs) lives in workflow_run +
 workflow_node_executions and is re-derived on open.
 
-Revision ID: b2c3d4e5f6a7
-Revises: a1b2c3d4e5f6
+Revision ID: 38ce6eaa16f7
+Revises: 1d9266fb6499
 Create Date: 2026-04-25 11:00:00.000000
 
 """
@@ -13,8 +13,8 @@ Create Date: 2026-04-25 11:00:00.000000
 import sqlalchemy as sa
 from alembic import op
 
-revision = "b2c3d4e5f6a7"
-down_revision = "a1b2c3d4e5f6"
+revision = "38ce6eaa16f7"
+down_revision = "1d9266fb6499"
 branch_labels = None
 depends_on = None
 

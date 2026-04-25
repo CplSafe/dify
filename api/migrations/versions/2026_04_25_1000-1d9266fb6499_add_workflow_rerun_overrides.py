@@ -4,7 +4,7 @@ Stores per-message overrides of node inputs/outputs so users can edit
 intermediate results and re-run downstream nodes without losing the
 original execution data.
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: 1d9266fb6499
 Revises: 9d0ed9c39b17
 Create Date: 2026-04-25 10:00:00.000000
 
@@ -13,7 +13,7 @@ Create Date: 2026-04-25 10:00:00.000000
 import sqlalchemy as sa
 from alembic import op
 
-revision = "a1b2c3d4e5f6"
+revision = "1d9266fb6499"
 down_revision = "9d0ed9c39b17"
 branch_labels = None
 depends_on = None

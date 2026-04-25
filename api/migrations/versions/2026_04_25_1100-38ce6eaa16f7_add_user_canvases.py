@@ -13,6 +13,8 @@ Create Date: 2026-04-25 11:00:00.000000
 import sqlalchemy as sa
 from alembic import op
 
+import models.types
+
 revision = "38ce6eaa16f7"
 down_revision = "1d9266fb6499"
 branch_labels = None
@@ -22,15 +24,18 @@ depends_on = None
 def upgrade():
     op.create_table(
         "user_canvases",
-        sa.Column("id", sa.String(36), nullable=False),
-        sa.Column("tenant_id", sa.String(36), nullable=False),
-        sa.Column("app_id", sa.String(36), nullable=False),
-        sa.Column("owner_id", sa.String(36), nullable=False),
+        # Use the project's StringUUID type so PostgreSQL stores these
+        # as native uuid columns and joins to other tenant_id / app_id
+        # columns don't blow up with `varchar = uuid` errors.
+        sa.Column("id", models.types.StringUUID(), nullable=False),
+        sa.Column("tenant_id", models.types.StringUUID(), nullable=False),
+        sa.Column("app_id", models.types.StringUUID(), nullable=False),
+        sa.Column("owner_id", models.types.StringUUID(), nullable=False),
         sa.Column("title", sa.String(200), nullable=False),
         # source_run_id points at workflow_runs.id; we don't FK because
         # workflow runs can be GC'd and we want the row to stay around so
         # the user sees a "snapshot expired" placeholder instead of a 404.
-        sa.Column("source_run_id", sa.String(36), nullable=False),
+        sa.Column("source_run_id", models.types.StringUUID(), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(),

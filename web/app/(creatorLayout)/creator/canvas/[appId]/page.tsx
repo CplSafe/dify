@@ -8,8 +8,11 @@ import RuntimeInput from '@/app/components/canvas-runtime/runtime-input'
 import { useRuntimeStore } from '@/app/components/canvas-runtime/runtime-store'
 import SaveCanvasDialog from '@/app/components/canvas-runtime/save-canvas-dialog'
 import { useParams, useRouter, useSearchParams } from '@/next/navigation'
-import { runChatflowOnCanvas } from '@/service/canvas-runtime'
-import { fetchInstalledAppList, fetchTrialAppParams } from '@/service/explore'
+import {
+  fetchCanvasAppParameters,
+  runChatflowOnCanvas,
+} from '@/service/canvas-runtime'
+import { fetchInstalledAppList } from '@/service/explore'
 import { getUserCanvasSnapshot } from '@/service/user-canvases'
 
 type InstalledAppListResp = {
@@ -35,6 +38,14 @@ const CanvasRuntimePage = () => {
   const [authState, setAuthState] = useState<'checking' | 'ok' | 'forbidden'>(
     'checking',
   )
+  // The URL slug can be either app_id (canonical) or installed_app_id.
+  // Resolve both during the auth probe:
+  //   - installedAppId → for /installed-apps/<id>/chat-messages and
+  //     /installed-apps/<id>/parameters (creator-allowed routes).
+  //   - resolvedAppId → for /apps/<app_id>/messages/.../resume-from
+  //     (the rerun endpoints — admin-only today, see __init__.py).
+  const [installedAppId, setInstalledAppId] = useState<string | null>(null)
+  const [resolvedAppId, setResolvedAppId] = useState<string | null>(null)
 
   const goBack = useCallback(() => {
     router.push('/creator')
@@ -124,7 +135,7 @@ const CanvasRuntimePage = () => {
   }, [applyEvent, authState, canvasIdParam, resetRuntime])
   const handleSubmit = useCallback(
     (payload: { text: string, files: unknown[] }) => {
-      if (!appId)
+      if (!installedAppId)
         return
       // Reset the canvas before each new run.
       applyEvent({
@@ -133,7 +144,7 @@ const CanvasRuntimePage = () => {
       })
       setMessageId(null)
       runChatflowOnCanvas(
-        appId,
+        installedAppId,
         {
           query: payload.text,
           // Inputs are empty for canvas runtime today — start-node vars
@@ -202,7 +213,7 @@ const CanvasRuntimePage = () => {
         },
       )
     },
-    [appId, applyEvent, setMessageId],
+    [installedAppId, applyEvent, setMessageId],
   )
 
   useEffect(() => {
@@ -218,17 +229,29 @@ const CanvasRuntimePage = () => {
         )) as InstalledAppListResp
         const list = resp?.installed_apps ?? []
         // Match either installed_app.id or the underlying app.id — different
-        // surfaces in the UI use different identifiers in the URL.
-        const allowed = list.some(
+        // surfaces in the UI use different identifiers in the URL. Cache
+        // the resolved installed_app.id so SSE / parameters calls have it.
+        const matched = list.find(
           item => item.id === appId || item.app?.id === appId,
         )
         if (cancelled)
           return
-        setAuthState(allowed ? 'ok' : 'forbidden')
+        if (matched) {
+          setInstalledAppId(matched.id)
+          setResolvedAppId(matched.app?.id ?? null)
+          setAuthState('ok')
+        }
+        else {
+          setInstalledAppId(null)
+          setResolvedAppId(null)
+          setAuthState('forbidden')
+        }
       }
       catch {
         if (cancelled)
           return
+        setInstalledAppId(null)
+        setResolvedAppId(null)
         setAuthState('forbidden')
       }
     })()
@@ -240,13 +263,15 @@ const CanvasRuntimePage = () => {
   // Fetch the chatflow's file_upload + system_parameters once auth is OK,
   // build the {fileUploadConfig} shape that FileFromLinkOrLocal needs.
   useEffect(() => {
-    if (!appId || authState !== 'ok')
+    if (!installedAppId || authState !== 'ok')
       return
     let cancelled = false;
     (async () => {
       try {
-        // eslint-disable-next-line ts/no-explicit-any
-        const params = (await fetchTrialAppParams(appId)) as any
+        const params = (await fetchCanvasAppParameters(installedAppId)) as {
+          file_upload?: Record<string, unknown>
+          system_parameters?: Record<string, unknown>
+        }
         if (cancelled)
           return
         setFileConfig({
@@ -266,7 +291,7 @@ const CanvasRuntimePage = () => {
     return () => {
       cancelled = true
     }
-  }, [appId, authState])
+  }, [installedAppId, authState])
 
   if (authState === 'checking') {
     return (
@@ -311,7 +336,7 @@ const CanvasRuntimePage = () => {
         </div>
       )}
       <CanvasRuntime
-        appId={appId!}
+        appId={resolvedAppId ?? appId!}
         onSave={handleOpenSave}
         saveDisabled={!workflowRunId}
       >
@@ -319,7 +344,7 @@ const CanvasRuntimePage = () => {
       </CanvasRuntime>
       <SaveCanvasDialog
         open={saveOpen}
-        appId={appId!}
+        appId={resolvedAppId ?? appId!}
         sourceRunId={workflowRunId}
         onClose={handleCloseSave}
       />

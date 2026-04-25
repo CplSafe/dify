@@ -9,7 +9,7 @@ import type {
   IOnWorkflowStarted,
   IOWorkflowPaused,
 } from './base'
-import { ssePost } from './base'
+import { get, ssePost } from './base'
 
 export type CanvasRuntimeChatBody = {
   query: string
@@ -31,14 +31,22 @@ export type CanvasRuntimeChatHandlers = {
   getAbortController?: (controller: AbortController) => void
 }
 
-// Routes through the trial-app prefix to match the creator allow-list (_CREATOR_ALLOWED_PREFIXES).
+// id in the URL is installed_app_id, not app_id. installed-apps covers
+// any app in the user's workspace (trial-apps would require marketplace publish).
+const path = (installedAppId: string, suffix: string) =>
+  `installed-apps/${installedAppId}/${suffix}`
+
 export const runChatflowOnCanvas = (
-  appId: string,
+  installedAppId: string,
   body: CanvasRuntimeChatBody,
   handlers: CanvasRuntimeChatHandlers,
 ) =>
   ssePost(
-    `trial-apps/${appId}/chat-messages`,
+    path(installedAppId, 'chat-messages'),
     { body: { ...body, response_mode: 'streaming' } },
     handlers,
   )
+
+export const fetchCanvasAppParameters = (
+  installedAppId: string,
+): Promise<Record<string, unknown>> => get(path(installedAppId, 'parameters'))

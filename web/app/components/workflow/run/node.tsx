@@ -31,6 +31,7 @@ import LargeDataAlert from '../variable-inspect/large-data-alert'
 import { AgentLogTrigger } from './agent-log'
 import { IterationLogTrigger } from './iteration-log'
 import { LoopLogTrigger } from './loop-log'
+import NodeRerunActions from './node-rerun-actions'
 import { RetryLogTrigger } from './retry-log'
 
 type Props = {
@@ -40,8 +41,15 @@ type Props = {
   inMessage?: boolean
   hideInfo?: boolean
   hideProcessDetail?: boolean
-  onShowIterationDetail?: (detail: NodeTracing[][], iterDurationMap: IterationDurationMap) => void
-  onShowLoopDetail?: (detail: NodeTracing[][], loopDurationMap: LoopDurationMap, loopVariableMap: LoopVariableMap) => void
+  onShowIterationDetail?: (
+    detail: NodeTracing[][],
+    iterDurationMap: IterationDurationMap,
+  ) => void
+  onShowLoopDetail?: (
+    detail: NodeTracing[][],
+    loopDurationMap: LoopDurationMap,
+    loopVariableMap: LoopVariableMap,
+  ) => void
   onShowRetryDetail?: (detail: NodeTracing[]) => void
   onShowAgentOrToolLog?: (detail?: AgentLogItemWithChildren) => void
   notShowIterationNav?: boolean
@@ -63,11 +71,14 @@ const NodePanel: FC<Props> = ({
   notShowLoopNav,
 }) => {
   const [collapseState, doSetCollapseState] = useState<boolean>(true)
-  const setCollapseState = useCallback((state: boolean) => {
-    if (hideProcessDetail)
-      return
-    doSetCollapseState(state)
-  }, [hideProcessDetail])
+  const setCollapseState = useCallback(
+    (state: boolean) => {
+      if (hideProcessDetail)
+        return
+      doSetCollapseState(state)
+    },
+    [hideProcessDetail],
+  )
   const { t } = useTranslation()
   const docLink = useDocLink()
 
@@ -92,11 +103,16 @@ const NodePanel: FC<Props> = ({
     setCollapseState(!nodeInfo.expand)
   }, [nodeInfo.expand, setCollapseState])
 
-  const isIterationNode = nodeInfo.node_type === BlockEnum.Iteration && !!nodeInfo.details?.length
-  const isLoopNode = nodeInfo.node_type === BlockEnum.Loop && !!nodeInfo.details?.length
-  const isRetryNode = hasRetryNode(nodeInfo.node_type) && !!nodeInfo.retryDetail?.length
-  const isAgentNode = nodeInfo.node_type === BlockEnum.Agent && !!nodeInfo.agentLog?.length
-  const isToolNode = nodeInfo.node_type === BlockEnum.Tool && !!nodeInfo.agentLog?.length
+  const isIterationNode
+    = nodeInfo.node_type === BlockEnum.Iteration && !!nodeInfo.details?.length
+  const isLoopNode
+    = nodeInfo.node_type === BlockEnum.Loop && !!nodeInfo.details?.length
+  const isRetryNode
+    = hasRetryNode(nodeInfo.node_type) && !!nodeInfo.retryDetail?.length
+  const isAgentNode
+    = nodeInfo.node_type === BlockEnum.Agent && !!nodeInfo.agentLog?.length
+  const isToolNode
+    = nodeInfo.node_type === BlockEnum.Tool && !!nodeInfo.agentLog?.length
 
   const inputsTitle = useMemo(() => {
     let text = t('common.input', { ns: 'workflow' })
@@ -104,7 +120,9 @@ const NodePanel: FC<Props> = ({
       text = t('nodes.loop.initialLoopVariables', { ns: 'workflow' })
     return text.toLocaleUpperCase()
   }, [nodeInfo.node_type, t])
-  const processDataTitle = t('common.processData', { ns: 'workflow' }).toLocaleUpperCase()
+  const processDataTitle = t('common.processData', {
+    ns: 'workflow',
+  }).toLocaleUpperCase()
   const outputTitle = useMemo(() => {
     let text = t('common.output', { ns: 'workflow' })
     if (nodeInfo.node_type === BlockEnum.Loop)
@@ -131,23 +149,29 @@ const NodePanel: FC<Props> = ({
               )}
             />
           )}
-          <BlockIcon size={inMessage ? 'xs' : 'sm'} className={cn('mr-2 shrink-0', inMessage && 'mr-1!')} type={nodeInfo.node_type} toolIcon={nodeInfo.extras?.icon || nodeInfo.extras} />
+          <BlockIcon
+            size={inMessage ? 'xs' : 'sm'}
+            className={cn('mr-2 shrink-0', inMessage && 'mr-1!')}
+            type={nodeInfo.node_type}
+            toolIcon={nodeInfo.extras?.icon || nodeInfo.extras}
+          />
           <Tooltip
-            popupContent={
-              <div className="max-w-xs">{nodeInfo.title}</div>
-            }
+            popupContent={<div className="max-w-xs">{nodeInfo.title}</div>}
           >
-            <div className={cn(
-              'system-xs-semibold-uppercase grow truncate text-text-secondary',
-              hideInfo && 'text-xs!',
-            )}
+            <div
+              className={cn(
+                'system-xs-semibold-uppercase grow truncate text-text-secondary',
+                hideInfo && 'text-xs!',
+              )}
             >
               {nodeInfo.title}
             </div>
           </Tooltip>
           {!['running', 'paused'].includes(nodeInfo.status) && !hideInfo && (
             <div className="system-xs-regular shrink-0 text-text-tertiary">
-              {nodeInfo.execution_metadata?.total_tokens ? `${getTokenCount(nodeInfo.execution_metadata?.total_tokens || 0)} tokens · ` : ''}
+              {nodeInfo.execution_metadata?.total_tokens
+                ? `${getTokenCount(nodeInfo.execution_metadata?.total_tokens || 0)} tokens · `
+                : ''}
               {`${getTime(nodeInfo.elapsed_time || 0)}`}
             </div>
           )}
@@ -158,13 +182,28 @@ const NodePanel: FC<Props> = ({
             <RiErrorWarningFill className="ml-2 h-3.5 w-3.5 shrink-0 text-text-destructive" />
           )}
           {nodeInfo.status === 'stopped' && (
-            <RiAlertFill className={cn('ml-2 h-4 w-4 shrink-0 text-text-warning-secondary', inMessage && 'h-3.5 w-3.5')} />
+            <RiAlertFill
+              className={cn(
+                'ml-2 h-4 w-4 shrink-0 text-text-warning-secondary',
+                inMessage && 'h-3.5 w-3.5',
+              )}
+            />
           )}
           {nodeInfo.status === 'paused' && (
-            <RiPauseCircleFill className={cn('ml-2 h-4 w-4 shrink-0 text-text-warning-secondary', inMessage && 'h-3.5 w-3.5')} />
+            <RiPauseCircleFill
+              className={cn(
+                'ml-2 h-4 w-4 shrink-0 text-text-warning-secondary',
+                inMessage && 'h-3.5 w-3.5',
+              )}
+            />
           )}
           {nodeInfo.status === 'exception' && (
-            <RiAlertFill className={cn('ml-2 h-4 w-4 shrink-0 text-text-warning-secondary', inMessage && 'h-3.5 w-3.5')} />
+            <RiAlertFill
+              className={cn(
+                'ml-2 h-4 w-4 shrink-0 text-text-warning-secondary',
+                inMessage && 'h-3.5 w-3.5',
+              )}
+            />
           )}
           {nodeInfo.status === 'running' && (
             <div className="flex shrink-0 items-center text-[13px] font-medium leading-[16px] text-text-accent">
@@ -176,7 +215,9 @@ const NodePanel: FC<Props> = ({
         {!collapseState && !hideProcessDetail && (
           <div className="px-1 pb-1">
             {/* The nav to the iteration detail */}
-            {isIterationNode && !notShowIterationNav && onShowIterationDetail && (
+            {isIterationNode
+              && !notShowIterationNav
+              && onShowIterationDetail && (
               <IterationLogTrigger
                 nodeInfo={nodeInfo}
                 allExecutions={allExecutions}
@@ -197,21 +238,24 @@ const NodePanel: FC<Props> = ({
                 onShowRetryResultList={onShowRetryDetail}
               />
             )}
-            {
-              (isAgentNode || isToolNode) && onShowAgentOrToolLog && (
-                <AgentLogTrigger
-                  nodeInfo={nodeInfo}
-                  onShowAgentOrToolLog={onShowAgentOrToolLog}
-                />
-              )
-            }
+            {(isAgentNode || isToolNode) && onShowAgentOrToolLog && (
+              <AgentLogTrigger
+                nodeInfo={nodeInfo}
+                onShowAgentOrToolLog={onShowAgentOrToolLog}
+              />
+            )}
             <div className={cn('mb-1', hideInfo && 'px-2! py-0.5!')}>
-              {(nodeInfo.status === 'stopped') && (
+              {nodeInfo.status === 'stopped' && (
                 <StatusContainer status="stopped">
-                  {t('tracing.stopBy', { ns: 'workflow', user: nodeInfo.created_by ? nodeInfo.created_by.name : 'N/A' })}
+                  {t('tracing.stopBy', {
+                    ns: 'workflow',
+                    user: nodeInfo.created_by
+                      ? nodeInfo.created_by.name
+                      : 'N/A',
+                  })}
                 </StatusContainer>
               )}
-              {(nodeInfo.status === 'exception') && (
+              {nodeInfo.status === 'exception' && (
                 <StatusContainer status="stopped">
                   {nodeInfo.error}
                   <a
@@ -233,9 +277,13 @@ const NodePanel: FC<Props> = ({
                   {nodeInfo.error}
                 </StatusContainer>
               )}
-              {(nodeInfo.status === 'paused') && (
+              {nodeInfo.status === 'paused' && (
                 <StatusContainer status="paused">
-                  <div className="system-xs-regular text-text-warning">{t('nodes.humanInput.log.reasonContent', { ns: 'workflow' })}</div>
+                  <div className="system-xs-regular text-text-warning">
+                    {t('nodes.humanInput.log.reasonContent', {
+                      ns: 'workflow',
+                    })}
+                  </div>
                 </StatusContainer>
               )}
             </div>
@@ -247,7 +295,14 @@ const NodePanel: FC<Props> = ({
                   language={CodeLanguage.json}
                   value={nodeInfo.inputs}
                   isJSONStringifyBeauty
-                  footer={nodeInfo.inputs_truncated && <LargeDataAlert textHasNoExport className="mx-1 mb-1 mt-2 h-7" />}
+                  footer={
+                    nodeInfo.inputs_truncated && (
+                      <LargeDataAlert
+                        textHasNoExport
+                        className="mx-1 mb-1 mt-2 h-7"
+                      />
+                    )
+                  }
                 />
               </div>
             )}
@@ -270,11 +325,26 @@ const NodePanel: FC<Props> = ({
                   language={CodeLanguage.json}
                   value={nodeInfo.outputs}
                   isJSONStringifyBeauty
-                  tip={<ErrorHandleTip type={nodeInfo.execution_metadata?.error_strategy} />}
-                  footer={nodeInfo.outputs_truncated && <LargeDataAlert textHasNoExport downloadUrl={nodeInfo.outputs_full_content?.download_url} className="mx-1 mb-1 mt-2 h-7" />}
+                  tip={(
+                    <ErrorHandleTip
+                      type={nodeInfo.execution_metadata?.error_strategy}
+                    />
+                  )}
+                  footer={
+                    nodeInfo.outputs_truncated && (
+                      <LargeDataAlert
+                        textHasNoExport
+                        downloadUrl={
+                          nodeInfo.outputs_full_content?.download_url
+                        }
+                        className="mx-1 mb-1 mt-2 h-7"
+                      />
+                    )
+                  }
                 />
               </div>
             )}
+            <NodeRerunActions nodeId={nodeInfo.node_id} />
           </div>
         )}
       </div>

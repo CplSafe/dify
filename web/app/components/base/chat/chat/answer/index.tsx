@@ -1,5 +1,6 @@
 import type { FC, ReactNode } from 'react'
 import type { ChatConfig, ChatItem } from '../../types'
+import type { RerunController } from './rerun-context'
 import type { AppData } from '@/models/share'
 import {
   memo,
@@ -31,6 +32,7 @@ import HumanInputFilledFormList from './human-input-filled-form-list'
 import HumanInputFormList from './human-input-form-list'
 import More from './more'
 import Operation from './operation'
+import { RerunContext } from './rerun-context'
 import SuggestedQuestions from './suggested-questions'
 import WorkflowProcessItem from './workflow-process'
 
@@ -49,6 +51,11 @@ type AnswerProps = {
   switchSibling?: (siblingMessageId: string) => void
   hideAvatar?: boolean
   onHumanInputFormSubmit?: (formToken: string, formData: any) => Promise<void>
+  // True when this is the last assistant message — only the last one
+  // should expose rerun affordances so we don't fork the conversation tree.
+  isLatestAnswer?: boolean
+  // Surface that wires up node-level rerun (only the chatflow debug surface today).
+  rerunController?: RerunController
 }
 const Answer: FC<AnswerProps> = ({
   item,
@@ -65,6 +72,8 @@ const Answer: FC<AnswerProps> = ({
   switchSibling,
   hideAvatar,
   onHumanInputFormSubmit,
+  isLatestAnswer = false,
+  rerunController,
 }) => {
   const { t } = useTranslation()
   const pathname = usePathname()
@@ -232,7 +241,15 @@ const Answer: FC<AnswerProps> = ({
       ? `${appTitle} 正在继续生成视频`
       : `${appTitle} 正在分析需求`
 
-  return (
+  // Rerun is only enabled on the last assistant message AND once the workflow
+  // has stopped streaming AND when the surface (chatflow debug) provided a
+  // controller. Anything else means the affordance stays hidden.
+  const effectiveRerunController
+    = isLatestAnswer && !responding && isWorkflowFinished && rerunController
+      ? rerunController
+      : null
+
+  const answerNode = (
     <div className="mb-2 flex last:mb-0">
       {!hideAvatar && (
         <div className="relative h-9 w-9 shrink-0 md:h-10 md:w-10">
@@ -587,6 +604,13 @@ const Answer: FC<AnswerProps> = ({
         {!isCreatorMode && <More more={more} />}
       </div>
     </div>
+  )
+
+  if (!effectiveRerunController)
+    return answerNode
+
+  return (
+    <RerunContext value={effectiveRerunController}>{answerNode}</RerunContext>
   )
 }
 

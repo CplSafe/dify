@@ -1,5 +1,6 @@
 import type { StartNodeType } from '../../nodes/start/types'
 import type { ChatWrapperRefType } from './index'
+import type { RerunController } from '@/app/components/base/chat/chat/answer/rerun-context'
 import type { ChatItem, OnSend } from '@/app/components/base/chat/types'
 import type { FileEntity } from '@/app/components/base/file-uploader/types'
 import type { AppData } from '@/models/share'
@@ -22,6 +23,7 @@ import { EVENT_WORKFLOW_STOP } from '@/app/components/workflow/variable-inspect/
 import { useEventEmitterContextContext } from '@/context/event-emitter'
 import {
   fetchSuggestedQuestions,
+  prepareChatflowRerun,
   stopChatMessageResponding,
 } from '@/service/debug'
 import { useStore, useWorkflowStore } from '../../store'
@@ -240,6 +242,54 @@ const ChatWrapper = ({
       onHide()
   }, [isResponding, onHide])
 
+  const latestAnswerId = useMemo(
+    () => getLastAnswer(chatList)?.id ?? null,
+    [chatList],
+  )
+
+  // Build the chatflow rerun controller from the canvas + latest message.
+  // `null` (returned via memo only when prereqs missing) tells Chat that
+  // the rerun affordance should stay hidden.
+  const rerunController = useMemo<RerunController | null>(() => {
+    if (!appDetail?.id || !latestAnswerId)
+      return null
+    return {
+      appId: appDetail.id,
+      messageId: latestAnswerId,
+      getNodeRerunFlags: (nodeId: string) => {
+        const node = nodes.find(n => n.id === nodeId)
+        if (!node)
+          return null
+        // node.data shape varies per BlockEnum — the rerun flags are plain
+        // boolean addons stored uniformly across all node types in M3.
+        // eslint-disable-next-line ts/no-explicit-any
+        const data = node.data as any
+        return {
+          allowEditInput: data?.allow_user_edit_input === true,
+          allowEditOutput: data?.allow_user_edit_output === true,
+        }
+      },
+      onRerunFromNode: async (nodeId, kind) => {
+        // M5 stub: validate the rerun plan with the backend so the user
+        // sees blocking errors (loop containment, kind/permission mismatch)
+        // immediately. The actual editor lands in M6 and the streaming
+        // dispatch lands in M7.
+        try {
+          const plan = await prepareChatflowRerun({
+            appId: appDetail.id,
+            messageId: latestAnswerId,
+            nodeId,
+            kind,
+          })
+          console.warn('[chatflow-rerun] prepare ok', plan)
+        }
+        catch (err) {
+          console.warn('[chatflow-rerun] prepare failed', err)
+        }
+      },
+    }
+  }, [appDetail?.id, latestAnswerId, nodes])
+
   return (
     <>
       <Chat
@@ -279,6 +329,7 @@ const ChatWrapper = ({
         switchSibling={doSwitchSibling}
         inputDisabled={inputDisabled}
         hideAvatar
+        rerunController={rerunController ?? undefined}
       />
       {showConversationVariableModal && (
         <ConversationVariableModal

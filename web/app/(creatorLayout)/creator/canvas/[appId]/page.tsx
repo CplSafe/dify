@@ -1,0 +1,111 @@
+'use client'
+/* eslint-disable react/set-state-in-effect -- single-shot auth probe; Suspense not warranted for CR3 shell */
+
+import type { InstalledApp as ExploreInstalledApp } from '@/models/explore'
+import { useCallback, useEffect, useState } from 'react'
+import { useParams, useRouter } from '@/next/navigation'
+import { fetchInstalledAppList } from '@/service/explore'
+
+type InstalledAppListResp = {
+  installed_apps: ExploreInstalledApp[]
+}
+
+/**
+ * Canvas runtime page.
+ *
+ * Authorization model: this page itself only renders chrome. All data
+ * requests (chatflow run, rerun, canvas CRUD) go through endpoints that
+ * already enforce tenant + owner scope, so a forged appId in the URL
+ * cannot leak data — it just produces 404s on every API call. The
+ * `installed_app` lookup below is purely a UX guard so the user sees a
+ * clean "无权访问该应用" instead of a wall of failed requests.
+ */
+const CanvasRuntimePage = () => {
+  const params = useParams<{ appId: string }>()
+  const router = useRouter()
+  const appId = params?.appId
+  const [authState, setAuthState] = useState<'checking' | 'ok' | 'forbidden'>(
+    'checking',
+  )
+
+  const goBack = useCallback(() => {
+    router.push('/creator')
+  }, [router])
+
+  useEffect(() => {
+    if (!appId) {
+      setAuthState('forbidden')
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const resp = (await fetchInstalledAppList(null)) as InstalledAppListResp
+        const list = resp?.installed_apps ?? []
+        // Match either installed_app.id or the underlying app.id — different
+        // surfaces in the UI use different identifiers in the URL.
+        const allowed = list.some(
+          item => item.id === appId || item.app?.id === appId,
+        )
+        if (cancelled)
+          return
+        setAuthState(allowed ? 'ok' : 'forbidden')
+      }
+      catch {
+        if (cancelled)
+          return
+        setAuthState('forbidden')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [appId])
+
+  if (authState === 'checking') {
+    return (
+      <div className="flex h-full items-center justify-center text-text-tertiary">
+        正在加载画布…
+      </div>
+    )
+  }
+
+  if (authState === 'forbidden') {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 text-text-tertiary">
+        <div className="system-md-medium text-text-primary">无权访问该应用</div>
+        <div className="system-sm-regular">
+          该应用未在你的工作区中安装，或已被移除。
+        </div>
+        <button
+          type="button"
+          onClick={goBack}
+          className="rounded-md border border-components-button-secondary-border bg-components-button-secondary-bg px-3 py-1.5 system-sm-medium text-text-secondary hover:bg-components-button-secondary-bg-hover"
+        >
+          返回创作中心
+        </button>
+      </div>
+    )
+  }
+
+  // CR3 only ships the route + auth shell. The actual fork'd ReactFlow
+  // canvas (CR4), bottom input box (CR5), pause/resume affordances
+  // (CR6) and save toolbar (CR7) drop in here without changing routing.
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between px-6 py-4">
+        <div>
+          <div className="system-md-semibold text-text-primary">运行画布</div>
+          <div className="system-xs-regular text-text-tertiary">
+            从底部输入开始；节点会按运行顺序依次显示。
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-1 items-center justify-center text-text-quaternary">
+        画布加载中（CR4 接入 ReactFlow 后此处变为运行时画布）
+      </div>
+    </div>
+  )
+}
+
+export default CanvasRuntimePage

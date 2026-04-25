@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import CanvasRuntime from '@/app/components/canvas-runtime'
 import RuntimeInput from '@/app/components/canvas-runtime/runtime-input'
 import { useRuntimeStore } from '@/app/components/canvas-runtime/runtime-store'
+import SaveCanvasDialog from '@/app/components/canvas-runtime/save-canvas-dialog'
 import { useParams, useRouter } from '@/next/navigation'
 import { runChatflowOnCanvas } from '@/service/canvas-runtime'
 import { fetchInstalledAppList } from '@/service/explore'
@@ -42,6 +43,10 @@ const CanvasRuntimePage = () => {
   // backend infrastructure.
   const applyEvent = useRuntimeStore(s => s.applyEvent)
   const setMessageId = useRuntimeStore(s => s.setMessageId)
+  const workflowRunId = useRuntimeStore(s => s.workflowRunId)
+  const [saveOpen, setSaveOpen] = useState(false)
+  const handleOpenSave = useCallback(() => setSaveOpen(true), [])
+  const handleCloseSave = useCallback(() => setSaveOpen(false), [])
   const handleSubmit = useCallback(
     (payload: { text: string, files: unknown[] }) => {
       if (!appId)
@@ -187,11 +192,26 @@ const CanvasRuntimePage = () => {
   // above the ReactFlow surface without intercepting pan/zoom events.
   // CR6 will mount paused-node portals; CR7 wires onSave for the
   // toolbar's "保存为画布".
+  // CR7 surfaces the toolbar's "保存为画布" — the dialog opens, calls
+  // POST /creator/canvases (which already validates source_run_id ↔ app
+  // server-side) and on success the user can find the saved canvas in
+  // /creator/canvas. We pass through the live workflowRunId from the
+  // store; the toolbar disables itself when there's nothing to save.
   return (
     <div className="flex h-full flex-col">
-      <CanvasRuntime appId={appId!}>
+      <CanvasRuntime
+        appId={appId!}
+        onSave={handleOpenSave}
+        saveDisabled={!workflowRunId}
+      >
         <RuntimeInput onSubmit={handleSubmit} />
       </CanvasRuntime>
+      <SaveCanvasDialog
+        open={saveOpen}
+        appId={appId!}
+        sourceRunId={workflowRunId}
+        onClose={handleCloseSave}
+      />
     </div>
   )
 }

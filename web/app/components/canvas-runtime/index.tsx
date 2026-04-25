@@ -23,14 +23,20 @@ type CanvasRuntimeProps = {
   // CR6 needs the appId to call resume / rerun endpoints from inside
   // node-level pause CTAs.
   appId: string
-  // CR7 will pass through; CR4 forwards as-is.
+  // CR7: opens the save-as-canvas dialog. saveDisabled lets the page
+  // grey the button out (e.g. before the user has run anything).
   onSave?: () => void
+  saveDisabled?: boolean
   // CR5 will mount its bottom-centred input as a child so it sits above
   // the canvas without hijacking ReactFlow's pointer events.
   children?: React.ReactNode
 }
 
-const CanvasRuntimeInner = ({ onSave, children }: CanvasRuntimeProps) => {
+const CanvasRuntimeInner = ({
+  onSave,
+  saveDisabled,
+  children,
+}: CanvasRuntimeProps) => {
   const storeNodes = useRuntimeStore(s => s.nodes)
   const storeEdges = useRuntimeStore(s => s.edges)
   const visibleOrder = useRuntimeStore(s => s.visibleOrder)
@@ -100,7 +106,7 @@ const CanvasRuntimeInner = ({ onSave, children }: CanvasRuntimeProps) => {
           className="!right-4 !bottom-32 !rounded-lg !border !border-components-panel-border !bg-components-panel-bg !shadow-md"
         />
       </ReactFlow>
-      <RuntimeToolbar onSave={onSave} />
+      <RuntimeToolbar onSave={onSave} saveDisabled={saveDisabled} />
       {children}
     </div>
   )

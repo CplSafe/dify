@@ -3,6 +3,7 @@
 
 import type { InstalledApp as ExploreInstalledApp } from '@/models/explore'
 import { useCallback, useEffect, useState } from 'react'
+import CanvasRuntime from '@/app/components/canvas-runtime'
 import { useParams, useRouter } from '@/next/navigation'
 import { fetchInstalledAppList } from '@/service/explore'
 
@@ -37,10 +38,12 @@ const CanvasRuntimePage = () => {
       setAuthState('forbidden')
       return
     }
-    let cancelled = false
-    ;(async () => {
+    let cancelled = false;
+    (async () => {
       try {
-        const resp = (await fetchInstalledAppList(null)) as InstalledAppListResp
+        const resp = (await fetchInstalledAppList(
+          null,
+        )) as InstalledAppListResp
         const list = resp?.installed_apps ?? []
         // Match either installed_app.id or the underlying app.id — different
         // surfaces in the UI use different identifiers in the URL.
@@ -88,22 +91,11 @@ const CanvasRuntimePage = () => {
     )
   }
 
-  // CR3 only ships the route + auth shell. The actual fork'd ReactFlow
-  // canvas (CR4), bottom input box (CR5), pause/resume affordances
-  // (CR6) and save toolbar (CR7) drop in here without changing routing.
+  // CR4 mounts the runtime canvas. CR5 will inject the bottom input as
+  // a child; CR6 will mount paused-node portals; CR7 wires onSave.
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between px-6 py-4">
-        <div>
-          <div className="system-md-semibold text-text-primary">运行画布</div>
-          <div className="system-xs-regular text-text-tertiary">
-            从底部输入开始；节点会按运行顺序依次显示。
-          </div>
-        </div>
-      </div>
-      <div className="flex flex-1 items-center justify-center text-text-quaternary">
-        画布加载中（CR4 接入 ReactFlow 后此处变为运行时画布）
-      </div>
+      <CanvasRuntime />
     </div>
   )
 }

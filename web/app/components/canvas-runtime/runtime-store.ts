@@ -325,23 +325,38 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       // target is visible, walk back through hidden ancestors to find
       // the nearest visible predecessor (or just use the SSE-reported
       // predecessor when both ends are visible).
+      //
+      // Fallback chain when the engine doesn't supply predecessor_node_id
+      // on the SSE event (some chatflow nodes don't set it):
+      //   1. SSE-reported predecessor — most accurate when present.
+      //   2. Last visible node in `visibleOrder` — true for linear
+      //      chatflows, which covers ~all canvas-runtime app shapes.
+      // The first node ever revealed (Start) has no predecessor in
+      // either source — it's expected to be edgeless.
       const nextEdges = { ...edges }
-      if (!hidden && event.predecessorNodeId) {
-        const sources = _resolveVisibleSources(
-          graphDict,
-          event.predecessorNodeId,
-          nodes,
-          hidden,
-        )
-        for (const src of sources) {
-          if (!nextNodes[src])
-            continue
-          const edgeId = `${src}->${event.nodeId}`
-          if (!nextEdges[edgeId]) {
-            nextEdges[edgeId] = {
-              id: edgeId,
-              source: src,
-              target: event.nodeId,
+      if (!hidden) {
+        const candidatePred
+          = event.predecessorNodeId
+            || (visibleOrder.length > 0
+              ? visibleOrder[visibleOrder.length - 1]
+              : undefined)
+        if (candidatePred && candidatePred !== event.nodeId) {
+          const sources = _resolveVisibleSources(
+            graphDict,
+            candidatePred,
+            nodes,
+            hidden,
+          )
+          for (const src of sources) {
+            if (!nextNodes[src])
+              continue
+            const edgeId = `${src}->${event.nodeId}`
+            if (!nextEdges[edgeId]) {
+              nextEdges[edgeId] = {
+                id: edgeId,
+                source: src,
+                target: event.nodeId,
+              }
             }
           }
         }

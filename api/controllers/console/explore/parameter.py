@@ -48,3 +48,49 @@ class ExploreAppMetaApi(InstalledAppResource):
         if not app_model:
             raise ValueError("App not found")
         return AppService().get_app_meta(app_model)
+
+
+@console_ns.route(
+    "/installed-apps/<uuid:installed_app_id>/runtime-graph",
+    endpoint="installed_app_runtime_graph",
+)
+class InstalledAppRuntimeGraphApi(InstalledAppResource):
+    """CR9: minimal draft-graph projection for the canvas runtime.
+
+    Returns the node + edge skeleton with the ``show_in_canvas_runtime``
+    flag exposed per node, so the runtime store can decide which nodes
+    to render and which edges to pass through. We deliberately do NOT
+    return prompts, model configs, or anything else from
+    ``workflow.graph_dict`` so this stays cheap and avoids leaking
+    author-side configuration through a creator-allowed route.
+    """
+
+    def get(self, installed_app: InstalledApp):
+        app_model = installed_app.app
+        if app_model is None:
+            raise AppUnavailableError()
+        if app_model.mode != AppMode.ADVANCED_CHAT:
+            return {"nodes": [], "edges": []}
+        workflow = app_model.workflow
+        if workflow is None:
+            raise AppUnavailableError()
+        graph = workflow.graph_dict or {}
+
+        nodes = []
+        for n in graph.get("nodes", []) or []:
+            data = n.get("data") or {}
+            nodes.append(
+                {
+                    "id": n.get("id"),
+                    "data": {
+                        "show_in_canvas_runtime": data.get(
+                            "show_in_canvas_runtime", True
+                        ),
+                    },
+                }
+            )
+        edges = [
+            {"source": e.get("source"), "target": e.get("target")}
+            for e in (graph.get("edges", []) or [])
+        ]
+        return {"nodes": nodes, "edges": edges}

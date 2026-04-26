@@ -15,6 +15,7 @@ import TopupModal from '@/app/components/creator/wallet/topup-modal'
 import { useParams, useRouter, useSearchParams } from '@/next/navigation'
 import {
   fetchCanvasAppParameters,
+  fetchCanvasRuntimeGraph,
   runChatflowOnCanvas,
 } from '@/service/canvas-runtime'
 import { fetchInstalledAppList } from '@/service/explore'
@@ -114,6 +115,7 @@ const CanvasRuntimePage = () => {
   // backend infrastructure.
   const applyEvent = useRuntimeStore(s => s.applyEvent)
   const setMessageId = useRuntimeStore(s => s.setMessageId)
+  const setGraphDict = useRuntimeStore(s => s.setGraphDict)
   const workflowRunId = useRuntimeStore(s => s.workflowRunId)
   const resetRuntime = useRuntimeStore(s => s.reset)
   const [saveOpen, setSaveOpen] = useState(false)
@@ -401,6 +403,34 @@ const CanvasRuntimePage = () => {
       cancelled = true
     }
   }, [installedAppId, authState])
+
+  // CR9: load the chatflow draft graph projection (just node ids +
+  // edges + show_in_canvas_runtime flags) so the runtime store can
+  // hide opted-out nodes and pass-through their edges.
+  useEffect(() => {
+    if (!installedAppId || authState !== 'ok')
+      return
+    let cancelled = false;
+    (async () => {
+      try {
+        const graph = await fetchCanvasRuntimeGraph(installedAppId)
+        if (cancelled)
+          return
+        setGraphDict(graph)
+      }
+      catch (err) {
+        console.warn('[canvas-runtime] failed to load runtime graph', err)
+        if (cancelled)
+          return
+        // Null means "render every node" — safer than opting out
+        // entire nodes when we can't reach the backend.
+        setGraphDict(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [installedAppId, authState, setGraphDict])
 
   if (authState === 'checking') {
     return (

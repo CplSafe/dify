@@ -86,11 +86,26 @@ export type PausedNodeKinds = {
   source: 'user_edit' | 'human_input'
 }
 
+// CR9: minimal projection of the chatflow draft graph. Only what the
+// runtime store needs to decide visibility + pass-through edges. Page
+// fetches it (via /apps/<id>/workflows/draft or workflow_run.graph)
+// and hands it off via setGraphDict before the user starts a run.
+export type RuntimeGraphDict = {
+  nodes: Array<{
+    id: string
+    data?: { show_in_canvas_runtime?: boolean }
+  }>
+  edges: Array<{ source: string, target: string }>
+}
+
 type RuntimeState = {
   workflowRunId: string | null
   // Chatflow message id that backs the current run — needed by the
   // resume / rerun endpoints (they're keyed by message_id, not run_id).
   messageId: string | null
+  // Raw draft graph snapshot used for hidden-node pass-through. When
+  // null, the store treats every node as visible (back-compat).
+  graphDict: RuntimeGraphDict | null
   nodes: Record<string, RuntimeNode>
   edges: Record<string, RuntimeEdge>
   // Insertion order so the canvas reveals nodes left-to-right rather
@@ -112,6 +127,7 @@ type RuntimeState = {
 
   applyEvent: (event: SSEEvent) => void
   setMessageId: (messageId: string | null) => void
+  setGraphDict: (graph: RuntimeGraphDict | null) => void
   clearPause: (nodeId: string) => void
   reset: () => void
 }
@@ -119,6 +135,7 @@ type RuntimeState = {
 const _initialState = {
   workflowRunId: null,
   messageId: null as string | null,
+  graphDict: null as RuntimeGraphDict | null,
   nodes: {} as Record<string, RuntimeNode>,
   edges: {} as Record<string, RuntimeEdge>,
   visibleOrder: [] as string[],
@@ -134,6 +151,85 @@ const _initialState = {
 // users ask for branching layouts.
 const _nodeOffset = 240
 const _nodeY = 0
+
+// CR9: a node is hidden from the canvas runtime when its draft graph
+// data has show_in_canvas_runtime explicitly set to false. Default
+// (undefined or true) means visible.
+const _isHiddenInRuntime = (
+  graph: RuntimeGraphDict | null,
+  nodeId: string,
+): boolean => {
+  if (!graph)
+    return false
+  const node = graph.nodes.find(n => n.id === nodeId)
+  return node?.data?.show_in_canvas_runtime === false
+}
+
+// CR9: pass-through edge expansion. From `source`, walk the draft
+// graph and for each first-encountered visible successor emit an edge
+// `source → successor`. Keeps the canvas connected even when
+// intermediate nodes were hidden by the author.
+const _visibleSuccessors = (
+  graph: RuntimeGraphDict | null,
+  source: string,
+): string[] => {
+  if (!graph)
+    return []
+  const visited = new Set<string>()
+  const out: string[] = []
+  const stack: string[] = [source]
+  while (stack.length) {
+    const cur = stack.pop()!
+    for (const e of graph.edges) {
+      if (e.source !== cur)
+        continue
+      if (visited.has(e.target))
+        continue
+      visited.add(e.target)
+      if (_isHiddenInRuntime(graph, e.target))
+        stack.push(e.target)
+      else out.push(e.target)
+    }
+  }
+  return out
+}
+
+// CR9: walk back from `start` through hidden ancestors and return
+// the first visible predecessor on each branch. The SSE event only
+// carries one predecessor_node_id, but a hidden node may itself have
+// multiple visible parents in the draft graph — we don't lose them.
+//
+// `_seenNodes` is the runtime-store's `nodes` map; we use it to avoid
+// proposing predecessors the engine hasn't reached this run yet.
+
+const _resolveVisibleSources = (
+  graph: RuntimeGraphDict | null,
+  start: string,
+  _seenNodes: Record<string, RuntimeNode>,
+  _hidden: boolean,
+): string[] => {
+  if (!graph)
+    return [start]
+  if (!_isHiddenInRuntime(graph, start))
+    return [start]
+  const visited = new Set<string>()
+  const out: string[] = []
+  const stack: string[] = [start]
+  while (stack.length) {
+    const cur = stack.pop()!
+    for (const e of graph.edges) {
+      if (e.target !== cur)
+        continue
+      if (visited.has(e.source))
+        continue
+      visited.add(e.source)
+      if (_isHiddenInRuntime(graph, e.source))
+        stack.push(e.source)
+      else out.push(e.source)
+    }
+  }
+  return out
+}
 
 const _placeNode = (index: number) => ({
   x: index * _nodeOffset,
@@ -177,8 +273,13 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   applyEvent: (event) => {
     const now = Date.now()
     if (event.type === 'workflow_started') {
+      // CR9: keep the graphDict across runs of the same canvas — the
+      // visibility decision is per-canvas, not per-run, and refetching
+      // it on every submit is wasteful.
+      const { graphDict } = get()
       set({
         ..._initialState,
+        graphDict,
         workflowRunId: event.workflowRunId,
         lastEventAt: now,
       })
@@ -186,18 +287,24 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     }
 
     if (event.type === 'node_started') {
-      const { nodes, edges, visibleOrder } = get()
+      const { nodes, edges, visibleOrder, graphDict } = get()
+      const hidden = _isHiddenInRuntime(graphDict, event.nodeId)
       const existing = nodes[event.nodeId]
-      const nextOrder = existing
-        ? visibleOrder
-        : [...visibleOrder, event.nodeId]
+      // Hidden nodes still get tracked in `nodes` (so node_finished
+      // can update their internal state and downstream lookups stay
+      // correct) but are kept out of `visibleOrder` so the canvas
+      // never renders a card for them.
+      const nextOrder
+        = existing || hidden ? visibleOrder : [...visibleOrder, event.nodeId]
       const nextNodes = {
         ...nodes,
         [event.nodeId]: {
           id: event.nodeId,
           type: event.nodeType,
           title: event.title,
-          position: existing?.position ?? _placeNode(nextOrder.length - 1),
+          position:
+            existing?.position
+            ?? _placeNode(hidden ? visibleOrder.length : nextOrder.length - 1),
           status: 'running' as NodeRuntimeStatus,
           inputs: event.inputs,
           // Carry forward outputs if the engine restarts a node we've
@@ -205,14 +312,28 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
           outputs: existing?.outputs,
         },
       }
+      // CR9: edges connect VISIBLE source → VISIBLE target. If the
+      // target is visible, walk back through hidden ancestors to find
+      // the nearest visible predecessor (or just use the SSE-reported
+      // predecessor when both ends are visible).
       const nextEdges = { ...edges }
-      if (event.predecessorNodeId && nodes[event.predecessorNodeId]) {
-        const edgeId = `${event.predecessorNodeId}->${event.nodeId}`
-        if (!nextEdges[edgeId]) {
-          nextEdges[edgeId] = {
-            id: edgeId,
-            source: event.predecessorNodeId,
-            target: event.nodeId,
+      if (!hidden && event.predecessorNodeId) {
+        const sources = _resolveVisibleSources(
+          graphDict,
+          event.predecessorNodeId,
+          nodes,
+          hidden,
+        )
+        for (const src of sources) {
+          if (!nextNodes[src])
+            continue
+          const edgeId = `${src}->${event.nodeId}`
+          if (!nextEdges[edgeId]) {
+            nextEdges[edgeId] = {
+              id: edgeId,
+              source: src,
+              target: event.nodeId,
+            }
           }
         }
       }
@@ -305,6 +426,8 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   },
 
   setMessageId: messageId => set({ messageId }),
+
+  setGraphDict: graphDict => set({ graphDict }),
 
   clearPause: (nodeId) => {
     // Flip the node back to 'succeeded' alongside dropping its pause

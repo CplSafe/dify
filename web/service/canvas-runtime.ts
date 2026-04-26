@@ -31,8 +31,13 @@ export type CanvasRuntimeChatHandlers = {
   getAbortController?: (controller: AbortController) => void
 }
 
-// id in the URL is installed_app_id, not app_id. installed-apps covers
-// any app in the user's workspace (trial-apps would require marketplace publish).
+export type CanvasRuntimeGraphResp = {
+  nodes: Array<{ id: string, data?: { show_in_canvas_runtime?: boolean } }>
+  edges: Array<{ source: string, target: string }>
+}
+
+// URL id is installed_app_id (not app_id); installed-apps covers any app in
+// the user's workspace, while trial-apps would require a marketplace publish.
 const path = (installedAppId: string, suffix: string) =>
   `installed-apps/${installedAppId}/${suffix}`
 
@@ -50,3 +55,8 @@ export const runChatflowOnCanvas = (
 export const fetchCanvasAppParameters = (
   installedAppId: string,
 ): Promise<Record<string, unknown>> => get(path(installedAppId, 'parameters'))
+
+export const fetchCanvasRuntimeGraph = (
+  installedAppId: string,
+): Promise<CanvasRuntimeGraphResp> =>
+  get(path(installedAppId, 'runtime-graph'))

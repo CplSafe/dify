@@ -21,10 +21,18 @@ const RerunPermissionsPanel = ({ id, data }: Props) => {
 
   const allowInput = (data as any).allow_user_edit_input === true
   const allowOutput = (data as any).allow_user_edit_output === true
+  // CR9: default true — author opts a node OUT of the canvas runtime
+  // (e.g. internal glue nodes the end user shouldn't see). Hidden
+  // nodes still execute; their edges are passed through to the next
+  // visible successor in the runtime store.
+  const showInRuntime = (data as any).show_in_canvas_runtime !== false
 
   const setFlag = useCallback(
     (
-      key: 'allow_user_edit_input' | 'allow_user_edit_output',
+      key:
+        | 'allow_user_edit_input'
+        | 'allow_user_edit_output'
+        | 'show_in_canvas_runtime',
       value: boolean,
     ) => {
       handleNodeDataUpdateWithSyncDraft({
@@ -38,11 +46,20 @@ const RerunPermissionsPanel = ({ id, data }: Props) => {
   return (
     <div className="border-t-[0.5px] border-divider-regular px-4 pt-3 pb-2">
       <div className="mb-2 system-sm-semibold-uppercase text-text-secondary">
-        用户编辑权限
+        画布运行时
       </div>
       <p className="mb-3 system-xs-regular text-text-tertiary">
-        允许使用者在聊天结果上修改本节点的输入或输出，并从此处重新运行后续节点。
+        控制本节点在「运行画布」上的可见性与可编辑性。
       </p>
+      <div className="flex h-9 items-center justify-between">
+        <span className="system-sm-regular text-text-primary">
+          在画布上显示
+        </span>
+        <Switch
+          value={showInRuntime}
+          onChange={v => setFlag('show_in_canvas_runtime', v)}
+        />
+      </div>
       <div className="flex h-9 items-center justify-between">
         <span className="system-sm-regular text-text-primary">
           允许编辑输入

@@ -2,7 +2,7 @@
 
 import type { Edge, Node } from 'reactflow'
 import type { RuntimeNode } from './runtime-store'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -11,10 +11,16 @@ import ReactFlow, {
 } from 'reactflow'
 import { RuntimeContext } from './runtime-context'
 import RuntimeEdge from './runtime-edge'
+import { computeRuntimeLayout } from './runtime-layout'
 import RuntimeNodeComponent from './runtime-node'
 import { useRuntimeStore } from './runtime-store'
 import RuntimeToolbar from './toolbar'
 import 'reactflow/dist/style.css'
+
+// Match the fixed footprint declared in runtime-node.tsx so the elk
+// layouter reserves the right amount of room around each card.
+const NODE_W = 280
+const NODE_H = 224
 
 const NODE_TYPES = {
   runtime: RuntimeNodeComponent,
@@ -45,6 +51,56 @@ const CanvasRuntimeInner = ({
   const storeNodes = useRuntimeStore(s => s.nodes)
   const storeEdges = useRuntimeStore(s => s.edges)
   const visibleOrder = useRuntimeStore(s => s.visibleOrder)
+  const relayoutNodes = useRuntimeStore(s => s.relayoutNodes)
+
+  // Reflow the canvas via ELK (layered/Sugiyama, same family as dagre)
+  // every time a node is revealed or an edge is added. The store's
+  // initial _placeNode() lays cards on a single horizontal line, which
+  // works for purely linear flows but breaks down on branching
+  // chatflows. ELK gives us proper layered placement with vertical
+  // offsetting, edge crossing minimisation, and centred parents.
+  //
+  // Keys are concatenated id strings so React only re-runs the effect
+  // when the topology actually changes — node *status* updates (which
+  // happen far more often) don't retrigger layout.
+  const layoutKey = useMemo(
+    () =>
+      `${visibleOrder.join(',')}|${Object.keys(storeEdges).sort().join(',')}`,
+    [visibleOrder, storeEdges],
+  )
+
+  useEffect(() => {
+    if (visibleOrder.length === 0)
+      return
+    let cancelled = false
+    void (async () => {
+      try {
+        const positions = await computeRuntimeLayout({
+          nodes: visibleOrder.map(id => ({ id })),
+          edges: Object.values(storeEdges).map(e => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+          })),
+          nodeWidth: NODE_W,
+          nodeHeight: NODE_H,
+        })
+        if (!cancelled)
+          relayoutNodes(positions)
+      }
+      catch (err) {
+        // ELK failures are non-fatal — the store keeps the linear
+        // fallback positions so the user still sees their cards.
+        console.warn('[canvas-runtime] elk layout failed', err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // layoutKey already encodes visibleOrder + storeEdges; depending on
+    // the raw maps would re-fire on every status update too.
+    // eslint-disable-next-line react/exhaustive-deps
+  }, [layoutKey])
 
   // Project the store into ReactFlow's node/edge shape. Order matters
   // so newly-revealed nodes are appended (no auto-relayout flicker).
@@ -130,21 +186,21 @@ const CanvasRuntimeInner = ({
       {children}
       <style jsx>
         {`
-        .canvas-runtime-stage {
-          background:
-            radial-gradient(
-              circle at 12% 18%,
-              rgba(34, 211, 238, 0.18),
-              transparent 55%
-            ),
-            radial-gradient(
-              circle at 88% 80%,
-              rgba(99, 102, 241, 0.18),
-              transparent 55%
-            ),
-            linear-gradient(180deg, #050816 0%, #0b1124 60%, #0a0f1f 100%);
-        }
-      `}
+          .canvas-runtime-stage {
+            background:
+              radial-gradient(
+                circle at 12% 18%,
+                rgba(34, 211, 238, 0.18),
+                transparent 55%
+              ),
+              radial-gradient(
+                circle at 88% 80%,
+                rgba(99, 102, 241, 0.18),
+                transparent 55%
+              ),
+              linear-gradient(180deg, #050816 0%, #0b1124 60%, #0a0f1f 100%);
+          }
+        `}
       </style>
     </div>
   )

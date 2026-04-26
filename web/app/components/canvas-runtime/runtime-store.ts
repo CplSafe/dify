@@ -136,6 +136,10 @@ type RuntimeState = {
   clearPause: (nodeId: string) => void
   signalRerunRunId: (runId: string) => void
   consumePendingRerunRunId: () => string | null
+  // Replace per-node positions in bulk. Used by the elk-layout effect
+  // in CanvasRuntimeInner to reflow the graph after each reveal so
+  // branches stack vertically instead of being crammed into one row.
+  relayoutNodes: (positions: Map<string, { x: number, y: number }>) => void
   reset: () => void
 }
 
@@ -480,6 +484,24 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     if (id)
       set({ pendingRerunRunId: null })
     return id
+  },
+
+  relayoutNodes: (positions) => {
+    const { nodes } = get()
+    let changed = false
+    const next: Record<string, RuntimeNode> = {}
+    for (const [id, n] of Object.entries(nodes)) {
+      const p = positions.get(id)
+      if (p && (p.x !== n.position.x || p.y !== n.position.y)) {
+        next[id] = { ...n, position: { x: p.x, y: p.y } }
+        changed = true
+      }
+      else {
+        next[id] = n
+      }
+    }
+    if (changed)
+      set({ nodes: next })
   },
 
   reset: () => set({ ..._initialState }),

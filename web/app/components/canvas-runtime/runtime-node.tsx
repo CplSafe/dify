@@ -30,15 +30,35 @@ import { useRuntimeStore } from './runtime-store'
 const NODE_W = 280
 const NODE_H = 224
 
-// Status drives a subtle left accent bar + the trailing badge icon.
-// Backgrounds stay panel-bg across the board so the canvas reads
-// uniformly; the eye picks out colour from the accent + icon pair.
+// Status drives the per-card neon accent. Card surface itself stays a
+// uniform glassy slate so the eye picks out activity from the colour
+// of the rim glow + status badge, not from card-to-card chrome drift.
 const STATUS_ACCENT: Record<NodeRuntimeStatus, string> = {
-  pending: 'bg-divider-regular',
-  running: 'bg-components-button-primary-bg',
-  succeeded: 'bg-text-success',
-  failed: 'bg-text-destructive',
-  paused: 'bg-text-warning-secondary',
+  pending: 'from-slate-500/20 to-slate-700/20',
+  running: 'from-cyan-400/60 to-indigo-500/60',
+  succeeded: 'from-emerald-400/55 to-cyan-400/55',
+  failed: 'from-rose-500/60 to-fuchsia-500/60',
+  paused: 'from-amber-400/55 to-orange-500/55',
+}
+
+const STATUS_GLOW: Record<NodeRuntimeStatus, string> = {
+  pending: 'shadow-[0_0_0_1px_rgba(148,163,184,0.18)]',
+  running:
+    'shadow-[0_0_0_1px_rgba(34,211,238,0.45),0_18px_55px_-15px_rgba(34,211,238,0.55)]',
+  succeeded:
+    'shadow-[0_0_0_1px_rgba(52,211,153,0.35),0_18px_55px_-20px_rgba(52,211,153,0.45)]',
+  failed:
+    'shadow-[0_0_0_1px_rgba(244,63,94,0.45),0_18px_55px_-15px_rgba(244,63,94,0.45)]',
+  paused:
+    'shadow-[0_0_0_1px_rgba(245,158,11,0.4),0_18px_55px_-15px_rgba(245,158,11,0.45)]',
+}
+
+const STATUS_TEXT: Record<NodeRuntimeStatus, string> = {
+  pending: 'text-slate-400',
+  running: 'text-cyan-300',
+  succeeded: 'text-emerald-300',
+  failed: 'text-rose-300',
+  paused: 'text-amber-300',
 }
 
 const STATUS_LABEL: Record<NodeRuntimeStatus, string> = {
@@ -51,23 +71,17 @@ const STATUS_LABEL: Record<NodeRuntimeStatus, string> = {
 
 const StatusBadge: FC<{ status: NodeRuntimeStatus }> = ({ status }) => {
   const cls = 'h-3.5 w-3.5 shrink-0'
-  if (status === 'running') {
-    return (
-      <RiLoader2Line className={cn(cls, 'animate-spin text-text-accent')} />
-    )
-  }
+  if (status === 'running')
+    return <RiLoader2Line className={cn(cls, 'animate-spin text-cyan-300')} />
   if (status === 'succeeded')
-    return <RiCheckboxCircleFill className={cn(cls, 'text-text-success')} />
+    return <RiCheckboxCircleFill className={cn(cls, 'text-emerald-300')} />
   if (status === 'failed')
-    return <RiErrorWarningFill className={cn(cls, 'text-text-destructive')} />
-  if (status === 'paused') {
-    return (
-      <RiPauseCircleFill className={cn(cls, 'text-text-warning-secondary')} />
-    )
-  }
+    return <RiErrorWarningFill className={cn(cls, 'text-rose-300')} />
+  if (status === 'paused')
+    return <RiPauseCircleFill className={cn(cls, 'text-amber-300')} />
   if (status === 'pending')
-    return <RiTimeLine className={cn(cls, 'text-text-quaternary')} />
-  return <RiAlertFill className={cn(cls, 'text-text-tertiary')} />
+    return <RiTimeLine className={cn(cls, 'text-slate-400')} />
+  return <RiAlertFill className={cn(cls, 'text-slate-400')} />
 }
 
 const _outputPreview = (outputs?: Record<string, unknown>): string => {
@@ -133,45 +147,80 @@ const RuntimeNodeComponent: FC<NodeProps<RuntimeNode>> = ({ data }) => {
   return (
     <div
       className={cn(
-        'group relative overflow-hidden rounded-2xl border border-divider-subtle bg-components-panel-bg shadow-sm transition-shadow hover:shadow-md',
+        'group relative overflow-hidden rounded-2xl backdrop-blur-xl transition-all duration-300',
+        'bg-gradient-to-br from-slate-900/85 via-slate-950/85 to-slate-900/85',
+        'hover:-translate-y-0.5',
+        STATUS_GLOW[data.status],
+        data.status === 'running' && 'runtime-node-pulse',
       )}
       style={{ width: NODE_W, minHeight: NODE_H }}
       data-testid={`runtime-node-${data.id}`}
       data-status={data.status}
     >
-      {/* status accent bar on the left */}
+      {/* Neon rim — gradient stroke implemented as a translucent
+          inset border + a coloured glow halo defined in STATUS_GLOW. */}
       <span
         aria-hidden
         className={cn(
-          'absolute top-0 bottom-0 left-0 w-1',
+          'inset-0 pointer-events-none absolute rounded-2xl bg-gradient-to-br opacity-90',
           STATUS_ACCENT[data.status],
         )}
+        style={{
+          mask: 'linear-gradient(#000, #000) content-box, linear-gradient(#000, #000)',
+          maskComposite: 'exclude',
+          WebkitMask:
+            'linear-gradient(#000, #000) content-box, linear-gradient(#000, #000)',
+          WebkitMaskComposite: 'xor',
+          padding: 1,
+        }}
+      />
+
+      {/* Faint scanline texture for that "agent runtime" terminal feel. */}
+      <span
+        aria-hidden
+        className="inset-0 pointer-events-none absolute rounded-2xl opacity-[0.07]"
+        style={{
+          backgroundImage:
+            'repeating-linear-gradient(0deg, rgba(148,163,184,0.6) 0 1px, transparent 1px 3px)',
+        }}
       />
 
       <Handle
         type="target"
         position={Position.Left}
-        className="!h-2 !w-2 !bg-divider-regular"
+        className="!h-2.5 !w-2.5 !rounded-full !border !border-cyan-300/60 !bg-slate-900 !shadow-[0_0_10px_rgba(34,211,238,0.6)]"
       />
 
-      <div className="flex h-full flex-col gap-2 px-3 py-2.5 pl-4">
-        <div className="flex items-center gap-2">
-          <BlockIcon
-            size="sm"
-            type={data.type as BlockEnum}
-            className="shrink-0"
-          />
+      <div className="relative flex h-full flex-col gap-2 px-3.5 py-3">
+        <div className="flex items-center gap-2.5">
+          <div
+            className={cn(
+              'flex size-8 shrink-0 items-center justify-center rounded-xl border border-white/5 bg-slate-900/80',
+              'shadow-[inset_0_0_12px_rgba(34,211,238,0.18)]',
+            )}
+          >
+            <BlockIcon
+              size="sm"
+              type={data.type as BlockEnum}
+              className="shrink-0"
+            />
+          </div>
           <div className="min-w-0 grow">
-            <div className="truncate system-sm-semibold text-text-primary">
+            <div className="truncate system-sm-semibold text-slate-50">
               {data.title || data.id}
             </div>
-            <div className="truncate system-2xs-regular text-text-tertiary">
+            <div className="truncate system-2xs-regular tracking-wider text-slate-400 uppercase">
               {data.type}
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/5 bg-slate-950/60 px-2 py-0.5">
             <StatusBadge status={data.status} />
-            <span className="system-2xs-regular text-text-tertiary">
+            <span
+              className={cn(
+                'system-2xs-medium tracking-wider uppercase',
+                STATUS_TEXT[data.status],
+              )}
+            >
               {STATUS_LABEL[data.status]}
             </span>
           </div>
@@ -181,7 +230,7 @@ const RuntimeNodeComponent: FC<NodeProps<RuntimeNode>> = ({ data }) => {
           <div
             className={cn(
               'line-clamp-2 system-xs-regular',
-              data.error ? 'text-text-destructive' : 'text-text-secondary',
+              data.error ? 'text-rose-300' : 'text-slate-300',
             )}
           >
             {summary}
@@ -215,8 +264,29 @@ const RuntimeNodeComponent: FC<NodeProps<RuntimeNode>> = ({ data }) => {
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-2 !w-2 !bg-divider-regular"
+        className="!h-2.5 !w-2.5 !rounded-full !border !border-cyan-300/60 !bg-slate-900 !shadow-[0_0_10px_rgba(34,211,238,0.6)]"
       />
+
+      <style jsx>
+        {`
+          :global(.runtime-node-pulse) {
+            animation: runtimeNodePulse 1.6s ease-in-out infinite;
+          }
+          @keyframes runtimeNodePulse {
+            0%,
+            100% {
+              box-shadow:
+                0 0 0 1px rgba(34, 211, 238, 0.45),
+                0 18px 55px -15px rgba(34, 211, 238, 0.55);
+            }
+            50% {
+              box-shadow:
+                0 0 0 1px rgba(99, 102, 241, 0.55),
+                0 22px 65px -10px rgba(99, 102, 241, 0.7);
+            }
+          }
+        `}
+      </style>
     </div>
   )
 }

@@ -10,6 +10,7 @@ import ReactFlow, {
   ReactFlowProvider,
 } from 'reactflow'
 import { RuntimeContext } from './runtime-context'
+import RuntimeEdge from './runtime-edge'
 import RuntimeNodeComponent from './runtime-node'
 import { useRuntimeStore } from './runtime-store'
 import RuntimeToolbar from './toolbar'
@@ -17,6 +18,10 @@ import 'reactflow/dist/style.css'
 
 const NODE_TYPES = {
   runtime: RuntimeNodeComponent,
+}
+
+const EDGE_TYPES = {
+  runtime: RuntimeEdge,
 }
 
 type CanvasRuntimeProps = {
@@ -75,21 +80,29 @@ const CanvasRuntimeInner = ({
         target: e.target,
         sourceHandle: e.sourceHandle,
         targetHandle: e.targetHandle,
-        type: 'smoothstep',
-        animated: storeNodes[e.target]?.status === 'running',
+        // Custom edge owns its own gradient + flow animation, so the
+        // built-in `animated` flag is no longer needed (and would draw
+        // a second dashed overlay on top of ours).
+        type: 'runtime',
       })),
-    [storeEdges, storeNodes],
+    [storeEdges],
   )
 
   // Drive ReactFlow directly off the projected store output. ReactFlow
   // accepts controlled `nodes` / `edges` props and we don't need any of
   // its internal change tracking (no drag, no connect, no delete).
+  //
+  // Outer wrapper paints a deep tech-y backdrop:
+  //   - vertical gradient from near-black to slate
+  //   - subtle radial cyan/indigo glows in the corners ("data centre" vibe)
+  // ReactFlow's <Background> dots are recoloured via CSS to match.
   return (
-    <div className="relative h-full w-full">
+    <div className="canvas-runtime-stage relative h-full w-full overflow-hidden">
       <ReactFlow
         nodes={reactFlowNodes}
         edges={reactFlowEdges}
         nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
         fitView
         fitViewOptions={{ padding: 0.4 }}
         nodesDraggable={false}
@@ -99,15 +112,40 @@ const CanvasRuntimeInner = ({
         multiSelectionKeyCode={null}
         proOptions={{ hideAttribution: true }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={20}
+          size={1.2}
+          color="rgba(148, 163, 184, 0.18)"
+        />
         <MiniMap
           pannable
           zoomable
-          className="!right-4 !bottom-32 !rounded-lg !border !border-components-panel-border !bg-components-panel-bg !shadow-md"
+          maskColor="rgba(15, 23, 42, 0.6)"
+          nodeColor="#22d3ee"
+          className="!right-4 !bottom-32 !rounded-xl !border !border-cyan-400/20 !bg-slate-950/70 !shadow-lg !shadow-cyan-500/10 !backdrop-blur"
         />
       </ReactFlow>
       <RuntimeToolbar onSave={onSave} saveDisabled={saveDisabled} />
       {children}
+      <style jsx>
+        {`
+        .canvas-runtime-stage {
+          background:
+            radial-gradient(
+              circle at 12% 18%,
+              rgba(34, 211, 238, 0.18),
+              transparent 55%
+            ),
+            radial-gradient(
+              circle at 88% 80%,
+              rgba(99, 102, 241, 0.18),
+              transparent 55%
+            ),
+            linear-gradient(180deg, #050816 0%, #0b1124 60%, #0a0f1f 100%);
+        }
+      `}
+      </style>
     </div>
   )
 }

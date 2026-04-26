@@ -97,6 +97,7 @@ RESOURCE_MODULES = (
     "controllers.console.explore.conversation",
     "controllers.console.explore.message",
     "controllers.console.explore.workflow",
+    "controllers.console.explore.workflow_rerun",
     "controllers.console.files",
     "controllers.console.remote_files",
 )
@@ -196,6 +197,9 @@ from .explore import (
     saved_message,
     trial,
 )
+from .explore import (
+    workflow_rerun as explore_workflow_rerun,
+)
 
 # Import social-publish controllers (P1: account management; P2: publish tasks)
 from .social_publish import accounts as social_publish_accounts
@@ -254,6 +258,7 @@ __all__ = [
     "datasource_content_preview",
     "email_register",
     "endpoint",
+    "explore_workflow_rerun",
     "extension",
     "external",
     "feature",

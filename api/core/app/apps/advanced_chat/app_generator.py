@@ -269,6 +269,43 @@ class AdvancedChatAppGenerator(MessageBasedAppGenerator):
             graph_runtime_state=graph_runtime_state,
         )
 
+    def rerun_from_node(
+        self,
+        *,
+        app_model: App,
+        workflow: Workflow,
+        user: Account | EndUser,
+        conversation: Conversation,
+        message: Message,
+        application_generate_entity: AdvancedChatAppGenerateEntity,
+        workflow_execution_repository: WorkflowExecutionRepository,
+        workflow_node_execution_repository: WorkflowNodeExecutionRepository,
+        graph_runtime_state: GraphRuntimeState,
+    ):
+        """CR10 entry point: rerun a *terminated* chatflow from an arbitrary
+        completed node.
+
+        Differs from `resume()` in only one way: the source run was already
+        succeeded/failed/stopped (no `WorkflowPause` row), so we don't pass
+        a `pause_state_config`. The caller is expected to have:
+          1. populated `application_generate_entity.rerun_start_node_id`
+             (so `AdvancedChatAppRunner` enters the graph at that node), and
+          2. seeded `graph_runtime_state.variable_pool` with the ancestor
+             outputs computed by `WorkflowRerunService.prepare`.
+        """
+        return self._generate(
+            workflow=workflow,
+            user=user,
+            invoke_from=application_generate_entity.invoke_from,
+            application_generate_entity=application_generate_entity,
+            workflow_execution_repository=workflow_execution_repository,
+            workflow_node_execution_repository=workflow_node_execution_repository,
+            conversation=conversation,
+            message=message,
+            stream=application_generate_entity.stream,
+            graph_runtime_state=graph_runtime_state,
+        )
+
     def single_iteration_generate(
         self,
         app_model: App,

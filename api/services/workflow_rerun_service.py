@@ -262,19 +262,24 @@ class WorkflowRerunService:
         plan: RerunPlan,
         actor_id: str,
     ) -> str:
-        """Resume a paused chatflow from `plan.start_node_id`.
+        """Resume / rerun a chatflow from `plan.start_node_id`.
 
-        CR1 wiring: the chatflow is expected to already be in `paused`
-        state (UserEditPauseLayer halted it after the rewind node
-        finished). FIX2: before kicking off the celery resume task we
-        splice any pending overrides for the rewind node into the
-        serialized `WorkflowResumptionContext` so that when the engine
-        rehydrates `GraphRuntimeState`, the variable_pool already
-        reflects the user's edits. Without this, the modal's
-        "保存并准备重跑" was a no-op — the run would just resume on the
-        original outputs.
+        Two code paths, picked by the source run's status:
 
-        Returns the workflow_run_id that was resumed.
+        * **paused** — the original `UserEditPauseLayer` halted the run
+          after the rewind node and left a `WorkflowPause` row. We splice
+          overrides into its serialized state and let the existing celery
+          `resume_app_execution` continue execution.
+        * **succeeded / failed / stopped** — no pause row exists. We
+          synthesize a fresh `GraphRuntimeState` whose `variable_pool` is
+          seeded from the plan's ancestor outputs (with overrides
+          applied), then enqueue the new `rerun_app_execution` celery
+          task which spins up a fresh chatflow run rooted at
+          `plan.start_node_id`.
+
+        Returns the workflow_run_id that was resumed (paused path) or
+        the source run id (terminated path — the new run id is generated
+        asynchronously inside the celery worker).
         """
         # Local imports to avoid circular dependency with the human input
         # service (which imports celery tasks that import models).
@@ -282,37 +287,94 @@ class WorkflowRerunService:
 
         from services.human_input_service import HumanInputService
 
+        run_status = cls._load_run_status(plan.source_run_id)
+
         with _message_rerun_lock(plan.source_message_id):
             logger.info(
-                "chatflow_rerun_dispatch invoked: message=%s run=%s "
+                "chatflow_rerun_dispatch invoked: message=%s run=%s status=%s "
                 "rewind_node=%s start_node=%s ancestors=%d overrides=%d actor=%s",
                 plan.source_message_id,
                 plan.source_run_id,
+                run_status,
                 plan.rewind_node_id,
                 plan.start_node_id,
                 len(plan.ancestor_outputs),
                 len(plan.overrides_applied),
                 actor_id,
             )
-            # FIX7: input overrides require re-executing the edited node,
-            # but paused-resume continues *after* the pause point so the
-            # edit would never reach the node that owns it. Reject early
-            # with a clear message instead of silently corrupting state.
-            if plan.rewind_kind == WorkflowRerunOverrideKind.INPUT.value:
-                raise RerunPausedMismatchError(
-                    "input-kind overrides cannot be applied to a paused run "
-                    "via resume; edit the node's output instead, or wait for "
-                    "the run to fully terminate before rerunning"
-                )
-            # FIX7: also confirm the rewind node is actually the one the
-            # engine paused on. Without this, dispatch would splice the
-            # override at the requested selector but resume from a different
-            # node, putting the override in the wrong place.
-            cls._verify_rewind_matches_paused_node(plan)
-            cls._apply_overrides_to_paused_state(plan)
-            session_factory = sessionmaker(bind=db.engine, expire_on_commit=False)
-            HumanInputService(session_factory=session_factory).enqueue_resume(plan.source_run_id)
+
+            if run_status == "paused":
+                # FIX7: input overrides require re-executing the edited node,
+                # but paused-resume continues *after* the pause point so the
+                # edit would never reach the node that owns it. Reject early
+                # with a clear message instead of silently corrupting state.
+                if plan.rewind_kind == WorkflowRerunOverrideKind.INPUT.value:
+                    raise RerunPausedMismatchError(
+                        "input-kind overrides cannot be applied to a paused run "
+                        "via resume; edit the node's output instead, or wait for "
+                        "the run to fully terminate before rerunning"
+                    )
+                cls._verify_rewind_matches_paused_node(plan)
+                cls._apply_overrides_to_paused_state(plan)
+                session_factory = sessionmaker(bind=db.engine, expire_on_commit=False)
+                HumanInputService(session_factory=session_factory).enqueue_resume(plan.source_run_id)
+                return plan.source_run_id
+
+            # Terminated path — fresh run rooted at plan.start_node_id.
+            cls._dispatch_terminated_rerun(plan=plan, actor_id=actor_id)
             return plan.source_run_id
+
+    @classmethod
+    def _load_run_status(cls, run_id: str) -> str:
+        run = db.session.execute(
+            select(WorkflowRun).where(WorkflowRun.id == run_id)
+        ).scalar_one_or_none()
+        if run is None:
+            raise RerunValidationError(f"workflow_run {run_id!r} not found")
+        return str(run.status)
+
+    @classmethod
+    def _dispatch_terminated_rerun(cls, *, plan: RerunPlan, actor_id: str) -> None:
+        """Enqueue the celery `rerun_app_execution` task for a terminated run.
+
+        The task itself reconstructs the full execution context from the
+        plan: it loads the workflow + source message, builds a fresh
+        AdvancedChatAppGenerateEntity carrying `rerun_start_node_id`,
+        seeds a new GraphRuntimeState from `ancestor_outputs`, and runs
+        the chatflow. Doing the heavy lifting in celery (rather than
+        inline here) matches the paused-resume path and keeps the HTTP
+        request fast.
+        """
+        # Local import — celery tasks pull in models which would otherwise
+        # cycle back through services on module load.
+        from tasks.app_generate import rerun_app_execution
+
+        # Pre-resolve start_node_id: when the user edits the rewind
+        # node's INPUT, the engine must re-execute that node itself
+        # (start_node_id == rewind_node_id is already set by `prepare`).
+        # When the user edits the OUTPUT of a leaf, `prepare` left
+        # start_node_id == "" — that's a no-op rerun and should be
+        # rejected here rather than enqueued.
+        if not plan.start_node_id:
+            raise RerunValidationError(
+                "cannot rerun a terminated run from a leaf node's output "
+                "with no downstream — the edit would not affect any further node"
+            )
+
+        payload = {
+            "source_message_id": plan.source_message_id,
+            "source_run_id": plan.source_run_id,
+            "workflow_id": plan.workflow_id,
+            "start_node_id": plan.start_node_id,
+            "rewind_node_id": plan.rewind_node_id,
+            "rewind_kind": plan.rewind_kind,
+            "ancestor_outputs": {
+                node_id: dict(outputs) for node_id, outputs in plan.ancestor_outputs.items()
+            },
+            "overrides_applied": plan.overrides_applied,
+            "actor_id": actor_id,
+        }
+        rerun_app_execution.delay(payload)
 
     @classmethod
     def _verify_rewind_matches_paused_node(cls, plan: RerunPlan) -> None:

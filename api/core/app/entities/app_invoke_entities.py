@@ -231,6 +231,12 @@ class AdvancedChatAppGenerateEntity(ConversationAppGenerateEntity):
 
     single_loop_run: SingleLoopRunEntity | None = None
 
+    # CR10: when set, the runner skips moderation/annotation/start-node setup
+    # and instead initialises the graph rooted at this node, expecting the
+    # caller to supply a pre-seeded GraphRuntimeState whose variable_pool
+    # already carries the ancestor outputs of the target node.
+    rerun_start_node_id: str | None = None
+
 
 class WorkflowAppGenerateEntity(AppGenerateEntity):
     """

@@ -118,10 +118,14 @@ class AdvancedChatAppRunner(WorkflowBasedAppRunner):
         user_from = self._resolve_user_from(invoke_from)
 
         resume_state = self._resume_graph_runtime_state
+        rerun_start_node_id = self.application_generate_entity.rerun_start_node_id
 
         if resume_state is not None:
             graph_runtime_state = resume_state
             variable_pool = graph_runtime_state.variable_pool
+            # CR10: a terminated-run rerun supplies both a pre-seeded runtime
+            # state AND the node to start from. The default-root behaviour is
+            # wrong here — we must enter the graph at the user's chosen node.
             graph = self._init_graph(
                 graph_config=self._workflow.graph_dict,
                 graph_runtime_state=graph_runtime_state,
@@ -130,6 +134,7 @@ class AdvancedChatAppRunner(WorkflowBasedAppRunner):
                 user_id=self.application_generate_entity.user_id,
                 invoke_from=invoke_from,
                 user_from=user_from,
+                root_node_id=rerun_start_node_id,
             )
         elif self.application_generate_entity.single_iteration_run or self.application_generate_entity.single_loop_run:
             # Handle single iteration or single loop run

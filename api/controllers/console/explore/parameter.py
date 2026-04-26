@@ -86,6 +86,12 @@ class InstalledAppRuntimeGraphApi(InstalledAppResource):
                         "show_in_canvas_runtime": data.get(
                             "show_in_canvas_runtime", True
                         ),
+                        # CR10: surface per-node "allow user edit" toggles
+                        # so the canvas-runtime UI knows when to render the
+                        # 重跑 trigger on completed nodes. Defaults to false
+                        # — author must opt the node in via the workflow editor.
+                        "allow_user_edit_input": bool(data.get("allow_user_edit_input")),
+                        "allow_user_edit_output": bool(data.get("allow_user_edit_output")),
                     },
                 }
             )

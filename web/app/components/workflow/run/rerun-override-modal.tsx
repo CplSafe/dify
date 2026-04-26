@@ -20,6 +20,29 @@ import {
   upsertChatflowRerunOverride,
 } from '@/service/debug'
 
+// Surface the four endpoints the modal needs. Default impl points at the
+// admin `/console/api/apps/...` routes; CR10's canvas runtime injects an
+// `installed-apps`-scoped impl so end-users can rerun without admin perms.
+export type RerunOverrideApi = {
+  upsertOverride: (args: {
+    nodeId: string
+    kind: ChatflowRerunKind
+    data: Record<string, unknown>
+  }) => Promise<unknown>
+  prepare: (args: {
+    nodeId: string
+    kind: ChatflowRerunKind
+  }) => Promise<unknown>
+  dispatch: (args: {
+    nodeId: string
+    kind: ChatflowRerunKind
+  }) => Promise<unknown>
+  deleteOverride: (args: {
+    nodeId: string
+    kind: ChatflowRerunKind
+  }) => Promise<unknown>
+}
+
 type RerunOverrideModalProps = {
   open: boolean
   appId: string
@@ -37,6 +60,10 @@ type RerunOverrideModalProps = {
     kind: ChatflowRerunKind
     data: Record<string, unknown>
   }) => void
+  // CR10: when omitted, falls back to the admin `/console/api/apps/...`
+  // service helpers. Canvas runtime supplies an installed-apps scoped impl
+  // so creators don't need console-app permissions.
+  api?: RerunOverrideApi
 }
 
 const stringifyForEditor = (value: Record<string, unknown>) => {
@@ -74,7 +101,36 @@ const RerunOverrideModal: FC<RerunOverrideModalProps> = ({
   initialData,
   onClose,
   onConfirmed,
+  api,
 }) => {
+  // Default the api to the admin (`/console/api/apps/...`) endpoints so
+  // existing call-sites keep working unchanged.
+  const effectiveApi: RerunOverrideApi = useMemo(
+    () =>
+      api ?? {
+        upsertOverride: ({ nodeId: nid, kind: k, data }) =>
+          upsertChatflowRerunOverride({
+            appId,
+            messageId,
+            nodeId: nid,
+            kind: k,
+            data,
+          }),
+        prepare: ({ nodeId: nid, kind: k }) =>
+          prepareChatflowRerun({ appId, messageId, nodeId: nid, kind: k }),
+        dispatch: ({ nodeId: nid, kind: k }) =>
+          dispatchChatflowRerun({ appId, messageId, nodeId: nid, kind: k }),
+        deleteOverride: ({ nodeId: nid, kind: k }) =>
+          deleteChatflowRerunOverride({
+            appId,
+            messageId,
+            nodeId: nid,
+            kind: k,
+          }),
+      },
+    [api, appId, messageId],
+  )
+
   const initialText = useMemo(
     () => stringifyForEditor(initialData),
     [initialData],
@@ -110,19 +166,13 @@ const RerunOverrideModal: FC<RerunOverrideModalProps> = ({
 
     setSubmitting(true)
     try {
-      await upsertChatflowRerunOverride({
-        appId,
-        messageId,
-        nodeId,
-        kind,
-        data: parsed,
-      })
+      await effectiveApi.upsertOverride({ nodeId, kind, data: parsed })
       // Validate the rerun plan first — surfaces loop/permission errors
       // before we hit dispatch.
-      await prepareChatflowRerun({ appId, messageId, nodeId, kind })
+      await effectiveApi.prepare({ nodeId, kind })
       // CR1: dispatch resumes the paused chatflow run via celery; the
       // engine continues from the editable node onward.
-      await dispatchChatflowRerun({ appId, messageId, nodeId, kind })
+      await effectiveApi.dispatch({ nodeId, kind })
       onConfirmed?.({ nodeId, kind, data: parsed })
       onClose()
     }
@@ -132,13 +182,13 @@ const RerunOverrideModal: FC<RerunOverrideModalProps> = ({
     finally {
       setSubmitting(false)
     }
-  }, [appId, messageId, nodeId, kind, text, onConfirmed, onClose])
+  }, [effectiveApi, nodeId, kind, text, onConfirmed, onClose])
 
   const handleReset = useCallback(async () => {
     setError(null)
     setResetting(true)
     try {
-      await deleteChatflowRerunOverride({ appId, messageId, nodeId, kind })
+      await effectiveApi.deleteOverride({ nodeId, kind })
       setText(initialText)
     }
     catch (e: unknown) {
@@ -147,7 +197,7 @@ const RerunOverrideModal: FC<RerunOverrideModalProps> = ({
     finally {
       setResetting(false)
     }
-  }, [appId, messageId, nodeId, kind, initialText])
+  }, [effectiveApi, nodeId, kind, initialText])
 
   const title
     = kind === 'input'

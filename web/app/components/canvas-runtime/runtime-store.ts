@@ -149,7 +149,8 @@ const _initialState = {
 // Lay nodes out left-to-right by their reveal order. The real workflow
 // editor uses dagre — for the runtime a simple offset is enough until
 // users ask for branching layouts.
-const _nodeOffset = 240
+// Matches runtime-node NODE_W (260) + ~40px gap so cards never overlap.
+const _nodeOffset = 300
 const _nodeY = 0
 
 // CR9: a node is hidden from the canvas runtime when its draft graph

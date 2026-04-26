@@ -2105,6 +2105,17 @@ class WorkflowRerunOverride(Base):
         sa.PrimaryKeyConstraint("id", name="workflow_rerun_override_pkey"),
         sa.Index("workflow_rerun_override_message_node_idx", "message_id", "node_id"),
         sa.Index("workflow_rerun_override_run_idx", "workflow_run_id"),
+        # CR10 review fix: at most one override row per (message, node, kind)
+        # so concurrent saves can't produce silent duplicates. The atomic
+        # upsert in `WorkflowRerunService.upsert_override` relies on this
+        # via PostgreSQL's INSERT ... ON CONFLICT.
+        sa.Index(
+            "workflow_rerun_override_message_node_kind_uq",
+            "message_id",
+            "node_id",
+            "override_kind",
+            unique=True,
+        ),
     )
 
     id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()))

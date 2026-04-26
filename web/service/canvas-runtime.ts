@@ -115,3 +115,15 @@ export const deleteCanvasRerunOverride = (
     ),
   )
 }
+
+// CR10 review fix: creator-side "继续" was pointing at the admin
+// `/apps/.../resume-from` route, which requires console-app permissions
+// the canvas-runtime user doesn't have. Use the installed-apps mirror
+// instead; default kind='output' matches the user-facing semantics
+// (paused node's output is fine — advance to the next node).
+export const resumeCanvasFromNode = (
+  args: RerunArgs & { kind?: ChatflowRerunKind },
+) =>
+  post(messagePath(args, `resume-from/${encodeURIComponent(args.nodeId)}`), {
+    body: args.kind ? { kind: args.kind } : {},
+  })

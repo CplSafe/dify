@@ -33,10 +33,15 @@ export type RerunOverrideApi = {
     nodeId: string
     kind: ChatflowRerunKind
   }) => Promise<unknown>
+  // CR10 review fix: dispatch returns the *new* workflow_run_id for
+  // terminated reruns so the caller can re-subscribe to its SSE topic.
+  // Paused reruns reuse the original run id (already streaming) and
+  // backends may also return that — either way callers should treat
+  // the value as opaque "subscribe here for events".
   dispatch: (args: {
     nodeId: string
     kind: ChatflowRerunKind
-  }) => Promise<unknown>
+  }) => Promise<{ workflow_run_id?: string, status?: string } | unknown>
   deleteOverride: (args: {
     nodeId: string
     kind: ChatflowRerunKind
@@ -59,6 +64,10 @@ type RerunOverrideModalProps = {
     nodeId: string
     kind: ChatflowRerunKind
     data: Record<string, unknown>
+    // CR10 review fix: terminated reruns produce a fresh workflow_run_id
+    // that the canvas runtime needs to subscribe to (the original SSE
+    // topic is closed). Optional so admin callers can ignore it.
+    workflowRunId?: string
   }) => void
   // CR10: when omitted, falls back to the admin `/console/api/apps/...`
   // service helpers. Canvas runtime supplies an installed-apps scoped impl
@@ -172,8 +181,15 @@ const RerunOverrideModal: FC<RerunOverrideModalProps> = ({
       await effectiveApi.prepare({ nodeId, kind })
       // CR1: dispatch resumes the paused chatflow run via celery; the
       // engine continues from the editable node onward.
-      await effectiveApi.dispatch({ nodeId, kind })
-      onConfirmed?.({ nodeId, kind, data: parsed })
+      const dispatchResult = (await effectiveApi.dispatch({ nodeId, kind })) as
+        | { workflow_run_id?: string }
+        | undefined
+      onConfirmed?.({
+        nodeId,
+        kind,
+        data: parsed,
+        workflowRunId: dispatchResult?.workflow_run_id,
+      })
       onClose()
     }
     catch (e: unknown) {

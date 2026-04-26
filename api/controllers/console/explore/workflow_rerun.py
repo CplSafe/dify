@@ -65,7 +65,7 @@ class InstalledAppRerunPrepareApi(InstalledAppResource):
 
         try:
             plan = WorkflowRerunService.prepare(
-                tenant_id=str(app_model.tenant_id),
+                tenant_id=str(installed_app.tenant_id),
                 app_id=str(app_model.id),
                 message_id=str(message_id),
                 rewind_node_id=node_id,
@@ -101,7 +101,7 @@ class InstalledAppRerunOverridesApi(InstalledAppResource):
         app_model = _require_chatflow_app(installed_app)
         try:
             rows = WorkflowRerunService.list_overrides(
-                tenant_id=str(app_model.tenant_id),
+                tenant_id=str(installed_app.tenant_id),
                 app_id=str(app_model.id),
                 message_id=str(message_id),
             )
@@ -128,7 +128,7 @@ class InstalledAppRerunOverridesApi(InstalledAppResource):
 
         try:
             override = WorkflowRerunService.upsert_override(
-                tenant_id=str(app_model.tenant_id),
+                tenant_id=str(installed_app.tenant_id),
                 app_id=str(app_model.id),
                 message_id=str(message_id),
                 node_id=node_id,
@@ -164,7 +164,7 @@ class InstalledAppRerunDispatchApi(InstalledAppResource):
 
         try:
             plan = WorkflowRerunService.prepare(
-                tenant_id=str(app_model.tenant_id),
+                tenant_id=str(installed_app.tenant_id),
                 app_id=str(app_model.id),
                 message_id=str(message_id),
                 rewind_node_id=node_id,
@@ -188,6 +188,49 @@ class InstalledAppRerunDispatchApi(InstalledAppResource):
 
 
 @console_ns.route(
+    "/installed-apps/<uuid:installed_app_id>/messages/<uuid:message_id>/resume-from/<string:node_id>",
+    endpoint="installed_app_resume_from_node",
+)
+class InstalledAppResumeFromNodeApi(InstalledAppResource):
+    """Resume a paused chatflow without applying any new override.
+
+    Mirrors the admin `/apps/<id>/messages/<mid>/resume-from/<nid>` endpoint
+    so the canvas-runtime "继续" CTA doesn't have to call into a console-app
+    route. Default kind is 'output' — the user is signalling that the paused
+    node's output is fine and execution should advance to the next node.
+    """
+
+    def post(self, installed_app: InstalledApp, message_id, node_id):
+        app_model = _require_chatflow_app(installed_app)
+        body = request.get_json(silent=True) or {}
+        kind = (body.get("kind") or "output").strip()
+
+        try:
+            plan = WorkflowRerunService.prepare(
+                tenant_id=str(installed_app.tenant_id),
+                app_id=str(app_model.id),
+                message_id=str(message_id),
+                rewind_node_id=node_id,
+                rewind_kind=kind,
+            )
+        except RerunValidationError as exc:
+            return {"error": str(exc)}, 400
+
+        try:
+            workflow_run_id = WorkflowRerunService.dispatch(
+                plan=plan, actor_id=str(current_user.id)
+            )
+        except RerunBusyError as exc:
+            return {"error": str(exc), "code": "rerun_busy"}, 409
+        except RerunPausedMismatchError as exc:
+            return {"error": str(exc), "code": "rerun_paused_mismatch"}, 400
+        except RerunValidationError as exc:
+            return {"error": str(exc)}, 400
+
+        return {"status": "resumed", "workflow_run_id": workflow_run_id}, 200
+
+
+@console_ns.route(
     "/installed-apps/<uuid:installed_app_id>/messages/<uuid:message_id>/rerun-overrides/<string:node_id>",
     endpoint="installed_app_rerun_override_item",
 )
@@ -203,7 +246,7 @@ class InstalledAppRerunOverrideItemApi(InstalledAppResource):
 
         try:
             deleted = WorkflowRerunService.delete_override(
-                tenant_id=str(app_model.tenant_id),
+                tenant_id=str(installed_app.tenant_id),
                 app_id=str(app_model.id),
                 message_id=str(message_id),
                 node_id=node_id,

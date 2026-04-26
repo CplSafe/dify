@@ -318,11 +318,15 @@ class WorkflowRerunService:
                 cls._apply_overrides_to_paused_state(plan)
                 session_factory = sessionmaker(bind=db.engine, expire_on_commit=False)
                 HumanInputService(session_factory=session_factory).enqueue_resume(plan.source_run_id)
+                # Paused resume keeps the same run id — UI's existing
+                # subscription continues to receive events.
                 return plan.source_run_id
 
-            # Terminated path — fresh run rooted at plan.start_node_id.
-            cls._dispatch_terminated_rerun(plan=plan, actor_id=actor_id)
-            return plan.source_run_id
+            # Terminated path — fresh run rooted at plan.start_node_id. The
+            # service allocates the new run id here (rather than letting the
+            # celery worker invent one) so the HTTP caller can return it to
+            # the UI for the new SSE subscription.
+            return cls._dispatch_terminated_rerun(plan=plan, actor_id=actor_id)
 
     @classmethod
     def _load_run_status(cls, run_id: str) -> str:
@@ -334,19 +338,18 @@ class WorkflowRerunService:
         return str(run.status)
 
     @classmethod
-    def _dispatch_terminated_rerun(cls, *, plan: RerunPlan, actor_id: str) -> None:
+    def _dispatch_terminated_rerun(cls, *, plan: RerunPlan, actor_id: str) -> str:
         """Enqueue the celery `rerun_app_execution` task for a terminated run.
 
-        The task itself reconstructs the full execution context from the
-        plan: it loads the workflow + source message, builds a fresh
-        AdvancedChatAppGenerateEntity carrying `rerun_start_node_id`,
-        seeds a new GraphRuntimeState from `ancestor_outputs`, and runs
-        the chatflow. Doing the heavy lifting in celery (rather than
-        inline here) matches the paused-resume path and keeps the HTTP
-        request fast.
+        Returns the freshly-allocated `workflow_run_id` for the rerun so
+        the controller can return it to the UI (which uses it to open a
+        new SSE subscription — terminated runs have already closed
+        theirs).
         """
         # Local import — celery tasks pull in models which would otherwise
         # cycle back through services on module load.
+        import uuid
+
         from tasks.app_generate import rerun_app_execution
 
         # Pre-resolve start_node_id: when the user edits the rewind
@@ -361,6 +364,7 @@ class WorkflowRerunService:
                 "with no downstream — the edit would not affect any further node"
             )
 
+        new_run_id = str(uuid.uuid4())
         payload = {
             "source_message_id": plan.source_message_id,
             "source_run_id": plan.source_run_id,
@@ -373,8 +377,10 @@ class WorkflowRerunService:
             },
             "overrides_applied": plan.overrides_applied,
             "actor_id": actor_id,
+            "new_run_id": new_run_id,
         }
         rerun_app_execution.delay(payload)
+        return new_run_id
 
     @classmethod
     def _verify_rewind_matches_paused_node(cls, plan: RerunPlan) -> None:
@@ -447,30 +453,38 @@ class WorkflowRerunService:
             select(WorkflowPause).where(WorkflowPause.workflow_run_id == plan.source_run_id)
         ).scalar_one_or_none()
         if pause_row is None:
-            logger.warning(
-                "no WorkflowPause row for run %s — skipping override splice",
-                plan.source_run_id,
+            # CR10 review fix: a missing pause row when overrides exist means
+            # the splice can't possibly take effect. Surfacing as a 4xx beats
+            # silently dispatching a resume that ignores the user's edits.
+            raise RerunPausedMismatchError(
+                f"no WorkflowPause row for run {plan.source_run_id!r}; "
+                "cannot apply override edits — please reload and try again"
             )
-            return
 
         try:
             raw = storage.load(pause_row.state_object_key)
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "failed to load paused state for run %s",
                 plan.source_run_id,
             )
-            return
+            raise RerunPausedMismatchError(
+                "could not load paused state for override splice; "
+                "the rerun was NOT dispatched"
+            ) from exc
 
         try:
             context = WorkflowResumptionContext.loads(raw.decode())
             state = GraphRuntimeState.from_snapshot(context.serialized_graph_runtime_state)
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "failed to deserialize paused state for run %s",
                 plan.source_run_id,
             )
-            return
+            raise RerunPausedMismatchError(
+                "paused state is corrupt or incompatible; "
+                "the rerun was NOT dispatched"
+            ) from exc
 
         # Apply each override onto the variable_pool. Output overrides
         # write to (node_id, key); input overrides also write to the
@@ -493,12 +507,15 @@ class WorkflowRerunService:
         )
         try:
             storage.save(pause_row.state_object_key, new_context.dumps().encode())
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "failed to persist override-spliced state for run %s",
                 plan.source_run_id,
             )
-            return
+            raise RerunPausedMismatchError(
+                "could not persist override edits onto paused state; "
+                "the rerun was NOT dispatched"
+            ) from exc
 
         logger.info(
             "spliced %d override variable(s) into paused state for run %s",
@@ -583,15 +600,15 @@ class WorkflowRerunService:
             kind=kind,
         )
 
-        existing = db.session.execute(
-            select(WorkflowRerunOverride)
-            .where(WorkflowRerunOverride.message_id == str(message.id))
-            .where(WorkflowRerunOverride.node_id == node_id)
-            .where(WorkflowRerunOverride.override_kind == kind)
-        ).scalar_one_or_none()
+        # CR10 review fix: atomic upsert via Postgres ON CONFLICT against
+        # the (message_id, node_id, override_kind) unique index. The previous
+        # "select then insert/update" was vulnerable to concurrent saves
+        # racing past the SELECT and producing duplicate rows.
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-        if existing is None:
-            override = WorkflowRerunOverride(
+        stmt = (
+            pg_insert(WorkflowRerunOverride)
+            .values(
                 message_id=str(message.id),
                 workflow_run_id=str(run.id),
                 node_id=node_id,
@@ -599,14 +616,25 @@ class WorkflowRerunService:
                 override_data=dict(data),
                 created_by=actor_id,
             )
-            db.session.add(override)
-        else:
-            existing.override_data = dict(data)
-            # `created_by` intentionally not updated — first author wins;
-            # audit trail can grow later if we ever need it.
-            override = existing
-
+            .on_conflict_do_update(
+                index_elements=["message_id", "node_id", "override_kind"],
+                # `created_by` intentionally not updated — first author wins;
+                # audit trail can grow later if we ever need it.
+                set_={
+                    "override_data": dict(data),
+                    "workflow_run_id": str(run.id),
+                },
+            )
+            .returning(WorkflowRerunOverride.id)
+        )
+        result_id = db.session.execute(stmt).scalar_one()
         db.session.commit()
+
+        override = db.session.execute(
+            select(WorkflowRerunOverride).where(
+                WorkflowRerunOverride.id == result_id
+            )
+        ).scalar_one()
         return override
 
     @classmethod
@@ -697,16 +725,21 @@ class WorkflowRerunService:
                     f"node {node_id!r} does not allow user-edit of {kind!r}; "
                     f"enable the toggle in the workflow editor first"
                 )
+        # CR10 review fix: a paused node lands in WorkflowNodeExecutionModel
+        # with status=='paused', not 'succeeded' — its outputs are nonetheless
+        # already populated and editable. Accept either terminal-success OR
+        # currently-paused so the canvas-runtime "编辑输出并继续" CTA actually
+        # works on a paused node.
         executed = db.session.execute(
             select(WorkflowNodeExecutionModel.id)
             .where(WorkflowNodeExecutionModel.workflow_run_id == run_id)
             .where(WorkflowNodeExecutionModel.node_id == node_id)
-            .where(WorkflowNodeExecutionModel.status == "succeeded")
+            .where(WorkflowNodeExecutionModel.status.in_(["succeeded", "paused"]))
             .limit(1)
         ).scalar_one_or_none()
         if executed is None:
             raise RerunValidationError(
-                f"node {node_id!r} has no successful execution in run "
+                f"node {node_id!r} has no successful or paused execution in run "
                 f"{run_id!r}; cannot override"
             )
 

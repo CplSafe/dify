@@ -39,6 +39,7 @@ const RuntimeRerunActions: FC<RuntimeRerunActionsProps> = ({
   allowOutput,
 }) => {
   const messageId = useRuntimeStore(s => s.messageId)
+  const signalRerunRunId = useRuntimeStore(s => s.signalRerunRunId)
   const [editKind, setEditKind] = useState<ChatflowRerunKind | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -65,9 +66,17 @@ const RuntimeRerunActions: FC<RuntimeRerunActionsProps> = ({
     }
   }, [installedAppId, messageId])
 
-  const handleConfirmed = useCallback(() => {
-    setError(null)
-  }, [])
+  const handleConfirmed = useCallback(
+    (payload: { workflowRunId?: string }) => {
+      setError(null)
+      // CR10 review fix: terminated reruns mint a new workflow_run_id and
+      // publish SSE under that topic. Forward it to the page so it can
+      // open a fresh subscription — the original run's stream is closed.
+      if (payload.workflowRunId)
+        signalRerunRunId(payload.workflowRunId)
+    },
+    [signalRerunRunId],
+  )
 
   const initialData = (
     editKind === 'input' ? (node.inputs ?? {}) : (node.outputs ?? {})

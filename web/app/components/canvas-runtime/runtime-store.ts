@@ -124,11 +124,18 @@ type RuntimeState = {
   messageEnded: boolean
   // For diagnostic only — exposed in the toolbar.
   lastEventAt: number | null
+  // CR10 review fix: when a terminated rerun returns a new workflow_run_id
+  // the page subscribes to that SSE topic. The store carries it as a
+  // single-shot signal — page consumes it, then clears via
+  // `consumePendingRerunRunId`.
+  pendingRerunRunId: string | null
 
   applyEvent: (event: SSEEvent) => void
   setMessageId: (messageId: string | null) => void
   setGraphDict: (graph: RuntimeGraphDict | null) => void
   clearPause: (nodeId: string) => void
+  signalRerunRunId: (runId: string) => void
+  consumePendingRerunRunId: () => string | null
   reset: () => void
 }
 
@@ -144,6 +151,7 @@ const _initialState = {
   messageAnswer: '',
   messageEnded: false,
   lastEventAt: null as number | null,
+  pendingRerunRunId: null as string | null,
 }
 
 // Lay nodes out left-to-right by their reveal order. The real workflow
@@ -448,6 +456,15 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       pausedNodeIds: nextIds,
       pausedKinds: nextKinds,
     })
+  },
+
+  signalRerunRunId: runId => set({ pendingRerunRunId: runId }),
+
+  consumePendingRerunRunId: () => {
+    const id = get().pendingRerunRunId
+    if (id)
+      set({ pendingRerunRunId: null })
+    return id
   },
 
   reset: () => set({ ..._initialState }),

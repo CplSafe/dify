@@ -579,8 +579,17 @@ def _rerun_app_execution(payload: dict[str, Any]) -> None:
     # bubble empty in the UI ("rerun" is an action on a past message, not
     # a new user turn). `rerun_start_node_id` tells the runner to enter the
     # graph at the chosen node instead of the workflow's root.
+    #
+    # CR10 fix: allocate a NEW workflow_run_id up front and pass it via the
+    # entity. The persistence layer reads this when creating the WorkflowRun
+    # row; without it the layer raises immediately and the rerun never
+    # actually runs. The id is also surfaced to the caller (via the payload
+    # the service returns) so the frontend can subscribe to the new SSE
+    # topic instead of the original — terminated runs have already closed
+    # their stream.
     app_config = AdvancedChatAppConfigManager.get_app_config(app_model=app_model, workflow=workflow)
     is_account = isinstance(user, Account)
+    new_run_id = payload.get("new_run_id") or str(uuid.uuid4())
     generate_entity = AdvancedChatAppGenerateEntity(
         task_id=str(uuid.uuid4()),
         app_config=app_config,
@@ -594,6 +603,7 @@ def _rerun_app_execution(payload: dict[str, Any]) -> None:
         stream=True,
         invoke_from=InvokeFrom.EXPLORE if is_account else InvokeFrom.WEB_APP,
         extras={"auto_generate_conversation_name": False},
+        workflow_run_id=new_run_id,
         rerun_start_node_id=start_node_id,
     )
 
@@ -648,28 +658,36 @@ def _rerun_app_execution(payload: dict[str, Any]) -> None:
         triggered_from=WorkflowNodeExecutionTriggeredFrom.WORKFLOW_RUN,
     )
 
+    # CR10 review fix: hold the per-message rerun lock for the entire
+    # generator lifecycle (not just the controller's prepare+enqueue).
+    # Without this two reruns enqueued ~10ms apart would both pass
+    # acquire-in-controller and then race inside the worker.
+    from services.workflow_rerun_service import WorkflowRerunService
+
     generator = AdvancedChatAppGenerator()
     try:
-        response = generator.rerun_from_node(
-            app_model=app_model,
-            workflow=workflow,
-            user=user,
-            conversation=conversation,
-            message=source_message,
-            application_generate_entity=generate_entity,
-            workflow_execution_repository=workflow_execution_repository,
-            workflow_node_execution_repository=workflow_node_execution_repository,
-            graph_runtime_state=graph_runtime_state,
-        )
+        with WorkflowRerunService.acquire_rerun_lock(source_message_id):
+            response = generator.rerun_from_node(
+                app_model=app_model,
+                workflow=workflow,
+                user=user,
+                conversation=conversation,
+                message=source_message,
+                application_generate_entity=generate_entity,
+                workflow_execution_repository=workflow_execution_repository,
+                workflow_node_execution_repository=workflow_node_execution_repository,
+                graph_runtime_state=graph_runtime_state,
+            )
+
+            if generate_entity.stream and isinstance(response, Generator):
+                # Publish under the NEW run id. The original run already
+                # terminated (its SSE subscription is closed), so the frontend
+                # has to re-subscribe to the new run topic — which the
+                # controller returned as `workflow_run_id`.
+                _publish_streaming_response(response, new_run_id, AppMode.ADVANCED_CHAT)
     except Exception:
         logger.exception("rerun: failed to dispatch chatflow rerun for run %s", source_run_id)
         raise
-
-    if generate_entity.stream and isinstance(response, Generator):
-        # Publish under the *source* run id so the canvas-runtime UI (which
-        # is already subscribed to that topic from the original turn) keeps
-        # receiving events without needing a re-subscription.
-        _publish_streaming_response(response, source_run_id, AppMode.ADVANCED_CHAT)
 
 
 @shared_task(queue=WORKFLOW_BASED_APP_EXECUTION_QUEUE, name="rerun_app_execution")

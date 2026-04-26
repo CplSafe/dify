@@ -2,10 +2,17 @@
 
 import type { FC } from 'react'
 import type { PausedNodeKinds, RuntimeNode } from './runtime-store'
+import type { RerunOverrideApi } from '@/app/components/workflow/run/rerun-override-modal'
 import type { ChatflowRerunKind } from '@/service/debug'
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import RerunOverrideModal from '@/app/components/workflow/run/rerun-override-modal'
-import { resumeChatflowFromNode } from '@/service/debug'
+import {
+  deleteCanvasRerunOverride,
+  dispatchCanvasRerun,
+  prepareCanvasRerun,
+  resumeCanvasFromNode,
+  upsertCanvasRerunOverride,
+} from '@/service/canvas-runtime'
 import { useRuntimeStore } from './runtime-store'
 
 type RuntimePauseActionsProps = {
@@ -44,13 +51,11 @@ const RuntimePauseActions: FC<RuntimePauseActionsProps> = ({
     setError(null)
     setResuming(true)
     try {
-      // FIX10: explicitly send kind='output' so prepare() picks the
-      // downstream node as start_node_id. The user-facing "继续" means
-      // "this paused node's output is fine, go on to the next node";
-      // 'input' would re-anchor on the paused node itself, which the
-      // resume path can't actually replay.
-      await resumeChatflowFromNode({
-        appId,
+      // CR10 review fix: route through the installed-apps mirror so the
+      // canvas-runtime user (creator) doesn't need console-app perms.
+      // kind='output' = "this paused node's output is fine, advance".
+      await resumeCanvasFromNode({
+        installedAppId: appId,
         messageId,
         nodeId: node.id,
         kind: 'output',
@@ -72,6 +77,34 @@ const RuntimePauseActions: FC<RuntimePauseActionsProps> = ({
     // resume path). Clear the pause locally; SSE will fix things up.
     clearPause(node.id)
   }, [clearPause, node.id])
+
+  // CR10 review fix: same installed-apps API injection as
+  // RuntimeRerunActions so the modal doesn't fall through to admin routes.
+  const api = useMemo<RerunOverrideApi | undefined>(() => {
+    if (!messageId)
+      return undefined
+    return {
+      upsertOverride: ({ nodeId, kind, data }) =>
+        upsertCanvasRerunOverride({
+          installedAppId: appId,
+          messageId,
+          nodeId,
+          kind,
+          data,
+        }),
+      prepare: ({ nodeId, kind }) =>
+        prepareCanvasRerun({ installedAppId: appId, messageId, nodeId, kind }),
+      dispatch: ({ nodeId, kind }) =>
+        dispatchCanvasRerun({ installedAppId: appId, messageId, nodeId, kind }),
+      deleteOverride: ({ nodeId, kind }) =>
+        deleteCanvasRerunOverride({
+          installedAppId: appId,
+          messageId,
+          nodeId,
+          kind,
+        }),
+    }
+  }, [appId, messageId])
 
   const initialData = (
     editKind === 'input' ? (node.inputs ?? {}) : (node.outputs ?? {})
@@ -128,7 +161,7 @@ const RuntimePauseActions: FC<RuntimePauseActionsProps> = ({
           {error}
         </div>
       )}
-      {editKind && messageId && (
+      {editKind && messageId && api && (
         <RerunOverrideModal
           open={editKind !== null}
           appId={appId}
@@ -139,6 +172,7 @@ const RuntimePauseActions: FC<RuntimePauseActionsProps> = ({
           initialData={initialData}
           onClose={() => setEditKind(null)}
           onConfirmed={handleEditConfirmed}
+          api={api}
         />
       )}
     </div>

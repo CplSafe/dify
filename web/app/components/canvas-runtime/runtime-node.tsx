@@ -17,16 +17,18 @@ import { Handle, Position } from 'reactflow'
 import BlockIcon from '@/app/components/workflow/block-icon'
 import { cn } from '@/utils/classnames'
 import { useRuntimeContext } from './runtime-context'
+import NodeMediaPreview from './runtime-node-media'
 import RuntimePauseActions from './runtime-pause-actions'
 import RuntimeRerunActions from './runtime-rerun-actions'
 import { useRuntimeStore } from './runtime-store'
 
 // Fixed node footprint — every card is the same size so the canvas
 // reads as a deliberate flow rather than a wall of inconsistently
-// sized boxes. Inline content (title, type, summary) truncates;
-// hover state surfaces actions without changing geometry.
-const NODE_W = 260
-const NODE_H = 132
+// sized boxes. Inline content (title, type, summary, media preview)
+// truncates / scrolls inside the fixed box; hover state surfaces
+// actions without changing geometry.
+const NODE_W = 280
+const NODE_H = 224
 
 // Status drives a subtle left accent bar + the trailing badge icon.
 // Backgrounds stay panel-bg across the board so the canvas reads
@@ -185,6 +187,8 @@ const RuntimeNodeComponent: FC<NodeProps<RuntimeNode>> = ({ data }) => {
             {summary}
           </div>
         )}
+
+        <NodeMediaPreview outputs={data.outputs} />
 
         {showPauseActions && pausedKinds && ctx && (
           <div className="mt-auto">

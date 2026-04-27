@@ -112,11 +112,22 @@ const RuntimeNodeComponent: FC<NodeProps<RuntimeNode>> = ({ data }) => {
   const ctx = useRuntimeContext()
   const pausedKinds = useRuntimeStore(s => s.pausedKinds[data.id])
   const graphDict = useRuntimeStore(s => s.graphDict)
+  const humanInputForm = useRuntimeStore(s => s.humanInputForms[data.id])
+  const openHumanInputDrawer = useRuntimeStore(s => s.openHumanInputDrawer)
   // Show inline pause CTAs only for user_edit pauses; human_input pauses
-  // surface their own form via the existing chatflow infrastructure.
+  // surface their own "等待你输入" CTA which pops the side drawer.
   const showPauseActions
     = data.status === 'paused'
       && pausedKinds?.source === 'user_edit'
+      && ctx?.appId
+  // Human-input CTA: only meaningful when we have a real form payload
+  // from the SSE event (token + inputs). A bare paused-state without
+  // form data means the engine is still preparing; render nothing
+  // rather than a dead button.
+  const showHumanInputCta
+    = data.status === 'paused'
+      && pausedKinds?.source === 'human_input'
+      && humanInputForm
       && ctx?.appId
 
   // CR10: 重跑 actions on succeeded nodes. The author opts a node in via
@@ -257,6 +268,26 @@ const RuntimeNodeComponent: FC<NodeProps<RuntimeNode>> = ({ data }) => {
               allowInput={editAllow.input}
               allowOutput={editAllow.output}
             />
+          </div>
+        )}
+
+        {showHumanInputCta && (
+          <div className="mt-auto">
+            <button
+              type="button"
+              onClick={() => openHumanInputDrawer(data.id)}
+              className={cn(
+                'group/cta relative flex w-full items-center justify-center gap-1.5 rounded-lg',
+                'border border-amber-400/40 bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-amber-500/15',
+                'px-3 py-2 system-xs-semibold tracking-wide text-amber-200',
+                'shadow-[0_0_18px_-6px_rgba(245,158,11,0.6)]',
+                'transition hover:border-amber-300/70 hover:from-amber-500/25 hover:to-amber-500/25',
+              )}
+              data-testid={`runtime-human-input-cta-${data.id}`}
+            >
+              <span className="size-1.5 animate-pulse rounded-full bg-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.9)]" />
+              等待你的输入 →
+            </button>
           </div>
         )}
       </div>

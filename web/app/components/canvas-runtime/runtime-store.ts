@@ -1,5 +1,6 @@
 'use client'
 
+import type { HumanInputFormData } from '@/types/workflow'
 import { create } from 'zustand'
 
 export type NodeRuntimeStatus
@@ -129,6 +130,16 @@ type RuntimeState = {
   // single-shot signal — page consumes it, then clears via
   // `consumePendingRerunRunId`.
   pendingRerunRunId: string | null
+  // Active human-input forms keyed by node_id. Populated when the
+  // engine emits `human_input_required` and cleared when the user
+  // submits or the form expires. The card uses presence here to swap
+  // its CTA for "等待你输入" and the drawer mounts off the same data.
+  humanInputForms: Record<string, HumanInputFormData>
+  // The node whose human-input drawer is currently open. Set by the
+  // card CTA, cleared by the drawer close handler. Kept in the store
+  // (instead of local state on the canvas root) so any component can
+  // open the drawer without prop-drilling.
+  openHumanInputNodeId: string | null
 
   applyEvent: (event: SSEEvent) => void
   setMessageId: (messageId: string | null) => void
@@ -140,6 +151,11 @@ type RuntimeState = {
   // in CanvasRuntimeInner to reflow the graph after each reveal so
   // branches stack vertically instead of being crammed into one row.
   relayoutNodes: (positions: Map<string, { x: number, y: number }>) => void
+  // Human-input lifecycle.
+  setHumanInputForm: (form: HumanInputFormData) => void
+  clearHumanInputForm: (nodeId: string) => void
+  openHumanInputDrawer: (nodeId: string) => void
+  closeHumanInputDrawer: () => void
   reset: () => void
 }
 
@@ -156,6 +172,8 @@ const _initialState = {
   messageEnded: false,
   lastEventAt: null as number | null,
   pendingRerunRunId: null as string | null,
+  humanInputForms: {} as Record<string, HumanInputFormData>,
+  openHumanInputNodeId: null as string | null,
 }
 
 // Lay nodes out left-to-right by their reveal order. The real workflow
@@ -503,6 +521,29 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     if (changed)
       set({ nodes: next })
   },
+
+  setHumanInputForm: (form) => {
+    const { humanInputForms } = get()
+    set({
+      humanInputForms: { ...humanInputForms, [form.node_id]: form },
+    })
+  },
+
+  clearHumanInputForm: (nodeId) => {
+    const { humanInputForms, openHumanInputNodeId } = get()
+    if (!(nodeId in humanInputForms))
+      return
+    const next = { ...humanInputForms }
+    delete next[nodeId]
+    set({
+      humanInputForms: next,
+      openHumanInputNodeId:
+        openHumanInputNodeId === nodeId ? null : openHumanInputNodeId,
+    })
+  },
+
+  openHumanInputDrawer: nodeId => set({ openHumanInputNodeId: nodeId }),
+  closeHumanInputDrawer: () => set({ openHumanInputNodeId: null }),
 
   reset: () => set({ ..._initialState }),
 }))

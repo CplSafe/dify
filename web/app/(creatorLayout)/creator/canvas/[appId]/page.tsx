@@ -118,6 +118,9 @@ const CanvasRuntimePage = () => {
   const setGraphDict = useRuntimeStore(s => s.setGraphDict)
   const workflowRunId = useRuntimeStore(s => s.workflowRunId)
   const resetRuntime = useRuntimeStore(s => s.reset)
+  const setHumanInputForm = useRuntimeStore(s => s.setHumanInputForm)
+  const clearHumanInputForm = useRuntimeStore(s => s.clearHumanInputForm)
+  const openHumanInputDrawer = useRuntimeStore(s => s.openHumanInputDrawer)
   const [saveOpen, setSaveOpen] = useState(false)
   const handleOpenSave = useCallback(() => setSaveOpen(true), [])
   const handleCloseSave = useCallback(() => setSaveOpen(false), [])
@@ -315,10 +318,33 @@ const CanvasRuntimePage = () => {
               workflowRunId: resp.workflow_run_id,
             })
           },
+          // Human-input lifecycle. The drawer keys off the form payload
+          // by node_id; auto-opening on `human_input_required` (rather
+          // than waiting for a click) means the user is never left
+          // wondering what to do.
+          onHumanInputRequired: (resp) => {
+            setHumanInputForm(resp.data)
+            openHumanInputDrawer(resp.data.node_id)
+          },
+          onHumanInputFormFilled: (resp) => {
+            clearHumanInputForm(resp.data.node_id)
+          },
+          onHumanInputFormTimeout: (resp) => {
+            clearHumanInputForm(resp.data.node_id)
+          },
         },
       )
     },
-    [installedAppId, applyEvent, setMessageId, startVarsForm, startVarValues],
+    [
+      installedAppId,
+      applyEvent,
+      setMessageId,
+      startVarsForm,
+      startVarValues,
+      setHumanInputForm,
+      openHumanInputDrawer,
+      clearHumanInputForm,
+    ],
   )
 
   useEffect(() => {

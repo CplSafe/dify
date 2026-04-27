@@ -11,6 +11,7 @@ import ReactFlow, {
 } from 'reactflow'
 import { RuntimeContext } from './runtime-context'
 import RuntimeEdge from './runtime-edge'
+import RuntimeHumanInputDrawer from './runtime-human-input-drawer'
 import { computeRuntimeLayout } from './runtime-layout'
 import RuntimeNodeComponent from './runtime-node'
 import { useRuntimeStore } from './runtime-store'
@@ -52,6 +53,12 @@ const CanvasRuntimeInner = ({
   const storeEdges = useRuntimeStore(s => s.edges)
   const visibleOrder = useRuntimeStore(s => s.visibleOrder)
   const relayoutNodes = useRuntimeStore(s => s.relayoutNodes)
+  const openHumanInputNodeId = useRuntimeStore(s => s.openHumanInputNodeId)
+  const humanInputForms = useRuntimeStore(s => s.humanInputForms)
+  const closeHumanInputDrawer = useRuntimeStore(s => s.closeHumanInputDrawer)
+  const activeHumanInputForm = openHumanInputNodeId
+    ? (humanInputForms[openHumanInputNodeId] ?? null)
+    : null
 
   // Reflow the canvas via ELK (layered/Sugiyama, same family as dagre)
   // every time a node is revealed or an edge is added. The store's
@@ -183,6 +190,10 @@ const CanvasRuntimeInner = ({
         />
       </ReactFlow>
       <RuntimeToolbar onSave={onSave} saveDisabled={saveDisabled} />
+      <RuntimeHumanInputDrawer
+        form={activeHumanInputForm}
+        onClose={closeHumanInputDrawer}
+      />
       {children}
       <style jsx>
         {`

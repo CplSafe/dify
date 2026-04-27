@@ -1,7 +1,10 @@
 import type {
+  IOHumanInputRequired,
   IOnCompleted,
   IOnData,
   IOnError,
+  IOnHumanInputFormFilled,
+  IOnHumanInputFormTimeout,
   IOnMessageEnd,
   IOnNodeFinished,
   IOnNodeStarted,
@@ -29,6 +32,11 @@ export type CanvasRuntimeChatHandlers = {
   onWorkflowPaused?: IOWorkflowPaused
   onNodeStarted?: IOnNodeStarted
   onNodeFinished?: IOnNodeFinished
+  // Human-input lifecycle: required → filled / timeout. Canvas runtime
+  // surfaces these via a slide-in drawer keyed by node_id.
+  onHumanInputRequired?: IOHumanInputRequired
+  onHumanInputFormFilled?: IOnHumanInputFormFilled
+  onHumanInputFormTimeout?: IOnHumanInputFormTimeout
   getAbortController?: (controller: AbortController) => void
 }
 

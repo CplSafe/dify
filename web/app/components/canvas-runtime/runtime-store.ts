@@ -71,6 +71,13 @@ export type SSEEvent
     // `append` (default) concatenates onto the running answer.
     // `replace` swaps the buffer (for message_replace events).
     mode?: 'append' | 'replace'
+    // First entry of `from_variable_selector` from the SSE payload —
+    // identifies which workflow node owns this chunk (typically the
+    // answer node). When the owning node hasn't been revealed yet
+    // (message arrives before its node_started), the store stashes
+    // the text in a pending buffer keyed by this id and flushes it
+    // into outputs.answer the moment node_started fires.
+    nodeId?: string
   }
   | {
     type: 'message_end'
@@ -140,6 +147,13 @@ type RuntimeState = {
   // (instead of local state on the canvas root) so any component can
   // open the drawer without prop-drilling.
   openHumanInputNodeId: string | null
+  // Buffer for `event: message` chunks whose owning node hasn't been
+  // revealed yet. Chatflow's SSE order is sometimes [message] →
+  // [node_started for the answer node] → [node_finished], so the text
+  // arrives BEFORE the card it should land on. Stash by node_id and
+  // flush into outputs.answer the moment the matching node_started
+  // fires.
+  pendingMessageByNode: Record<string, string>
 
   applyEvent: (event: SSEEvent) => void
   setMessageId: (messageId: string | null) => void
@@ -174,6 +188,7 @@ const _initialState = {
   pendingRerunRunId: null as string | null,
   humanInputForms: {} as Record<string, HumanInputFormData>,
   openHumanInputNodeId: null as string | null,
+  pendingMessageByNode: {} as Record<string, string>,
 }
 
 // Lay nodes out left-to-right by their reveal order. The real workflow
@@ -327,7 +342,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       // never renders a card for them.
       const nextOrder
         = existing || hidden ? visibleOrder : [...visibleOrder, event.nodeId]
-      const nextNodes = {
+      let nextNodes: Record<string, RuntimeNode> = {
         ...nodes,
         [event.nodeId]: {
           id: event.nodeId,
@@ -383,10 +398,32 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
           }
         }
       }
+      // Flush any pending message text that arrived before this
+      // node was revealed (chatflow's SSE order is sometimes
+      // [event:message for answer node] → [node_started for it]).
+      const { pendingMessageByNode } = get()
+      let nextPending = pendingMessageByNode
+      const pending = pendingMessageByNode[event.nodeId]
+      if (pending) {
+        const target = nextNodes[event.nodeId]
+        if (target) {
+          nextNodes = {
+            ...nextNodes,
+            [event.nodeId]: {
+              ...target,
+              outputs: { ...(target.outputs ?? {}), answer: pending },
+            },
+          }
+        }
+        nextPending = { ...pendingMessageByNode }
+        delete nextPending[event.nodeId]
+      }
+
       set({
         nodes: nextNodes,
         edges: nextEdges,
         visibleOrder: nextOrder,
+        pendingMessageByNode: nextPending,
         lastEventAt: now,
       })
       return
@@ -455,26 +492,26 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       // Append (or replace) the running answer buffer. Surfaced by the
       // page as a banner so users see middleware bailouts (e.g. balance
       // checks) and ad-hoc LLM answers even when no workflow node fires.
-      const { messageAnswer, nodes, visibleOrder } = get()
+      const { messageAnswer, nodes, visibleOrder, pendingMessageByNode }
+        = get()
       const next
         = event.mode === 'replace' ? event.text : `${messageAnswer}${event.text}`
 
-      // ALSO attach the message text to the latest answer-type node's
-      // outputs. Chatflow's `event: message` is how answer / direct-reply
-      // nodes stream their content — `node_finished` for those nodes
-      // arrives with `outputs: null`, so without this the answer card
-      // would never show its result (and a video URL embedded in the
-      // HTML would never reach the media-preview detector).
+      // Route the chunk to the owning node's outputs.answer.
+      //
+      // Three cases, in priority order:
+      //   1. event.nodeId provided + node already revealed → write to it.
+      //   2. event.nodeId provided + node NOT yet revealed → stash in
+      //      pendingMessageByNode; node_started will flush later.
+      //   3. event.nodeId missing → walk visibleOrder back, find the
+      //      latest answer/llm node (works for old payloads that don't
+      //      carry from_variable_selector).
       let nextNodes = nodes
-      for (let i = visibleOrder.length - 1; i >= 0; i--) {
-        const id = visibleOrder[i]
+      let nextPending = pendingMessageByNode
+      const writeToNode = (id: string) => {
         const n = nodes[id]
         if (!n)
-          continue
-        // Match answer / llm nodes — both stream their result via
-        // `event: message`. Skip everything else (start, if-else, …).
-        if (n.type !== 'answer' && n.type !== 'llm')
-          continue
+          return false
         const prevAnswer = (n.outputs?.answer as string | undefined) ?? ''
         const newAnswer
           = event.mode === 'replace' ? event.text : `${prevAnswer}${event.text}`
@@ -485,13 +522,36 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
             outputs: { ...(n.outputs ?? {}), answer: newAnswer },
           },
         }
-        break
+        return true
+      }
+
+      if (event.nodeId) {
+        if (!writeToNode(event.nodeId)) {
+          // Stash for the upcoming node_started.
+          const prev = pendingMessageByNode[event.nodeId] ?? ''
+          const buffered
+            = event.mode === 'replace' ? event.text : `${prev}${event.text}`
+          nextPending = { ...pendingMessageByNode, [event.nodeId]: buffered }
+        }
+      }
+      else {
+        for (let i = visibleOrder.length - 1; i >= 0; i--) {
+          const id = visibleOrder[i]
+          const n = nodes[id]
+          if (!n)
+            continue
+          if (n.type !== 'answer' && n.type !== 'llm')
+            continue
+          writeToNode(id)
+          break
+        }
       }
 
       set({
         messageAnswer: next,
         messageEnded: false,
         nodes: nextNodes,
+        pendingMessageByNode: nextPending,
         lastEventAt: now,
       })
       return

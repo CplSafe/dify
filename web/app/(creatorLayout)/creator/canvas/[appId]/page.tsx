@@ -231,11 +231,21 @@ const CanvasRuntimePage = () => {
   // route its events through the same store reducers.
   const chatflowHandlers = useMemo(
     () => ({
-      onData: (chunk: string) => {
+      onData: (
+        chunk: string,
+        _isFirstMessage: boolean,
+        moreInfo: { fromVariableSelector?: string[] },
+      ) => {
+        // `from_variable_selector[0]` is the node_id that owns this
+        // chunk. The store either writes to that card (already
+        // revealed) or stashes in a pending buffer until the matching
+        // node_started arrives.
+        const nodeId = moreInfo?.fromVariableSelector?.[0]
         applyEvent({
           type: 'message' as const,
           text: chunk,
           mode: 'append' as const,
+          nodeId,
         })
       },
       onMessageEnd: () => {

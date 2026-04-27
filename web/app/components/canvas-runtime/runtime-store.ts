@@ -530,15 +530,34 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   },
 
   clearHumanInputForm: (nodeId) => {
-    const { humanInputForms, openHumanInputNodeId } = get()
+    const {
+      humanInputForms,
+      openHumanInputNodeId,
+      nodes,
+      pausedNodeIds,
+      pausedKinds,
+    } = get()
     if (!(nodeId in humanInputForms))
       return
-    const next = { ...humanInputForms }
-    delete next[nodeId]
+    const nextForms = { ...humanInputForms }
+    delete nextForms[nodeId]
+    // Submitted/timed-out human-input also exits the paused state. The
+    // engine will follow up with `node_finished` shortly, but flipping
+    // status here removes the amber pulse + CTA the moment the user
+    // hits submit so the UI feels responsive instead of stuck.
+    const nextNodes = { ...nodes }
+    if (nextNodes[nodeId]?.status === 'paused')
+      nextNodes[nodeId] = { ...nextNodes[nodeId], status: 'succeeded' }
+    const nextPausedIds = pausedNodeIds.filter(id => id !== nodeId)
+    const nextPausedKinds = { ...pausedKinds }
+    delete nextPausedKinds[nodeId]
     set({
-      humanInputForms: next,
+      humanInputForms: nextForms,
       openHumanInputNodeId:
         openHumanInputNodeId === nodeId ? null : openHumanInputNodeId,
+      nodes: nextNodes,
+      pausedNodeIds: nextPausedIds,
+      pausedKinds: nextPausedKinds,
     })
   },
 

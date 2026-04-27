@@ -8,6 +8,7 @@ import ReactFlow, {
   BackgroundVariant,
   MiniMap,
   ReactFlowProvider,
+  useReactFlow,
 } from 'reactflow'
 import { RuntimeContext } from './runtime-context'
 import RuntimeEdge from './runtime-edge'
@@ -53,6 +54,7 @@ const CanvasRuntimeInner = ({
   const storeEdges = useRuntimeStore(s => s.edges)
   const visibleOrder = useRuntimeStore(s => s.visibleOrder)
   const relayoutNodes = useRuntimeStore(s => s.relayoutNodes)
+  const { fitView } = useReactFlow()
   const openHumanInputNodeId = useRuntimeStore(s => s.openHumanInputNodeId)
   const humanInputForms = useRuntimeStore(s => s.humanInputForms)
   const closeHumanInputDrawer = useRuntimeStore(s => s.closeHumanInputDrawer)
@@ -92,8 +94,17 @@ const CanvasRuntimeInner = ({
           nodeWidth: NODE_W,
           nodeHeight: NODE_H,
         })
-        if (!cancelled)
-          relayoutNodes(positions)
+        if (cancelled)
+          return
+        relayoutNodes(positions)
+        // After ELK rewrites positions, the existing viewport may no
+        // longer contain all the cards (especially as new nodes get
+        // appended). Defer to next frame so ReactFlow has applied the
+        // new positions, then refit. Without this, late-arriving nodes
+        // stayed off-screen and looked "missing" to the user.
+        requestAnimationFrame(() => {
+          fitView({ padding: 0.4, duration: 300 })
+        })
       }
       catch (err) {
         // ELK failures are non-fatal — the store keeps the linear

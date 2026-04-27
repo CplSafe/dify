@@ -4,7 +4,7 @@
 import type { StartVarValues } from '@/app/components/canvas-runtime/start-vars-helpers'
 import type { InstalledApp as ExploreInstalledApp } from '@/models/explore'
 import type { UserInputFormItem } from '@/types/app'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import CanvasRuntime from '@/app/components/canvas-runtime'
 import RuntimeInput from '@/app/components/canvas-runtime/runtime-input'
 import RuntimeStartVars from '@/app/components/canvas-runtime/runtime-start-vars'
@@ -17,6 +17,7 @@ import {
   fetchCanvasAppParameters,
   fetchCanvasRuntimeGraph,
   runChatflowOnCanvas,
+  subscribeToCanvasRunEvents,
 } from '@/service/canvas-runtime'
 import { fetchInstalledAppList } from '@/service/explore'
 import { getUserCanvasSnapshot } from '@/service/user-canvases'
@@ -121,6 +122,10 @@ const CanvasRuntimePage = () => {
   const setHumanInputForm = useRuntimeStore(s => s.setHumanInputForm)
   const clearHumanInputForm = useRuntimeStore(s => s.clearHumanInputForm)
   const openHumanInputDrawer = useRuntimeStore(s => s.openHumanInputDrawer)
+  const pendingRerunRunId = useRuntimeStore(s => s.pendingRerunRunId)
+  const consumePendingRerunRunId = useRuntimeStore(
+    s => s.consumePendingRerunRunId,
+  )
   const [saveOpen, setSaveOpen] = useState(false)
   const handleOpenSave = useCallback(() => setSaveOpen(true), [])
   const handleCloseSave = useCallback(() => setSaveOpen(false), [])
@@ -211,6 +216,125 @@ const CanvasRuntimePage = () => {
       cancelled = true
     }
   }, [applyEvent, authState, canvasIdParam, resetRuntime])
+  // Shared SSE handler bag — used by both the initial chatflow run
+  // and the post-resume resubscribe (after a human-input form is
+  // submitted, or a CR10 terminated rerun is dispatched). The original
+  // SSE connection ends when the engine pauses or the run terminates,
+  // so we open a fresh subscription to /workflow/<run_id>/events and
+  // route its events through the same store reducers.
+  const chatflowHandlers = useMemo(
+    () => ({
+      onData: (chunk: string) => {
+        applyEvent({
+          type: 'message' as const,
+          text: chunk,
+          mode: 'append' as const,
+        })
+      },
+      onMessageEnd: () => {
+        applyEvent({ type: 'message_end' as const })
+      },
+      onCompleted: () => {},
+      onError: (err: unknown) => {
+        console.error('[canvas-runtime] chatflow error', err)
+      },
+      onWorkflowStarted: (resp: {
+        workflow_run_id: string
+        message_id?: string
+      }) => {
+        applyEvent({
+          type: 'workflow_started' as const,
+          workflowRunId: resp.workflow_run_id,
+        })
+        if (resp.message_id)
+          setMessageId(resp.message_id)
+      },
+      onNodeStarted: (resp: { data: Record<string, unknown> }) => {
+        const data = resp.data as {
+          node_id: string
+          node_type: string
+          title: string
+          inputs?: Record<string, unknown>
+          predecessor_node_id?: string
+        }
+        applyEvent({
+          type: 'node_started' as const,
+          nodeId: data.node_id,
+          nodeType: data.node_type,
+          title: data.title,
+          inputs: data.inputs,
+          predecessorNodeId: data.predecessor_node_id || undefined,
+        })
+      },
+      onNodeFinished: (resp: { data: Record<string, unknown> }) => {
+        const data = resp.data as {
+          node_id: string
+          outputs?: Record<string, unknown>
+          status: string
+          error?: string
+        }
+        applyEvent({
+          type: 'node_finished' as const,
+          nodeId: data.node_id,
+          outputs: data.outputs,
+          status: data.status === 'succeeded' ? 'succeeded' : 'failed',
+          error: data.error || undefined,
+        })
+      },
+      onWorkflowPaused: (resp: {
+        data: { paused_nodes?: string[], reasons?: unknown[] }
+      }) => {
+        applyEvent({
+          type: 'workflow_paused' as const,
+          pausedNodeIds: resp.data.paused_nodes ?? [],
+          reasons: (resp.data.reasons ?? []).map((r: unknown) =>
+            typeof r === 'string'
+              ? r
+              : ((r as { reason?: string })?.reason ?? ''),
+          ),
+        })
+      },
+      onWorkflowFinished: (resp: { workflow_run_id: string }) => {
+        applyEvent({
+          type: 'workflow_finished' as const,
+          workflowRunId: resp.workflow_run_id,
+        })
+      },
+      onHumanInputRequired: (resp: {
+        data: import('@/types/workflow').HumanInputFormData
+      }) => {
+        setHumanInputForm(resp.data)
+        openHumanInputDrawer(resp.data.node_id)
+      },
+      onHumanInputFormFilled: (resp: { data: { node_id: string } }) => {
+        clearHumanInputForm(resp.data.node_id)
+      },
+      onHumanInputFormTimeout: (resp: { data: { node_id: string } }) => {
+        clearHumanInputForm(resp.data.node_id)
+      },
+    }),
+    [
+      applyEvent,
+      setMessageId,
+      setHumanInputForm,
+      clearHumanInputForm,
+      openHumanInputDrawer,
+    ],
+  )
+
+  // Re-subscribe to the workflow's SSE topic when something downstream
+  // resumes the run (human-input submit, CR10 terminated rerun). The
+  // store signals via `pendingRerunRunId`; consume + open a fresh
+  // sseGet against /console/api/workflow/<id>/events.
+  useEffect(() => {
+    if (!pendingRerunRunId)
+      return
+    const runId = consumePendingRerunRunId()
+    if (!runId)
+      return
+    subscribeToCanvasRunEvents(runId, chatflowHandlers)
+  }, [pendingRerunRunId, consumePendingRerunRunId, chatflowHandlers])
+
   const handleSubmit = useCallback(
     (payload: { text: string, files: unknown[] }) => {
       if (!installedAppId)
@@ -254,85 +378,7 @@ const CanvasRuntimePage = () => {
           inputs: startVarValues,
           files: payload.files,
         },
-        {
-          // chatflow `event: message` chunks. Could be an LLM answer or
-          // a middleware bailout (e.g. balance check returning 余额不足).
-          // Either way we want it on screen, so push into the store as
-          // an append-mode message event.
-          onData: (chunk) => {
-            applyEvent({ type: 'message', text: chunk, mode: 'append' })
-          },
-          onMessageEnd: () => {
-            applyEvent({ type: 'message_end' })
-          },
-          onCompleted: () => {},
-          onError: (err) => {
-            console.error('[canvas-runtime] chatflow error', err)
-          },
-          onWorkflowStarted: (resp) => {
-            applyEvent({
-              type: 'workflow_started',
-              workflowRunId: resp.workflow_run_id,
-            })
-            if (resp.message_id)
-              setMessageId(resp.message_id)
-          },
-          onNodeStarted: (resp) => {
-            const data = resp.data
-            applyEvent({
-              type: 'node_started',
-              nodeId: data.node_id,
-              nodeType: data.node_type as string,
-              title: data.title,
-              inputs: data.inputs as Record<string, unknown>,
-              predecessorNodeId: data.predecessor_node_id || undefined,
-            })
-          },
-          onNodeFinished: (resp) => {
-            const data = resp.data
-            applyEvent({
-              type: 'node_finished',
-              nodeId: data.node_id,
-              outputs: data.outputs,
-              status: data.status === 'succeeded' ? 'succeeded' : 'failed',
-              error: data.error || undefined,
-            })
-          },
-          onWorkflowPaused: (resp) => {
-            applyEvent({
-              type: 'workflow_paused',
-              pausedNodeIds: resp.data.paused_nodes ?? [],
-              // Reasons can arrive as either strings or {reason: string}
-              // objects depending on the backend payload version; coerce
-              // to strings so the parser only needs to handle one shape.
-              reasons: (resp.data.reasons ?? []).map((r: unknown) =>
-                typeof r === 'string'
-                  ? r
-                  : ((r as { reason?: string })?.reason ?? ''),
-              ),
-            })
-          },
-          onWorkflowFinished: (resp) => {
-            applyEvent({
-              type: 'workflow_finished',
-              workflowRunId: resp.workflow_run_id,
-            })
-          },
-          // Human-input lifecycle. The drawer keys off the form payload
-          // by node_id; auto-opening on `human_input_required` (rather
-          // than waiting for a click) means the user is never left
-          // wondering what to do.
-          onHumanInputRequired: (resp) => {
-            setHumanInputForm(resp.data)
-            openHumanInputDrawer(resp.data.node_id)
-          },
-          onHumanInputFormFilled: (resp) => {
-            clearHumanInputForm(resp.data.node_id)
-          },
-          onHumanInputFormTimeout: (resp) => {
-            clearHumanInputForm(resp.data.node_id)
-          },
-        },
+        chatflowHandlers,
       )
     },
     [
@@ -341,9 +387,7 @@ const CanvasRuntimePage = () => {
       setMessageId,
       startVarsForm,
       startVarValues,
-      setHumanInputForm,
-      openHumanInputDrawer,
-      clearHumanInputForm,
+      chatflowHandlers,
     ],
   )
 

@@ -36,6 +36,8 @@ const RuntimeHumanInputDrawer: FC<RuntimeHumanInputDrawerProps> = ({
   onClose,
 }) => {
   const clearHumanInputForm = useRuntimeStore(s => s.clearHumanInputForm)
+  const signalRerunRunId = useRuntimeStore(s => s.signalRerunRunId)
+  const workflowRunId = useRuntimeStore(s => s.workflowRunId)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -60,11 +62,19 @@ const RuntimeHumanInputDrawer: FC<RuntimeHumanInputDrawerProps> = ({
       setSubmitting(true)
       try {
         await submitHumanInputForm(formToken, formData)
-        // Optimistically clear the form locally — the engine will fire
-        // its own `human_input_form_filled` shortly which is a no-op
+        // Optimistically clear the form locally + flip the node back to
+        // succeeded. The engine's own `human_input_form_filled` will
+        // arrive over the resubscribed SSE shortly and is a no-op
         // against the empty state.
         if (form)
           clearHumanInputForm(form.node_id)
+        // Open a fresh SSE subscription to the workflow run — the
+        // original chatflow stream closed when the engine paused on
+        // human-input, so without re-subscribing the canvas would
+        // never see the post-resume node_started/node_finished events
+        // and downstream nodes would never appear.
+        if (workflowRunId)
+          signalRerunRunId(workflowRunId)
         onClose()
       }
       catch (e: unknown) {
@@ -74,7 +84,7 @@ const RuntimeHumanInputDrawer: FC<RuntimeHumanInputDrawerProps> = ({
         setSubmitting(false)
       }
     },
-    [clearHumanInputForm, form, onClose],
+    [clearHumanInputForm, form, onClose, signalRerunRunId, workflowRunId],
   )
 
   if (!form)

@@ -13,7 +13,7 @@ import type {
   IOWorkflowPaused,
 } from './base'
 import type { ChatflowRerunKind } from './debug'
-import { del, get, post, put, ssePost } from './base'
+import { del, get, post, put, sseGet, ssePost } from './base'
 
 export type CanvasRuntimeChatBody = {
   query: string
@@ -135,3 +135,23 @@ export const resumeCanvasFromNode = (
   post(messagePath(args, `resume-from/${encodeURIComponent(args.nodeId)}`), {
     body: args.kind ? { kind: args.kind } : {},
   })
+
+/**
+ * Re-subscribe to a workflow_run's SSE topic after the original chatflow
+ * stream ended (paused on human-input, then resumed). Without this the
+ * canvas would never see the post-pause node_started/node_finished
+ * events because the original `ssePost` connection has already closed.
+ *
+ * Reuses the same handler shape as runChatflowOnCanvas so the page can
+ * pass the same dispatcher object — every event type the engine emits
+ * post-resume is identical to a fresh-start run.
+ */
+export const subscribeToCanvasRunEvents = (
+  workflowRunId: string,
+  handlers: CanvasRuntimeChatHandlers,
+) =>
+  sseGet(
+    `/workflow/${workflowRunId}/events?include_state_snapshot=true`,
+    {},
+    handlers,
+  )

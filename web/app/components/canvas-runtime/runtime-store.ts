@@ -319,10 +319,19 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   applyEvent: (event) => {
     const now = Date.now()
     if (event.type === 'workflow_started') {
-      // CR9: keep the graphDict across runs of the same canvas — the
-      // visibility decision is per-canvas, not per-run, and refetching
-      // it on every submit is wasteful.
-      const { graphDict } = get()
+      // Two distinct cases here:
+      //   a) Fresh user-initiated run — reset the whole canvas.
+      //   b) Resubscribe-replay (after human-input submit / CR10 rerun).
+      //      The /workflow/<id>/events endpoint replays from the
+      //      beginning, so workflow_started fires AGAIN with the same
+      //      run id we already have. Wiping the canvas would erase
+      //      the cards the user just watched run. Detect this case
+      //      and only update lastEventAt instead.
+      const { graphDict, workflowRunId } = get()
+      if (workflowRunId === event.workflowRunId) {
+        set({ lastEventAt: now })
+        return
+      }
       set({
         ..._initialState,
         graphDict,
@@ -342,6 +351,14 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       // never renders a card for them.
       const nextOrder
         = existing || hidden ? visibleOrder : [...visibleOrder, event.nodeId]
+      // On resubscribe replay, the same node_started fires again for
+      // nodes we already finished. Keep their terminal status so the
+      // user doesn't see green cards flicker back to running.
+      const isReplay
+        = existing
+          && (existing.status === 'succeeded'
+            || existing.status === 'failed'
+            || existing.status === 'paused')
       let nextNodes: Record<string, RuntimeNode> = {
         ...nodes,
         [event.nodeId]: {
@@ -351,8 +368,8 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
           position:
             existing?.position
             ?? _placeNode(hidden ? visibleOrder.length : nextOrder.length - 1),
-          status: 'running' as NodeRuntimeStatus,
-          inputs: event.inputs,
+          status: isReplay ? existing.status : ('running' as NodeRuntimeStatus),
+          inputs: event.inputs ?? existing?.inputs,
           // Carry forward outputs if the engine restarts a node we've
           // seen before (e.g. retry).
           outputs: existing?.outputs,

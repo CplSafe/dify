@@ -82,13 +82,6 @@ class InstalledAppRuntimeGraphApi(InstalledAppResource):
             nodes.append(
                 {
                     "id": n.get("id"),
-                    # Node type + title used by the canvas runtime to render
-                    # the full graph up-front (mode A) — runtime status is
-                    # then layered on via SSE node_started/node_finished
-                    # events. Keeps cards present even before the engine
-                    # reaches them.
-                    "type": data.get("type") or n.get("type"),
-                    "title": data.get("title", ""),
                     "data": {
                         "show_in_canvas_runtime": data.get(
                             "show_in_canvas_runtime", True

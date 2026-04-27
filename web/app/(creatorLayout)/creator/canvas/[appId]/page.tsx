@@ -231,20 +231,11 @@ const CanvasRuntimePage = () => {
   // route its events through the same store reducers.
   const chatflowHandlers = useMemo(
     () => ({
-      onData: (
-        chunk: string,
-        _isFirstMessage: boolean,
-        moreInfo: { fromVariableSelector?: string[] },
-      ) => {
-        // `from_variable_selector[0]` is the node_id that owns this
-        // chunk (mode A: cards exist for every workflow node, so we
-        // can route the text directly to the right card).
-        const nodeId = moreInfo?.fromVariableSelector?.[0]
+      onData: (chunk: string) => {
         applyEvent({
           type: 'message' as const,
           text: chunk,
           mode: 'append' as const,
-          nodeId,
         })
       },
       onMessageEnd: () => {

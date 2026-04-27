@@ -455,12 +455,43 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       // Append (or replace) the running answer buffer. Surfaced by the
       // page as a banner so users see middleware bailouts (e.g. balance
       // checks) and ad-hoc LLM answers even when no workflow node fires.
-      const { messageAnswer } = get()
+      const { messageAnswer, nodes, visibleOrder } = get()
       const next
         = event.mode === 'replace' ? event.text : `${messageAnswer}${event.text}`
+
+      // ALSO attach the message text to the latest answer-type node's
+      // outputs. Chatflow's `event: message` is how answer / direct-reply
+      // nodes stream their content — `node_finished` for those nodes
+      // arrives with `outputs: null`, so without this the answer card
+      // would never show its result (and a video URL embedded in the
+      // HTML would never reach the media-preview detector).
+      let nextNodes = nodes
+      for (let i = visibleOrder.length - 1; i >= 0; i--) {
+        const id = visibleOrder[i]
+        const n = nodes[id]
+        if (!n)
+          continue
+        // Match answer / llm nodes — both stream their result via
+        // `event: message`. Skip everything else (start, if-else, …).
+        if (n.type !== 'answer' && n.type !== 'llm')
+          continue
+        const prevAnswer = (n.outputs?.answer as string | undefined) ?? ''
+        const newAnswer
+          = event.mode === 'replace' ? event.text : `${prevAnswer}${event.text}`
+        nextNodes = {
+          ...nodes,
+          [id]: {
+            ...n,
+            outputs: { ...(n.outputs ?? {}), answer: newAnswer },
+          },
+        }
+        break
+      }
+
       set({
         messageAnswer: next,
         messageEnded: false,
+        nodes: nextNodes,
         lastEventAt: now,
       })
       return

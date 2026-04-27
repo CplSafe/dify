@@ -30,6 +30,50 @@ const _kindFromString = (s: string): MediaKind | null => {
   return null
 }
 
+// Chatflow answer nodes commonly emit HTML like
+//   <video src="..."></video>
+//   <img src="..." />
+//   <audio src="..." />
+//   ![alt](https://...png)
+// instead of bare URLs. Pull every src= and markdown image out so the
+// preview gallery picks them up regardless of how the author wrapped
+// them. Tag is preferred when present (so we don't need to sniff the
+// extension), otherwise we fall back to extension matching.
+const _extractFromHtml = (text: string): MediaItem[] => {
+  if (!text || (!text.includes('<') && !text.includes('](')))
+    return []
+  const out: MediaItem[] = []
+  // <video|img|audio ... src="..."> in any attribute order
+  const tagRe
+    = /<(video|img|audio|source)\s[^>]*?\bsrc=["']([^"']+)["'][^>]*>/gi
+  let m: RegExpExecArray | null
+  // eslint-disable-next-line no-cond-assign
+  while ((m = tagRe.exec(text)) !== null) {
+    const tag = m[1].toLowerCase()
+    const url = m[2]
+    let kind: MediaKind | null = null
+    if (tag === 'video' || tag === 'source')
+      kind = 'video'
+    else if (tag === 'img')
+      kind = 'image'
+    else if (tag === 'audio')
+      kind = 'audio'
+    // <source> can be inside <audio>; sniff by extension as a tiebreaker.
+    const sniffed = _kindFromString(url)
+    out.push({ kind: sniffed || kind || 'image', url })
+  }
+  // Markdown image syntax ![](url)
+  const mdRe = /!\[[^\]]*\]\(([^)]+)\)/g
+  // eslint-disable-next-line no-cond-assign
+  while ((m = mdRe.exec(text)) !== null) {
+    const url = m[1]
+    const k = _kindFromString(url)
+    if (k)
+      out.push({ kind: k, url })
+  }
+  return out
+}
+
 const _kindFromObject = (
   obj: Record<string, unknown>,
 ): { kind: MediaKind, url: string } | null => {
@@ -92,9 +136,15 @@ const _collectMedia = (outputs?: Record<string, unknown>): MediaItem[] => {
     if (out.length >= 8)
       return
     if (typeof v === 'string') {
+      // Bare URL string.
       const k = _kindFromString(v)
-      if (k)
+      if (k) {
         push({ kind: k, url: v })
+        return
+      }
+      // HTML / markdown wrapping (chatflow answer nodes ship video as
+      // `<video src="...">` rather than a bare URL).
+      for (const item of _extractFromHtml(v)) push(item)
       return
     }
     if (Array.isArray(v)) {

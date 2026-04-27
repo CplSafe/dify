@@ -71,6 +71,11 @@ export type SSEEvent
     // `append` (default) concatenates onto the running answer.
     // `replace` swaps the buffer (for message_replace events).
     mode?: 'append' | 'replace'
+    // First entry of `from_variable_selector` from the SSE payload —
+    // identifies which workflow node owns this chunk (typically the
+    // answer node). Lets the store route the text into that node's
+    // outputs.answer instead of guessing by visibleOrder.
+    nodeId?: string
   }
   | {
     type: 'message_end'
@@ -94,7 +99,13 @@ export type PausedNodeKinds = {
 export type RuntimeGraphDict = {
   nodes: Array<{
     id: string
-    data?: { show_in_canvas_runtime?: boolean }
+    type?: string
+    title?: string
+    data?: {
+      show_in_canvas_runtime?: boolean
+      allow_user_edit_input?: boolean
+      allow_user_edit_output?: boolean
+    }
   }>
   edges: Array<{ source: string, target: string }>
 }
@@ -304,13 +315,26 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   applyEvent: (event) => {
     const now = Date.now()
     if (event.type === 'workflow_started') {
-      // CR9: keep the graphDict across runs of the same canvas — the
-      // visibility decision is per-canvas, not per-run, and refetching
-      // it on every submit is wasteful.
-      const { graphDict } = get()
+      // Mode A: cards came from setGraphDict at page mount, so the
+      // canvas is already populated. A new workflow run only needs to
+      // reset per-node status / outputs (clear messageAnswer, paused
+      // markers, etc) — the node + edge layout stays put.
+      const { nodes, edges, visibleOrder, graphDict } = get()
+      const resetNodes: Record<string, RuntimeNode> = {}
+      for (const [id, n] of Object.entries(nodes)) {
+        resetNodes[id] = {
+          ...n,
+          status: 'pending',
+          outputs: undefined,
+          error: undefined,
+        }
+      }
       set({
         ..._initialState,
         graphDict,
+        nodes: resetNodes,
+        edges,
+        visibleOrder,
         workflowRunId: event.workflowRunId,
         lastEventAt: now,
       })
@@ -318,68 +342,74 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     }
 
     if (event.type === 'node_started') {
+      // Mode A: only update the pre-existing card's status. Nodes that
+      // weren't in the draft graph (e.g. dynamically inserted by an
+      // iteration) get inserted lazily as a fallback so we don't lose
+      // them entirely.
       const { nodes, edges, visibleOrder, graphDict } = get()
       const hidden = _isHiddenInRuntime(graphDict, event.nodeId)
+      if (hidden) {
+        // Hidden nodes don't render — track them so node_finished can
+        // still update internal state, but stay out of visibleOrder.
+        set({
+          nodes: {
+            ...nodes,
+            [event.nodeId]: {
+              id: event.nodeId,
+              type: event.nodeType,
+              title: event.title,
+              position: _placeNode(visibleOrder.length),
+              status: 'running' as NodeRuntimeStatus,
+              inputs: event.inputs,
+              outputs: nodes[event.nodeId]?.outputs,
+            },
+          },
+          lastEventAt: now,
+        })
+        return
+      }
       const existing = nodes[event.nodeId]
-      // Hidden nodes still get tracked in `nodes` (so node_finished
-      // can update their internal state and downstream lookups stay
-      // correct) but are kept out of `visibleOrder` so the canvas
-      // never renders a card for them.
-      const nextOrder
-        = existing || hidden ? visibleOrder : [...visibleOrder, event.nodeId]
       const nextNodes = {
         ...nodes,
-        [event.nodeId]: {
-          id: event.nodeId,
-          type: event.nodeType,
-          title: event.title,
-          position:
-            existing?.position
-            ?? _placeNode(hidden ? visibleOrder.length : nextOrder.length - 1),
-          status: 'running' as NodeRuntimeStatus,
-          inputs: event.inputs,
-          // Carry forward outputs if the engine restarts a node we've
-          // seen before (e.g. retry).
-          outputs: existing?.outputs,
-        },
-      }
-      // CR9: edges connect VISIBLE source → VISIBLE target. If the
-      // target is visible, walk back through hidden ancestors to find
-      // the nearest visible predecessor (or just use the SSE-reported
-      // predecessor when both ends are visible).
-      //
-      // Fallback chain when the engine doesn't supply predecessor_node_id
-      // on the SSE event (some chatflow nodes don't set it):
-      //   1. SSE-reported predecessor — most accurate when present.
-      //   2. Last visible node in `visibleOrder` — true for linear
-      //      chatflows, which covers ~all canvas-runtime app shapes.
-      // The first node ever revealed (Start) has no predecessor in
-      // either source — it's expected to be edgeless.
-      const nextEdges = { ...edges }
-      if (!hidden) {
-        const candidatePred
-          = event.predecessorNodeId
-            || (visibleOrder.length > 0
-              ? visibleOrder[visibleOrder.length - 1]
-              : undefined)
-        if (candidatePred && candidatePred !== event.nodeId) {
-          const sources = _resolveVisibleSources(
-            graphDict,
-            candidatePred,
-            nodes,
-            hidden,
-          )
-          for (const src of sources) {
-            if (!nextNodes[src])
-              continue
-            const edgeId = `${src}->${event.nodeId}`
-            if (!nextEdges[edgeId]) {
-              nextEdges[edgeId] = {
-                id: edgeId,
-                source: src,
-                target: event.nodeId,
-              }
+        [event.nodeId]: existing
+          ? {
+              ...existing,
+              // Refresh the title in case the draft was updated since
+              // the graph was loaded.
+              title: existing.title || event.title,
+              type: existing.type || event.nodeType,
+              status: 'running' as NodeRuntimeStatus,
+              inputs: event.inputs ?? existing.inputs,
+              // Reset outputs/error on a fresh start; they'll be
+              // overwritten by the matching node_finished.
+              outputs: undefined,
+              error: undefined,
             }
+          : {
+              // Fallback for nodes that weren't in the draft graph
+              // (e.g. iteration children). Append to visibleOrder.
+              id: event.nodeId,
+              type: event.nodeType,
+              title: event.title,
+              position: _placeNode(visibleOrder.length),
+              status: 'running' as NodeRuntimeStatus,
+              inputs: event.inputs,
+            },
+      }
+      const nextOrder = existing
+        ? visibleOrder
+        : [...visibleOrder, event.nodeId]
+      // Edges are pre-built by setGraphDict in mode A, so we don't
+      // synthesize them on node_started anymore. Lazy fallback nodes
+      // get a best-effort edge from the previous visible node.
+      let nextEdges = edges
+      if (!existing && visibleOrder.length > 0) {
+        const src = visibleOrder[visibleOrder.length - 1]
+        const id = `${src}->${event.nodeId}`
+        if (!edges[id]) {
+          nextEdges = {
+            ...edges,
+            [id]: { id, source: src, target: event.nodeId },
           }
         }
       }
@@ -459,22 +489,22 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       const next
         = event.mode === 'replace' ? event.text : `${messageAnswer}${event.text}`
 
-      // ALSO attach the message text to the latest answer-type node's
-      // outputs. Chatflow's `event: message` is how answer / direct-reply
-      // nodes stream their content — `node_finished` for those nodes
-      // arrives with `outputs: null`, so without this the answer card
-      // would never show its result (and a video URL embedded in the
-      // HTML would never reach the media-preview detector).
+      // Attach the message text to the owning node's outputs.answer.
+      // Preferred path: SSE's `from_variable_selector[0]` tells us
+      // exactly which node (mode A — cards exist for every node from
+      // setGraphDict, so we can target by id). Fallback: walk visible
+      // order looking for the latest answer/llm node (covers cases
+      // where the engine omitted the selector).
       let nextNodes = nodes
-      for (let i = visibleOrder.length - 1; i >= 0; i--) {
-        const id = visibleOrder[i]
+      const targetId = event.nodeId
+        ? nodes[event.nodeId]
+          ? event.nodeId
+          : null
+        : null
+      const writeTo = (id: string) => {
         const n = nodes[id]
         if (!n)
-          continue
-        // Match answer / llm nodes — both stream their result via
-        // `event: message`. Skip everything else (start, if-else, …).
-        if (n.type !== 'answer' && n.type !== 'llm')
-          continue
+          return
         const prevAnswer = (n.outputs?.answer as string | undefined) ?? ''
         const newAnswer
           = event.mode === 'replace' ? event.text : `${prevAnswer}${event.text}`
@@ -485,7 +515,21 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
             outputs: { ...(n.outputs ?? {}), answer: newAnswer },
           },
         }
-        break
+      }
+      if (targetId) {
+        writeTo(targetId)
+      }
+      else {
+        for (let i = visibleOrder.length - 1; i >= 0; i--) {
+          const id = visibleOrder[i]
+          const n = nodes[id]
+          if (!n)
+            continue
+          if (n.type !== 'answer' && n.type !== 'llm')
+            continue
+          writeTo(id)
+          break
+        }
       }
 
       set({
@@ -504,7 +548,65 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
 
   setMessageId: messageId => set({ messageId }),
 
-  setGraphDict: graphDict => set({ graphDict }),
+  setGraphDict: (graphDict) => {
+    // Mode A: render the FULL workflow up-front from the draft graph,
+    // so cards exist before any SSE event fires. Subsequent
+    // node_started / node_finished events only mutate `status` and
+    // `outputs` on the pre-existing entries — they never insert new
+    // nodes / edges.
+    if (!graphDict) {
+      set({ graphDict: null })
+      return
+    }
+    const visibleNodes = graphDict.nodes.filter(
+      n => n.data?.show_in_canvas_runtime !== false,
+    )
+    const nextNodes: Record<string, RuntimeNode> = {}
+    const visibleOrder: string[] = []
+    visibleNodes.forEach((n, idx) => {
+      visibleOrder.push(n.id)
+      nextNodes[n.id] = {
+        id: n.id,
+        type: n.type ?? '',
+        title: n.title ?? '',
+        position: _placeNode(idx),
+        status: 'pending',
+      }
+    })
+    // Pre-build edges from the draft graph too (CR9 already had the
+    // hidden-node pass-through machinery; reuse it so edges connect
+    // visible source → visible target only).
+    const visibleIds = new Set(visibleOrder)
+    const nextEdges: Record<string, RuntimeEdge> = {}
+    for (const e of graphDict.edges) {
+      if (!visibleIds.has(e.source) || !visibleIds.has(e.target)) {
+        // At least one end is hidden — expand via pass-through. The
+        // existing helpers _resolveVisibleSources / _visibleSuccessors
+        // return the nearest visible neighbours on each side.
+        const sources = visibleIds.has(e.source)
+          ? [e.source]
+          : _resolveVisibleSources(graphDict, e.source, nextNodes, true)
+        const targets = visibleIds.has(e.target)
+          ? [e.target]
+          : _visibleSuccessors(graphDict, e.target)
+        for (const src of sources) {
+          for (const tgt of targets) {
+            const id = `${src}->${tgt}`
+            nextEdges[id] = { id, source: src, target: tgt }
+          }
+        }
+        continue
+      }
+      const id = `${e.source}->${e.target}`
+      nextEdges[id] = { id, source: e.source, target: e.target }
+    }
+    set({
+      graphDict,
+      nodes: nextNodes,
+      edges: nextEdges,
+      visibleOrder,
+    })
+  },
 
   clearPause: (nodeId) => {
     // Flip the node back to 'succeeded' alongside dropping its pause

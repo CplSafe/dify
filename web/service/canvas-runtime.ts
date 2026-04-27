@@ -43,6 +43,11 @@ export type CanvasRuntimeChatHandlers = {
 export type CanvasRuntimeGraphResp = {
   nodes: Array<{
     id: string
+    // Node type + title from the workflow draft. The canvas renders
+    // the full graph up-front using these (mode A); SSE events only
+    // mutate per-node status / outputs.
+    type?: string
+    title?: string
     data?: {
       show_in_canvas_runtime?: boolean
       // CR10: per-node toggles set in the workflow editor. Used by the

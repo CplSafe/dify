@@ -44,6 +44,11 @@ export type IOnDataMoreInfo = {
   messageId: string
   errorMessage?: string
   errorCode?: string
+  // Chatflow `event: message` carries `from_variable_selector`
+  // identifying which workflow node owns the chunk (typically
+  // `[node_id, "answer"]`). Forwarded so canvas-runtime can route
+  // the text into the right node's outputs.
+  fromVariableSelector?: string[]
 }
 
 export type IOnData = (message: string, isFirstMessage: boolean, moreInfo: IOnDataMoreInfo) => void
@@ -282,6 +287,7 @@ export const handleStream = (
                 conversationId: bufferObj.conversation_id,
                 taskId: bufferObj.task_id,
                 messageId: bufferObj.id,
+                fromVariableSelector: bufferObj.from_variable_selector,
               })
               isFirstMessage = false
             }

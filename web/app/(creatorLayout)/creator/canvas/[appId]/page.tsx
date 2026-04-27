@@ -140,6 +140,13 @@ const CanvasRuntimePage = () => {
   // node ever fires.
   const messageAnswer = useRuntimeStore(s => s.messageAnswer)
   const messageEnded = useRuntimeStore(s => s.messageEnded)
+  // Differentiate middleware bailouts (balance gate, etc.) from normal
+  // chatflow LLM streaming. Banner is meant for the former — when the
+  // engine never reaches a workflow node and just emits text. If any
+  // node has been revealed, the LLM/answer text belongs on its card,
+  // not in a "系统消息" banner.
+  const hasRunNodes = useRuntimeStore(s => Object.keys(s.nodes).length > 0)
+  const showSystemBanner = !!messageAnswer && !hasRunNodes
   // Chatflow's file_upload + system_parameters merged into the shape
   // RuntimeInput → FileFromLinkOrLocal expects (`{...file_upload,
   // fileUploadConfig: system_parameters}`). useFile() inside the
@@ -544,10 +551,10 @@ const CanvasRuntimePage = () => {
           该画布的运行数据已过期或被清理，无法重现节点。仍可在底部输入框开始一次新的运行。
         </div>
       )}
-      {messageAnswer && (
+      {showSystemBanner && (
         <div className="border-b border-components-panel-border bg-components-panel-bg px-4 py-3">
           <div className="mb-1 system-2xs-medium-uppercase text-text-tertiary">
-            来自系统的消息
+            提示
             {!messageEnded && '（接收中…）'}
           </div>
           <div className="system-sm-regular whitespace-pre-wrap text-text-primary">

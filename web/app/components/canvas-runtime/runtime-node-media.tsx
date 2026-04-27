@@ -50,26 +50,51 @@ const _kindFromObject = (
   return null
 }
 
+// Keys we never recurse into — these typically carry prompt/answer text
+// and walking them would (a) waste time and (b) risk false positives if
+// the prompt mentions a URL like "https://example.com/foo.mp4".
+const _NON_ASSET_KEYS = new Set([
+  'text',
+  'prompt',
+  'content',
+  'answer',
+  'message',
+  'reasoning',
+  'system_prompt',
+  'instruction',
+  'description',
+  'query',
+])
+
 /**
- * Walk a node's outputs looking for media references. Handles three
- * common shapes:
- *   1. A bare URL string in any value.
+ * Walk a node's outputs looking for media references. Handles:
+ *   1. A bare URL string in any value (any key, not just whitelisted).
  *   2. An array of strings or `{url, type}` objects.
  *   3. A nested object with a `url` key (Dify's file convention).
  *
- * Stops at the first 8 items so a noisy node can't blow out the card.
+ * Skips keys that typically carry prose (prompt/answer/text/...) so a
+ * URL mentioned inside an LLM prompt doesn't get rendered as a video.
+ *
+ * Caps at 8 items so a noisy node can't blow out the card.
  */
 const _collectMedia = (outputs?: Record<string, unknown>): MediaItem[] => {
   if (!outputs)
     return []
   const out: MediaItem[] = []
+  const seenUrls = new Set<string>()
+  const push = (item: MediaItem) => {
+    if (seenUrls.has(item.url))
+      return
+    seenUrls.add(item.url)
+    out.push(item)
+  }
   const visit = (v: unknown) => {
     if (out.length >= 8)
       return
     if (typeof v === 'string') {
       const k = _kindFromString(v)
       if (k)
-        out.push({ kind: k, url: v })
+        push({ kind: k, url: v })
       return
     }
     if (Array.isArray(v)) {
@@ -78,16 +103,20 @@ const _collectMedia = (outputs?: Record<string, unknown>): MediaItem[] => {
     }
     if (v && typeof v === 'object') {
       const obj = v as Record<string, unknown>
+      // Direct file-shape match short-circuits — prefer the declared
+      // `type` over sniffing each property.
       const direct = _kindFromObject(obj)
       if (direct) {
-        out.push(direct)
+        push(direct)
         return
       }
-      // Recurse into known container keys only — avoids touching prompt
-      // text or other non-asset payloads.
-      for (const key of ['files', 'images', 'urls', 'data', 'items']) {
-        if (key in obj)
-          visit(obj[key])
+      // Walk every property except obvious prose carriers. Catches
+      // generated keys like videoUrl, video_url, result_url, output_video,
+      // etc. without us having to enumerate every model's schema.
+      for (const [key, value] of Object.entries(obj)) {
+        if (_NON_ASSET_KEYS.has(key))
+          continue
+        visit(value)
       }
     }
   }

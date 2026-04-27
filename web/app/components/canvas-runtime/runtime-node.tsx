@@ -69,6 +69,33 @@ const STATUS_LABEL: Record<NodeRuntimeStatus, string> = {
   paused: '已暂停',
 }
 
+// Friendly Chinese fallback labels for nodes that don't ship a title
+// (Start node in particular often arrives with title=''). Keyed by the
+// engine's node_type string so we cover every shipped block type
+// without having to import the BlockEnum.
+const NODE_TYPE_LABEL: Record<string, string> = {
+  start: '开始',
+  end: '结束',
+  answer: '回复',
+  llm: 'LLM',
+  knowledge_retrieval: '知识检索',
+  if_else: '条件分支',
+  iteration: '迭代',
+  loop: '循环',
+  code: '代码',
+  template_transform: '模板转换',
+  question_classifier: '问题分类',
+  http_request: 'HTTP 请求',
+  tool: '工具',
+  variable_assigner: '变量赋值',
+  variable_aggregator: '变量聚合',
+  parameter_extractor: '参数提取',
+  document_extractor: '文档提取',
+  list_operator: '列表操作',
+  human_input: '人工输入',
+  agent: '智能体',
+}
+
 const StatusBadge: FC<{ status: NodeRuntimeStatus }> = ({ status }) => {
   const cls = 'h-3.5 w-3.5 shrink-0'
   if (status === 'running')
@@ -218,7 +245,7 @@ const RuntimeNodeComponent: FC<NodeProps<RuntimeNode>> = ({ data }) => {
           </div>
           <div className="min-w-0 grow">
             <div className="truncate system-sm-semibold text-slate-50">
-              {data.title || data.id}
+              {data.title || NODE_TYPE_LABEL[data.type] || data.type || data.id}
             </div>
             <div className="truncate system-2xs-regular tracking-wider text-slate-400 uppercase">
               {data.type}

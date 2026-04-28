@@ -158,6 +158,9 @@ from .asset_library import (
 from .asset_library import (
     files as asset_library_files,
 )
+from .asset_library import (
+    prompts as asset_library_prompts,
+)
 
 # Import auth controllers
 from .auth import (
@@ -253,6 +256,7 @@ __all__ = [
     "app",
     "asset_library_assets",
     "asset_library_files",
+    "asset_library_prompts",
     "audio",
     "banner",
     "billing",

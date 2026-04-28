@@ -19,6 +19,7 @@ console_ns = Namespace("console", description="Console management API operations
 # Paths that non-admin (creator) users are allowed to access.
 # Everything else requires is_system_admin=True.
 _CREATOR_ALLOWED_PREFIXES = (
+    "/console/api/asset-library",
     "/console/api/datasets",
     "/console/api/workspaces",
     "/console/api/files/upload",
@@ -61,6 +62,7 @@ def _enforce_creator_access_control():
     # Accessing current_user here would trigger request_loader which raises Unauthorized
     # for token-less requests, breaking public endpoints like /login and /system-features.
     from libs.token import extract_access_token
+
     if not extract_access_token(request):
         return None
 
@@ -81,11 +83,13 @@ def _enforce_creator_access_control():
         return None
 
     return (
-        jsonify({
-            "code": "system_admin_required",
-            "message": "This API is restricted to system administrators only.",
-            "status": 403,
-        }),
+        jsonify(
+            {
+                "code": "system_admin_required",
+                "message": "This API is restricted to system administrators only.",
+                "status": 403,
+            }
+        ),
         403,
     )
 
@@ -146,6 +150,9 @@ from .app import (
     workflow_statistic,
     workflow_trigger,
 )
+
+# Import asset-library controllers
+from .asset_library import assets as asset_library_assets
 
 # Import auth controllers
 from .auth import (
@@ -239,6 +246,7 @@ __all__ = [
     "api",
     "apikey",
     "app",
+    "asset_library_assets",
     "audio",
     "banner",
     "billing",

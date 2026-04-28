@@ -136,7 +136,6 @@ class TestDifyNodeFactory:
     def test_create_node_http_request_branch(self, monkeypatch):
         factory = self._factory(monkeypatch)
         self._stub_node_resolution(monkeypatch, DummyHttpRequestNode)
-        monkeypatch.setattr("core.workflow.node_factory.DifyHttpRequestNode", DummyHttpRequestNode)
 
         node = factory.create_node({"id": "node-1", "data": {"type": BuiltinNodeTypes.HTTP_REQUEST}})
 

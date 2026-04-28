@@ -9,10 +9,12 @@ allowing presentation layers to remain read-only observers of repository
 state.
 """
 
+import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Union
 
 from graphon.entities import WorkflowExecution, WorkflowNodeExecution
@@ -427,6 +429,184 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
         runtime_state = self.graph_runtime_state
         return runtime_state.variable_pool.get_by_prefix(SYSTEM_VARIABLE_NODE_ID)
 
+    @staticmethod
+    def _parse_decimal(value: Any, *, default: str = "0") -> Decimal:
+        try:
+            parsed = Decimal(str(value if value is not None else default).strip() or default)
+        except Exception:
+            return Decimal(default)
+        return parsed if parsed > 0 else Decimal("0")
+
+    @staticmethod
+    def _coerce_token_value(value: Any) -> int:
+        if value is None or isinstance(value, bool):
+            return 0
+        try:
+            coerced = int(value)
+        except Exception:
+            try:
+                coerced = int(float(str(value)))
+            except Exception:
+                return 0
+        return max(coerced, 0)
+
+    @staticmethod
+    def _resolve_nested_value(data: Any, path: str | None) -> Any:
+        if not path:
+            return None
+
+        current = data
+        for segment in path.split("."):
+            normalized = segment.strip()
+            if not normalized:
+                return None
+            if isinstance(current, Mapping):
+                current = current.get(normalized)
+                continue
+            return None
+        return current
+
+    @classmethod
+    def _extract_usage_total_tokens(cls, payload: Any) -> int:
+        if not isinstance(payload, Mapping):
+            return 0
+        usage = payload.get("usage")
+        if not isinstance(usage, Mapping):
+            return 0
+
+        total_tokens = cls._coerce_token_value(usage.get("total_tokens"))
+        if total_tokens > 0:
+            return total_tokens
+
+        return cls._coerce_token_value(usage.get("prompt_tokens")) + cls._coerce_token_value(
+            usage.get("completion_tokens")
+        )
+
+    @classmethod
+    def _extract_legacy_http_tokens(cls, *, outputs: Any, node_data: Mapping[str, Any]) -> int:
+        if not isinstance(outputs, Mapping):
+            return 0
+
+        token_field_name = str(node_data.get("token_field_name") or "").strip()
+        if not token_field_name:
+            billing_config = node_data.get("billing_config")
+            if isinstance(billing_config, Mapping):
+                token_field_name = str(billing_config.get("output_tokens_path") or "").strip()
+        if not token_field_name:
+            return 0
+
+        body_raw = outputs.get("body")
+        if isinstance(body_raw, str):
+            try:
+                body = json.loads(body_raw.strip()) if body_raw.strip() else {}
+            except json.JSONDecodeError:
+                return 0
+        elif isinstance(body_raw, Mapping):
+            body = body_raw
+        else:
+            return 0
+
+        return cls._coerce_token_value(cls._resolve_nested_value(body, token_field_name))
+
+    @classmethod
+    def _resolve_node_billable_tokens(cls, *, node_execution: Any, node_data: Mapping[str, Any]) -> int:
+        for attr_name in ("outputs", "outputs_dict", "process_data", "process_data_dict"):
+            payload = getattr(node_execution, attr_name, None)
+            tokens = cls._extract_usage_total_tokens(payload)
+            if tokens > 0:
+                return tokens
+
+        metadata = getattr(node_execution, "metadata", None) or getattr(
+            node_execution, "execution_metadata_dict", None
+        )
+        if isinstance(metadata, Mapping):
+            tokens = cls._coerce_token_value(metadata.get(WorkflowNodeExecutionMetadataKey.TOTAL_TOKENS))
+            if tokens > 0:
+                return tokens
+
+        return cls._extract_legacy_http_tokens(outputs=getattr(node_execution, "outputs", None), node_data=node_data)
+
+    @classmethod
+    def _resolve_node_price_per_1k(cls, node_data: Mapping[str, Any]) -> Decimal:
+        legacy_price = cls._parse_decimal(node_data.get("billing_price_per_k_tokens"))
+        if legacy_price > 0:
+            return legacy_price
+
+        billing_config = node_data.get("billing_config")
+        if not isinstance(billing_config, Mapping):
+            return Decimal("0")
+
+        output_price = cls._parse_decimal(billing_config.get("output_price_per_thousand"))
+        if output_price > 0:
+            return output_price
+        return cls._parse_decimal(billing_config.get("input_price_per_thousand"))
+
+    def _get_persisted_node_executions(self, execution: "WorkflowExecution") -> Sequence[Any]:
+        workflow_execution_id = getattr(execution, "id_", None)
+        if not workflow_execution_id:
+            return []
+
+        try:
+            return self._workflow_node_execution_repository.get_by_workflow_execution(str(workflow_execution_id))
+        except Exception:
+            logger.exception("Failed to load persisted node executions for workflow run %s", workflow_execution_id)
+            return []
+
+    def _resolve_workflow_billing(self, execution: "WorkflowExecution") -> tuple[int, Decimal]:
+        """Return billable tokens and amount using node-level token prices.
+
+        ``execution.total_tokens`` already contains standard GraphEngine usage
+        such as LLM and HTTP ``llm_usage``. Billing must not re-add HTTP tokens
+        from node bodies on top of that total. Instead, priced nodes contribute
+        their own usage once, at their own configured price.
+        """
+
+        graph_data = self._workflow_info.graph_data or {}
+        node_configs = graph_data.get("nodes", [])
+        node_data_by_id = {
+            str(node.get("id")): node.get("data", {})
+            for node in node_configs
+            if isinstance(node, Mapping) and isinstance(node.get("data"), Mapping)
+        }
+
+        billable_by_execution_id: dict[str, tuple[int, Decimal]] = {}
+        node_executions = [*self._node_execution_cache.values(), *self._get_persisted_node_executions(execution)]
+
+        for index, node_execution in enumerate(node_executions):
+            node_data = node_data_by_id.get(str(getattr(node_execution, "node_id", "")))
+            if not isinstance(node_data, Mapping):
+                continue
+
+            price_per_1k = self._resolve_node_price_per_1k(node_data)
+            if price_per_1k <= 0:
+                continue
+
+            node_tokens = self._resolve_node_billable_tokens(node_execution=node_execution, node_data=node_data)
+            if node_tokens <= 0:
+                continue
+
+            amount = (Decimal(node_tokens) / Decimal(1000)) * price_per_1k
+            execution_key = str(
+                getattr(node_execution, "id", None)
+                or getattr(node_execution, "node_execution_id", None)
+                or f"node-execution-{index}"
+            )
+            previous = billable_by_execution_id.get(execution_key)
+            if previous is None or node_tokens > previous[0]:
+                billable_by_execution_id[execution_key] = (node_tokens, amount)
+
+        billable_tokens = sum(tokens for tokens, _ in billable_by_execution_id.values())
+        total_amount = sum((amount for _, amount in billable_by_execution_id.values()), Decimal("0"))
+
+        if billable_tokens > 0:
+            return billable_tokens, total_amount.quantize(Decimal("0.000001"))
+
+        total_tokens = int(execution.total_tokens or 0)
+        if total_tokens <= 0:
+            return 0, Decimal("0")
+        default_price = Decimal("0.002")
+        return total_tokens, ((Decimal(total_tokens) / Decimal(1000)) * default_price).quantize(Decimal("0.000001"))
+
     def _bill_workflow_run(self, execution: "WorkflowExecution") -> None:
         """Deduct billing for consumed tokens after any terminal workflow state.
 
@@ -434,8 +614,6 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
         that tokens consumed before an early termination are still billed.
         Only bills for platform accounts (not end-users).
         """
-        from decimal import Decimal
-
         from services.user_billing_service import UserBillingService
 
         try:
@@ -450,14 +628,11 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
                 return
 
             account_id = self._application_generate_entity.user_id
-            total_tokens = int(execution.total_tokens or 0)
-            if total_tokens <= 0:
+            total_tokens, total_amount = self._resolve_workflow_billing(execution)
+            if total_tokens <= 0 or total_amount <= 0:
                 return
 
-            price_per_1k = Decimal("0.002")
-            usage = self.graph_runtime_state.llm_usage
-            if usage.total_tokens > 0 and usage.total_price > 0:
-                price_per_1k = (usage.total_price * Decimal(1000)) / Decimal(usage.total_tokens)
+            price_per_1k = (total_amount * Decimal(1000)) / Decimal(total_tokens)
 
             UserBillingService.deduct_for_workflow_run(
                 account_id=account_id,

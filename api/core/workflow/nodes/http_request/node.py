@@ -6,7 +6,6 @@ from typing import Any
 
 from graphon.enums import WorkflowNodeExecutionMetadataKey
 from graphon.model_runtime.entities.llm_entities import LLMUsage
-from graphon.model_runtime.utils.encoders import jsonable_encoder
 from graphon.node_events import NodeRunResult
 from graphon.nodes.http_request.node import HttpRequestNode
 
@@ -111,15 +110,14 @@ def apply_http_token_usage_to_result(*, result: NodeRunResult, node_data: Any) -
     if usage.total_tokens <= 0:
         return
 
-    usage_payload = jsonable_encoder(usage)
     result.llm_usage = usage
     result.outputs = {
         **dict(result.outputs),
-        "usage": usage_payload,
-    }
-    result.process_data = {
-        **dict(result.process_data),
-        "usage": usage_payload,
+        "usage": {
+            "prompt_tokens": usage.prompt_tokens,
+            "completion_tokens": usage.completion_tokens,
+            "total_tokens": usage.total_tokens,
+        },
     }
     result.metadata = {
         **dict(result.metadata),

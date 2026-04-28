@@ -39,12 +39,16 @@ class _RepoRecorder:
     def __init__(self) -> None:
         self.saved: list[object] = []
         self.saved_exec_data: list[object] = []
+        self.workflow_execution_results: list[object] = []
 
     def save(self, entity):
         self.saved.append(entity)
 
     def save_execution_data(self, entity):
         self.saved_exec_data.append(entity)
+
+    def get_by_workflow_execution(self, workflow_execution_id: str):
+        return self.workflow_execution_results
 
 
 def _naive_utc_now() -> datetime:
@@ -568,6 +572,53 @@ class TestWorkflowPersistenceLayer:
             )
         }
         execution = SimpleNamespace(total_tokens=324900)
+
+        billable_tokens, total_amount = layer._resolve_workflow_billing(execution)
+
+        assert billable_tokens == 324900
+        assert total_amount == Decimal("22.418100")
+
+    def test_workflow_billing_falls_back_to_persisted_http_body_tokens(self):
+        layer, _, node_repo, _ = _make_layer(
+            graph_data={
+                "nodes": [
+                    {
+                        "id": "http-node",
+                        "data": {
+                            "type": "http-request",
+                            "token_field_name": "usage.total_tokens",
+                            "billing_price_per_k_tokens": "0.069",
+                        },
+                    }
+                ],
+                "edges": [],
+            }
+        )
+        layer._node_execution_cache = {
+            "http-exec": SimpleNamespace(
+                id="http-exec",
+                node_id="http-node",
+                outputs={
+                    "body": (
+                        '{"id":"cgt","status":"running","created_at":1,'
+                        '"updated_at":1,"draft":false}'
+                    )
+                },
+            )
+        }
+        node_repo.workflow_execution_results = [
+            SimpleNamespace(
+                id="http-exec",
+                node_id="http-node",
+                outputs={
+                    "body": (
+                        '{"status":"succeeded","usage":'
+                        '{"completion_tokens":324900,"total_tokens":324900}}'
+                    )
+                },
+            )
+        ]
+        execution = SimpleNamespace(id_="run-id", total_tokens=519)
 
         billable_tokens, total_amount = layer._resolve_workflow_billing(execution)
 

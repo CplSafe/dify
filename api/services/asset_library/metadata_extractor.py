@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 
-from mutagen import File as MutagenFile
+from mutagen._file import File as MutagenFile
 from PIL import Image
 
 logger = logging.getLogger(__name__)
@@ -75,9 +75,13 @@ def extract_audio_metadata(content: bytes) -> AudioMeta:
         tmp.write(content)
         tmp.flush()
         muta = MutagenFile(tmp.name)
-        if muta is None or getattr(muta, "info", None) is None:
+        if muta is None:
             return AudioMeta(duration=None)
-        return AudioMeta(duration=float(muta.info.length))
+        info = getattr(muta, "info", None)
+        length = getattr(info, "length", None) if info is not None else None
+        if length is None:
+            return AudioMeta(duration=None)
+        return AudioMeta(duration=float(length))
 
 
 def extract_video_metadata(content: bytes) -> VideoMeta:

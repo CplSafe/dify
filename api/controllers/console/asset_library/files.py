@@ -24,7 +24,7 @@ from flask_restx import Resource
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from controllers.console import console_ns
-from controllers.console.asset_library.assets import _attach_creator
+from controllers.console.asset_library.assets import attach_creator
 from controllers.console.wraps import (
     account_initialization_required,
     setup_required,
@@ -109,4 +109,4 @@ class AssetFileUploadApi(Resource):
         except (FileSizeLimitExceededError, FileTooLargeError) as exc:
             raise RequestEntityTooLarge(str(exc)) from exc
 
-        return _attach_creator(asset), 201
+        return attach_creator(asset), 201

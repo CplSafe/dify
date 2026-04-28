@@ -129,8 +129,8 @@ def _install_current_account(module, monkeypatch, tenant_id: str = "tenant-1"):
     return account
 
 
-def _stub_attach_creator(module, monkeypatch):
-    monkeypatch.setattr(module, "_attach_creator", lambda asset: asset)
+def _stubattach_creator(module, monkeypatch):
+    monkeypatch.setattr(module, "attach_creator", lambda asset: asset)
 
 
 def _multipart_env(
@@ -175,7 +175,7 @@ def _multipart_env(
 class TestAssetFileUploadHappyPath:
     def test_returns_201_and_forwards_kwargs_to_service(self, flask_app, files_module, monkeypatch):
         account = _install_current_account(files_module, monkeypatch)
-        _stub_attach_creator(files_module, monkeypatch)
+        _stubattach_creator(files_module, monkeypatch)
         asset = _make_asset(name="测试图")
         captured: dict = {}
 
@@ -255,7 +255,7 @@ class TestAssetFileUploadValidation:
 
     def test_unsupported_mime_from_service_raises_bad_request(self, flask_app, files_module, monkeypatch):
         _install_current_account(files_module, monkeypatch)
-        _stub_attach_creator(files_module, monkeypatch)
+        _stubattach_creator(files_module, monkeypatch)
 
         def _create(**_kwargs):
             raise UnsupportedMimeTypeError("video/avi")
@@ -287,7 +287,7 @@ class TestAssetFileUploadValidation:
 
     def test_unsupported_file_type_from_filesvc_raises_bad_request(self, flask_app, files_module, monkeypatch):
         _install_current_account(files_module, monkeypatch)
-        _stub_attach_creator(files_module, monkeypatch)
+        _stubattach_creator(files_module, monkeypatch)
 
         def _create(**_kwargs):
             raise UnsupportedFileTypeError()
@@ -313,7 +313,7 @@ class TestAssetFileUploadValidation:
 class TestAssetFileUploadSizeLimit:
     def test_file_too_large_returns_413(self, flask_app, files_module, monkeypatch):
         _install_current_account(files_module, monkeypatch)
-        _stub_attach_creator(files_module, monkeypatch)
+        _stubattach_creator(files_module, monkeypatch)
 
         def _create(**_kwargs):
             raise FileTooLargeError("limit exceeded")
@@ -332,7 +332,7 @@ class TestAssetFileUploadSizeLimit:
 
     def test_asset_library_size_limit_returns_413(self, flask_app, files_module, monkeypatch):
         _install_current_account(files_module, monkeypatch)
-        _stub_attach_creator(files_module, monkeypatch)
+        _stubattach_creator(files_module, monkeypatch)
 
         def _create(**_kwargs):
             raise FileSizeLimitExceededError("over the cap")

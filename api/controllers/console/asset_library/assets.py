@@ -14,7 +14,7 @@ content-type-specific parsing stays separate.
 The model only stores ``created_by`` as a UUID string; the response
 serializer expects an ``Account``-shaped ``{id, name, avatar}`` dict
 (see ``fields.asset_library_fields.asset_creator_fields``). The
-``_attach_creator`` helper performs that lookup before marshalling.
+``attach_creator`` helper performs that lookup before marshalling.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ from services.errors.asset_library import (
 )
 
 
-def _attach_creator(asset: AssetLibrary) -> AssetLibrary:
+def attach_creator(asset: AssetLibrary) -> AssetLibrary:
     """Resolve ``asset.created_by`` UUID to an ``Account``-shaped dict.
 
     The ORM column stores the creator's UUID. ``asset_fields`` declares
@@ -132,7 +132,7 @@ class AssetListApi(Resource):
             page=page_arg,
             limit=limit_arg,
         )
-        items = [_attach_creator(item) for item in page.items]
+        items = [attach_creator(item) for item in page.items]
         return {
             "data": items,
             "total": page.total,
@@ -155,7 +155,7 @@ class AssetDetailApi(Resource):
             asset = AssetLibraryService.get_asset(tenant_id, asset_id)
         except AssetNotFoundError as exc:
             raise NotFound(str(exc)) from exc
-        return _attach_creator(asset)
+        return attach_creator(asset)
 
     @setup_required
     @login_required
@@ -175,7 +175,7 @@ class AssetDetailApi(Resource):
             raise NotFound(str(exc)) from exc
         except InvalidPromptVariablesError as exc:
             raise BadRequest(str(exc)) from exc
-        return _attach_creator(asset)
+        return attach_creator(asset)
 
     @setup_required
     @login_required

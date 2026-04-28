@@ -123,8 +123,8 @@ def _install_current_account(module, monkeypatch, tenant_id: str = "tenant-1"):
     return account
 
 
-def _stub_attach_creator(module, monkeypatch):
-    monkeypatch.setattr(module, "_attach_creator", lambda asset: asset)
+def _stubattach_creator(module, monkeypatch):
+    monkeypatch.setattr(module, "attach_creator", lambda asset: asset)
 
 
 def _json_env(payload):
@@ -154,7 +154,7 @@ def _json_env(payload):
 class TestAssetPromptCreateHappyPath:
     def test_returns_201_and_forwards_kwargs_to_service(self, flask_app, prompts_module, monkeypatch):
         account = _install_current_account(prompts_module, monkeypatch)
-        _stub_attach_creator(prompts_module, monkeypatch)
+        _stubattach_creator(prompts_module, monkeypatch)
         asset = _make_asset(name="种草")
         captured: dict = {}
 
@@ -195,7 +195,7 @@ class TestAssetPromptCreateHappyPath:
 
     def test_default_values_for_optional_fields(self, flask_app, prompts_module, monkeypatch):
         _install_current_account(prompts_module, monkeypatch)
-        _stub_attach_creator(prompts_module, monkeypatch)
+        _stubattach_creator(prompts_module, monkeypatch)
         asset = _make_asset()
         captured: dict = {}
 
@@ -270,7 +270,7 @@ class TestAssetPromptCreateValidation:
 
     def test_invalid_prompt_variables_from_service_raises_bad_request(self, flask_app, prompts_module, monkeypatch):
         _install_current_account(prompts_module, monkeypatch)
-        _stub_attach_creator(prompts_module, monkeypatch)
+        _stubattach_creator(prompts_module, monkeypatch)
 
         def _create(**_kwargs):
             raise InvalidPromptVariablesError("duplicate variable name 'a'")

@@ -100,7 +100,7 @@ def _make_asset(
     name: str = "Greeting",
     created_by: str = "user-1",
 ) -> SimpleNamespace:
-    """Build an ``AssetLibrary``-shaped stub. ``_attach_creator`` mutates
+    """Build an ``AssetLibrary``-shaped stub. ``attach_creator`` mutates
     ``created_by`` so we use ``SimpleNamespace`` (mutable) instead of a
     frozen dataclass."""
     return SimpleNamespace(
@@ -132,9 +132,9 @@ def _install_current_account(module, monkeypatch, tenant_id: str = "tenant-1"):
     monkeypatch.setattr(module, "current_account_with_tenant", lambda: (account, tenant_id))
 
 
-def _stub_attach_creator(module, monkeypatch):
-    """Skip the DB lookup that ``_attach_creator`` would otherwise perform."""
-    monkeypatch.setattr(module, "_attach_creator", lambda asset: asset)
+def _stubattach_creator(module, monkeypatch):
+    """Skip the DB lookup that ``attach_creator`` would otherwise perform."""
+    monkeypatch.setattr(module, "attach_creator", lambda asset: asset)
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +145,7 @@ def _stub_attach_creator(module, monkeypatch):
 class TestAssetList:
     def test_returns_paginated_envelope(self, flask_app, assets_module, monkeypatch):
         _install_current_account(assets_module, monkeypatch)
-        _stub_attach_creator(assets_module, monkeypatch)
+        _stubattach_creator(assets_module, monkeypatch)
         asset = _make_asset()
         page = AssetPage(items=[asset], total=1, page=1, limit=20)
         captured: dict = {}
@@ -172,7 +172,7 @@ class TestAssetList:
 
     def test_has_more_true_when_more_pages_remain(self, flask_app, assets_module, monkeypatch):
         _install_current_account(assets_module, monkeypatch)
-        _stub_attach_creator(assets_module, monkeypatch)
+        _stubattach_creator(assets_module, monkeypatch)
         page = AssetPage(items=[_make_asset()], total=50, page=1, limit=20)
         monkeypatch.setattr(
             assets_module.AssetLibraryService,
@@ -194,7 +194,7 @@ class TestAssetList:
 class TestAssetDetail:
     def test_returns_asset_with_creator_attached(self, flask_app, assets_module, monkeypatch):
         _install_current_account(assets_module, monkeypatch)
-        _stub_attach_creator(assets_module, monkeypatch)
+        _stubattach_creator(assets_module, monkeypatch)
         asset = _make_asset()
         captured: dict = {}
 
@@ -213,7 +213,7 @@ class TestAssetDetail:
 
     def test_missing_asset_raises_not_found(self, flask_app, assets_module, monkeypatch):
         _install_current_account(assets_module, monkeypatch)
-        _stub_attach_creator(assets_module, monkeypatch)
+        _stubattach_creator(assets_module, monkeypatch)
 
         def _get(_tenant_id, _asset_id):
             raise AssetNotFoundError("nope")
@@ -233,7 +233,7 @@ class TestAssetDetail:
 class TestAssetPatch:
     def test_forwards_whitelisted_fields_to_service(self, flask_app, assets_module, monkeypatch):
         _install_current_account(assets_module, monkeypatch)
-        _stub_attach_creator(assets_module, monkeypatch)
+        _stubattach_creator(assets_module, monkeypatch)
         asset = _make_asset(name="Updated")
         captured: dict = {}
 
@@ -265,7 +265,7 @@ class TestAssetPatch:
 
     def test_invalid_prompt_variables_returns_bad_request(self, flask_app, assets_module, monkeypatch):
         _install_current_account(assets_module, monkeypatch)
-        _stub_attach_creator(assets_module, monkeypatch)
+        _stubattach_creator(assets_module, monkeypatch)
 
         def _update(**_kwargs):
             raise InvalidPromptVariablesError("bad schema")
@@ -286,7 +286,7 @@ class TestAssetPatch:
 
     def test_missing_asset_raises_not_found(self, flask_app, assets_module, monkeypatch):
         _install_current_account(assets_module, monkeypatch)
-        _stub_attach_creator(assets_module, monkeypatch)
+        _stubattach_creator(assets_module, monkeypatch)
 
         def _update(**_kwargs):
             raise AssetNotFoundError("missing")
@@ -350,7 +350,7 @@ class TestAssetDelete:
 
 
 # ---------------------------------------------------------------------------
-# _attach_creator helper
+# attach_creator helper
 # ---------------------------------------------------------------------------
 
 
@@ -377,7 +377,7 @@ class TestAttachCreator:
         monkeypatch.setattr(assets_module, "Session", _FakeSession)
         monkeypatch.setattr(assets_module, "db", SimpleNamespace(engine=object()))
 
-        result = assets_module._attach_creator(asset)
+        result = assets_module.attach_creator(asset)
 
         assert result.created_by == {"id": "user-1", "name": "Alice", "avatar": "alice.png"}
 
@@ -402,7 +402,7 @@ class TestAttachCreator:
         monkeypatch.setattr(assets_module, "Session", _FakeSession)
         monkeypatch.setattr(assets_module, "db", SimpleNamespace(engine=object()))
 
-        result = assets_module._attach_creator(asset)
+        result = assets_module.attach_creator(asset)
 
         assert result.created_by is None
 
@@ -411,6 +411,6 @@ class TestAttachCreator:
         asset = _make_asset()
         asset.created_by = creator  # type: ignore[assignment]
 
-        result = assets_module._attach_creator(asset)
+        result = assets_module.attach_creator(asset)
 
         assert result.created_by is creator

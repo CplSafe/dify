@@ -9,9 +9,12 @@ allowing presentation layers to remain read-only observers of repository
 state.
 """
 
+import json
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Union
 
 from graphon.entities import WorkflowExecution, WorkflowNodeExecution
@@ -47,6 +50,8 @@ from core.workflow.system_variables import SystemVariableKey
 from core.workflow.variable_prefixes import SYSTEM_VARIABLE_NODE_ID
 from core.workflow.workflow_run_outputs import project_node_outputs_for_workflow_run
 from libs.datetime_utils import naive_utc_now
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -94,13 +99,6 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
         self._node_execution_cache: dict[str, WorkflowNodeExecution] = {}
         self._node_snapshots: dict[str, _NodeRuntimeSnapshot] = {}
         self._node_sequence: int = 0
-        # Independent counter for HTTP-node tokens. graphon's runtime
-        # `total_tokens` accumulator misses HTTP nodes intermittently in
-        # loop contexts (root cause unclear — likely event-ordering race
-        # between graph engine and layer notification). We mirror the same
-        # add_tokens calls into this counter so completion stats can fall
-        # back to it when runtime_state lost the data.
-        self._http_tokens_accumulated: int = 0
 
     # ------------------------------------------------------------------
     # GraphEngineLayer lifecycle
@@ -286,9 +284,6 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
             WorkflowNodeExecutionStatus.SUCCEEDED,
             finished_at=event.finished_at,
         )
-        # Extract tokens from HTTP request node response body when token_field_name is configured
-        if event.node_type == "http-request":
-            self._extract_http_node_tokens(event)
 
     def _handle_node_failed(self, event: NodeRunFailedEvent) -> None:
         domain_execution = self._get_node_execution(event.id)
@@ -323,118 +318,6 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-    def _extract_http_node_tokens(self, event: NodeRunSucceededEvent) -> None:
-        """Extract token count from an HTTP request node's response body.
-
-        When an HTTP node is configured with ``token_field_name`` (e.g.
-        ``usage.total_tokens``), parse the response body JSON and walk the
-        dot-separated path to read the integer token value.  The extracted
-        tokens are accumulated into ``graph_runtime_state`` so they appear
-        in ``execution.total_tokens`` and trigger billing.
-        """
-        import json
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        token_field_name: str = ""
-        try:
-            # Look up the node config from the workflow graph data
-            graph_data = self._workflow_info.graph_data or {}
-            nodes = graph_data.get("nodes", [])
-            node_config: dict[str, Any] | None = None
-            for n in nodes:
-                if n.get("id") == event.node_id:
-                    node_config = n.get("data", {})
-                    break
-
-            if not node_config:
-                logger.warning(
-                    "HTTP node %s: graph node config not found (graph has %d nodes)",
-                    event.node_id, len(nodes),
-                )
-                return
-
-            token_field_name = node_config.get("token_field_name", "") or ""
-            if not token_field_name.strip():
-                # Node intentionally not configured for billing — silent.
-                return
-
-            # Get the response body from node outputs
-            outputs = event.node_run_result.outputs or {}
-            body_raw = outputs.get("body")
-            if not body_raw:
-                logger.warning(
-                    "HTTP node %s: empty body in outputs (keys=%s, in_loop=%s)",
-                    event.node_id,
-                    list(outputs.keys()),
-                    getattr(event, "in_loop_id", None),
-                )
-                return
-
-            # Parse body as JSON (it may already be a dict or a JSON string)
-            if isinstance(body_raw, str):
-                body = json.loads(body_raw)
-            elif isinstance(body_raw, dict):
-                body = body_raw
-            else:
-                logger.warning(
-                    "HTTP node %s: body has unexpected type %s (in_loop=%s)",
-                    event.node_id,
-                    type(body_raw).__name__,
-                    getattr(event, "in_loop_id", None),
-                )
-                return
-
-            # Walk the dot-separated path to extract the token value
-            value: Any = body
-            for key in token_field_name.strip().split("."):
-                if isinstance(value, dict):
-                    value = value.get(key)
-                else:
-                    value = None
-                    break
-
-            if value is None:
-                logger.warning(
-                    "HTTP node %s: field=%s missing from body (top-level keys=%s, in_loop=%s)",
-                    event.node_id,
-                    token_field_name,
-                    list(body.keys()) if isinstance(body, dict) else type(body).__name__,
-                    getattr(event, "in_loop_id", None),
-                )
-                return
-
-            tokens = int(value)
-            if tokens > 0:
-                # graph_runtime_state from layer base is a ReadOnly wrapper;
-                # reach through to the underlying mutable state to add tokens.
-                # Falls back to direct call if a future graphon version exposes
-                # add_tokens on the wrapper itself.
-                state = getattr(self.graph_runtime_state, "_state", None) or self.graph_runtime_state
-                before = getattr(state, "total_tokens", 0)
-                state.add_tokens(tokens)
-                after = getattr(state, "total_tokens", 0)
-                # Mirror the addition into our own counter — survives even
-                # if runtime_state's value gets clobbered by other layers.
-                self._http_tokens_accumulated += tokens
-                logger.info(
-                    "HTTP node %s tokens extracted: +%d (field=%s, runtime %d→%d, mirror=%d)",
-                    event.node_id,
-                    tokens,
-                    token_field_name,
-                    before,
-                    after,
-                    self._http_tokens_accumulated,
-                )
-        except (json.JSONDecodeError, ValueError, TypeError, KeyError) as exc:
-            logger.warning(
-                "Failed to extract tokens from HTTP node %s (field=%s): %s",
-                event.node_id,
-                token_field_name,
-                exc,
-            )
-
     def _get_execution_id(self) -> str:
         workflow_execution_id = self._system_variables().get(SystemVariableKey.WORKFLOW_EXECUTION_ID)
         if not workflow_execution_id:
@@ -473,28 +356,7 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
         if update_finished:
             execution.finished_at = naive_utc_now()
         runtime_state = self.graph_runtime_state
-        runtime_total = runtime_state.total_tokens
-        # Detect the lost-token bug: if our HTTP-token mirror has more
-        # tokens than runtime_state ended up with, runtime lost some
-        # add_tokens writes (likely because another layer wrote
-        # execution.total_tokens earlier). In that case rebuild the
-        # final number from (runtime LLM portion) + (mirrored HTTP).
-        if self._http_tokens_accumulated > 0 and runtime_total < self._http_tokens_accumulated:
-            import logging
-            _logger = logging.getLogger(__name__)
-            _logger.warning(
-                "runtime total_tokens=%d < mirrored HTTP tokens=%d; "
-                "falling back to mirror+%d (runtime LLM portion)",
-                runtime_total, self._http_tokens_accumulated,
-                max(runtime_total - self._http_tokens_accumulated, 0),
-            )
-            # Treat any tokens already in runtime_total as LLM-side and
-            # add the mirrored HTTP total. If runtime kept some HTTP
-            # tokens, this would double-count, but the guard above
-            # ensures runtime < mirror so that case is impossible here.
-            execution.total_tokens = runtime_total + self._http_tokens_accumulated
-        else:
-            execution.total_tokens = runtime_total
+        execution.total_tokens = runtime_state.total_tokens
         execution.total_steps = runtime_state.node_run_steps
         execution.outputs = execution.outputs or runtime_state.outputs
         execution.exceptions_count = runtime_state.exceptions_count
@@ -567,6 +429,162 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
         runtime_state = self.graph_runtime_state
         return runtime_state.variable_pool.get_by_prefix(SYSTEM_VARIABLE_NODE_ID)
 
+    @staticmethod
+    def _parse_decimal(value: Any, *, default: str = "0") -> Decimal:
+        try:
+            parsed = Decimal(str(value if value is not None else default).strip() or default)
+        except Exception:
+            return Decimal(default)
+        return parsed if parsed > 0 else Decimal("0")
+
+    @staticmethod
+    def _coerce_token_value(value: Any) -> int:
+        if value is None or isinstance(value, bool):
+            return 0
+        try:
+            coerced = int(value)
+        except Exception:
+            try:
+                coerced = int(float(str(value)))
+            except Exception:
+                return 0
+        return max(coerced, 0)
+
+    @staticmethod
+    def _resolve_nested_value(data: Any, path: str | None) -> Any:
+        if not path:
+            return None
+
+        current = data
+        for segment in path.split("."):
+            normalized = segment.strip()
+            if not normalized:
+                return None
+            if isinstance(current, Mapping):
+                current = current.get(normalized)
+                continue
+            return None
+        return current
+
+    @classmethod
+    def _extract_usage_total_tokens(cls, payload: Any) -> int:
+        if not isinstance(payload, Mapping):
+            return 0
+        usage = payload.get("usage")
+        if not isinstance(usage, Mapping):
+            return 0
+
+        total_tokens = cls._coerce_token_value(usage.get("total_tokens"))
+        if total_tokens > 0:
+            return total_tokens
+
+        return cls._coerce_token_value(usage.get("prompt_tokens")) + cls._coerce_token_value(
+            usage.get("completion_tokens")
+        )
+
+    @classmethod
+    def _extract_legacy_http_tokens(cls, *, outputs: Any, node_data: Mapping[str, Any]) -> int:
+        if not isinstance(outputs, Mapping):
+            return 0
+
+        token_field_name = str(node_data.get("token_field_name") or "").strip()
+        if not token_field_name:
+            billing_config = node_data.get("billing_config")
+            if isinstance(billing_config, Mapping):
+                token_field_name = str(billing_config.get("output_tokens_path") or "").strip()
+        if not token_field_name:
+            return 0
+
+        body_raw = outputs.get("body")
+        if isinstance(body_raw, str):
+            try:
+                body = json.loads(body_raw.strip()) if body_raw.strip() else {}
+            except json.JSONDecodeError:
+                return 0
+        elif isinstance(body_raw, Mapping):
+            body = body_raw
+        else:
+            return 0
+
+        return cls._coerce_token_value(cls._resolve_nested_value(body, token_field_name))
+
+    @classmethod
+    def _resolve_node_billable_tokens(cls, *, node_execution: Any, node_data: Mapping[str, Any]) -> int:
+        for attr_name in ("outputs", "outputs_dict", "process_data", "process_data_dict"):
+            payload = getattr(node_execution, attr_name, None)
+            tokens = cls._extract_usage_total_tokens(payload)
+            if tokens > 0:
+                return tokens
+
+        metadata = getattr(node_execution, "metadata", None) or getattr(
+            node_execution, "execution_metadata_dict", None
+        )
+        if isinstance(metadata, Mapping):
+            tokens = cls._coerce_token_value(metadata.get(WorkflowNodeExecutionMetadataKey.TOTAL_TOKENS))
+            if tokens > 0:
+                return tokens
+
+        return cls._extract_legacy_http_tokens(outputs=getattr(node_execution, "outputs", None), node_data=node_data)
+
+    @classmethod
+    def _resolve_node_price_per_1k(cls, node_data: Mapping[str, Any]) -> Decimal:
+        legacy_price = cls._parse_decimal(node_data.get("billing_price_per_k_tokens"))
+        if legacy_price > 0:
+            return legacy_price
+
+        billing_config = node_data.get("billing_config")
+        if not isinstance(billing_config, Mapping):
+            return Decimal("0")
+
+        output_price = cls._parse_decimal(billing_config.get("output_price_per_thousand"))
+        if output_price > 0:
+            return output_price
+        return cls._parse_decimal(billing_config.get("input_price_per_thousand"))
+
+    def _resolve_workflow_billing(self, execution: "WorkflowExecution") -> tuple[int, Decimal]:
+        """Return billable tokens and amount using node-level token prices.
+
+        ``execution.total_tokens`` already contains standard GraphEngine usage
+        such as LLM and HTTP ``llm_usage``. Billing must not re-add HTTP tokens
+        from node bodies on top of that total. Instead, priced nodes contribute
+        their own usage once, at their own configured price.
+        """
+
+        graph_data = self._workflow_info.graph_data or {}
+        node_configs = graph_data.get("nodes", [])
+        node_data_by_id = {
+            str(node.get("id")): node.get("data", {})
+            for node in node_configs
+            if isinstance(node, Mapping) and isinstance(node.get("data"), Mapping)
+        }
+
+        billable_tokens = 0
+        total_amount = Decimal("0")
+        for node_execution in self._node_execution_cache.values():
+            node_data = node_data_by_id.get(str(getattr(node_execution, "node_id", "")))
+            if not isinstance(node_data, Mapping):
+                continue
+
+            price_per_1k = self._resolve_node_price_per_1k(node_data)
+            if price_per_1k <= 0:
+                continue
+
+            node_tokens = self._resolve_node_billable_tokens(node_execution=node_execution, node_data=node_data)
+            if node_tokens <= 0:
+                continue
+
+            billable_tokens += node_tokens
+            total_amount += (Decimal(node_tokens) / Decimal(1000)) * price_per_1k
+
+        if billable_tokens > 0:
+            return billable_tokens, total_amount.quantize(Decimal("0.000001"))
+
+        total_tokens = int(execution.total_tokens or 0)
+        if total_tokens <= 0:
+            return 0, Decimal("0")
+        default_price = Decimal("0.002")
+        return total_tokens, ((Decimal(total_tokens) / Decimal(1000)) * default_price).quantize(Decimal("0.000001"))
+
     def _bill_workflow_run(self, execution: "WorkflowExecution") -> None:
         """Deduct billing for consumed tokens after any terminal workflow state.
 
@@ -574,12 +592,7 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
         that tokens consumed before an early termination are still billed.
         Only bills for platform accounts (not end-users).
         """
-        import logging
-        from decimal import Decimal
-
         from services.user_billing_service import UserBillingService
-
-        logger = logging.getLogger(__name__)
 
         try:
             user_from = self._application_generate_entity.user_from
@@ -593,29 +606,11 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
                 return
 
             account_id = self._application_generate_entity.user_id
-            total_tokens = execution.total_tokens or 0
-
-            if total_tokens <= 0:
+            total_tokens, total_amount = self._resolve_workflow_billing(execution)
+            if total_tokens <= 0 or total_amount <= 0:
                 return
 
-            # Read default price from workflow graph config (nodes set billing_price_per_k_tokens)
-            # We use a global default of 0.002 CNY per 1k tokens if not configured
-            price_per_1k = Decimal("0.002")
-            try:
-                graph_data = self._workflow_info.graph_data or {}
-                nodes = graph_data.get("nodes", [])
-                # Find the smallest non-zero price across all configured nodes
-                configured_prices = []
-                for node in nodes:
-                    node_data = node.get("data", {})
-                    raw_price = node_data.get("billing_price_per_k_tokens")
-                    if raw_price:
-                        configured_prices.append(Decimal(str(raw_price)))
-                if configured_prices:
-                    # Use the average configured price
-                    price_per_1k = sum(configured_prices) / len(configured_prices)
-            except Exception as exc:
-                logger.debug("Failed to resolve workflow billing price, using default: %s", exc)
+            price_per_1k = (total_amount * Decimal(1000)) / Decimal(total_tokens)
 
             UserBillingService.deduct_for_workflow_run(
                 account_id=account_id,

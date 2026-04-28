@@ -152,7 +152,12 @@ from .app import (
 )
 
 # Import asset-library controllers
-from .asset_library import assets as asset_library_assets
+from .asset_library import (
+    assets as asset_library_assets,
+)
+from .asset_library import (
+    files as asset_library_files,
+)
 
 # Import auth controllers
 from .auth import (
@@ -247,6 +252,7 @@ __all__ = [
     "apikey",
     "app",
     "asset_library_assets",
+    "asset_library_files",
     "audio",
     "banner",
     "billing",

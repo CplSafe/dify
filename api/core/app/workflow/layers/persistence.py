@@ -11,7 +11,7 @@ state.
 
 import json
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -541,17 +541,6 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
             return output_price
         return cls._parse_decimal(billing_config.get("input_price_per_thousand"))
 
-    def _get_persisted_node_executions(self, execution: "WorkflowExecution") -> Sequence[Any]:
-        workflow_execution_id = getattr(execution, "id_", None)
-        if not workflow_execution_id:
-            return []
-
-        try:
-            return self._workflow_node_execution_repository.get_by_workflow_execution(str(workflow_execution_id))
-        except Exception:
-            logger.exception("Failed to load persisted node executions for workflow run %s", workflow_execution_id)
-            return []
-
     def _resolve_workflow_billing(self, execution: "WorkflowExecution") -> tuple[int, Decimal]:
         """Return billable tokens and amount using node-level token prices.
 
@@ -569,10 +558,9 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
             if isinstance(node, Mapping) and isinstance(node.get("data"), Mapping)
         }
 
-        billable_by_execution_id: dict[str, tuple[int, Decimal]] = {}
-        node_executions = [*self._node_execution_cache.values(), *self._get_persisted_node_executions(execution)]
-
-        for index, node_execution in enumerate(node_executions):
+        billable_tokens = 0
+        total_amount = Decimal("0")
+        for node_execution in self._node_execution_cache.values():
             node_data = node_data_by_id.get(str(getattr(node_execution, "node_id", "")))
             if not isinstance(node_data, Mapping):
                 continue
@@ -585,18 +573,8 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
             if node_tokens <= 0:
                 continue
 
-            amount = (Decimal(node_tokens) / Decimal(1000)) * price_per_1k
-            execution_key = str(
-                getattr(node_execution, "id", None)
-                or getattr(node_execution, "node_execution_id", None)
-                or f"node-execution-{index}"
-            )
-            previous = billable_by_execution_id.get(execution_key)
-            if previous is None or node_tokens > previous[0]:
-                billable_by_execution_id[execution_key] = (node_tokens, amount)
-
-        billable_tokens = sum(tokens for tokens, _ in billable_by_execution_id.values())
-        total_amount = sum((amount for _, amount in billable_by_execution_id.values()), Decimal("0"))
+            billable_tokens += node_tokens
+            total_amount += (Decimal(node_tokens) / Decimal(1000)) * price_per_1k
 
         if billable_tokens > 0:
             return billable_tokens, total_amount.quantize(Decimal("0.000001"))

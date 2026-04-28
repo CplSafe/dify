@@ -15,16 +15,20 @@ Tests follow the pure-mock pattern used by
 mock is returned via ``__enter__``.
 """
 
+from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 import pytest
+from PIL import Image
 
 from models.asset_library import AssetLibrary
 from services.asset_library.constants import AssetType
+from services.asset_library.metadata_extractor import AudioMeta, VideoMeta
 from services.asset_library_service import AssetLibraryService
 from services.errors.asset_library import (
     AssetNotFoundError,
     InvalidPromptVariablesError,
+    UnsupportedMimeTypeError,
 )
 
 MODULE = "services.asset_library_service"
@@ -194,3 +198,246 @@ class TestGetAsset:
 
         with pytest.raises(AssetNotFoundError):
             AssetLibraryService.get_asset("tenant-a", "does-not-exist")
+
+
+# ---------------------------------------------------------------------------
+# create_file_asset
+# ---------------------------------------------------------------------------
+
+
+def _png_bytes(width: int = 640, height: int = 480) -> bytes:
+    """Render a real PNG of the requested dimensions for Pillow tests."""
+    buf = BytesIO()
+    Image.new("RGB", (width, height)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _make_upload(file_id: str = "up-id-1", size: int = 1234) -> MagicMock:
+    """Build an ``UploadFile`` stand-in with the fields the service uses."""
+    upload = MagicMock()
+    upload.id = file_id
+    upload.size = size
+    return upload
+
+
+class TestCreateFileAsset:
+    @patch(f"{MODULE}.FileService")
+    @patch(f"{MODULE}.Session")
+    @patch(f"{MODULE}.db")
+    def test_image_happy_path(self, mock_db, mock_session_cls, mock_file_service_cls):
+        # Arrange
+        session = _mock_session(mock_session_cls)
+        upload = _make_upload(file_id="up-id-1", size=1234)
+        file_service = MagicMock()
+        file_service.upload_file.return_value = upload
+        mock_file_service_cls.return_value = file_service
+        content = _png_bytes(640, 480)
+
+        # Act
+        result = AssetLibraryService.create_file_asset(
+            tenant_id="tenant-a",
+            user=_make_user("user-1"),
+            file_content=content,
+            filename="hello.png",
+            mimetype="image/png",
+            asset_type=AssetType.IMAGE,
+            name="An image",
+            description=None,
+            tags=["a"],
+            category=None,
+        )
+
+        # Assert — return value
+        assert isinstance(result, AssetLibrary)
+        assert result.tenant_id == "tenant-a"
+        assert result.created_by == "user-1"
+        assert result.asset_type == AssetType.IMAGE
+        assert result.upload_file_id == "up-id-1"
+        assert result.width == 640
+        assert result.height == 480
+        assert result.duration is None
+        assert result.cover_url is None
+        assert result.file_size == 1234
+
+        # Assert — collaborators called
+        file_service.upload_file.assert_called_once()
+        session.add.assert_called_once_with(result)
+        session.commit.assert_called_once()
+
+    @patch(f"{MODULE}.FileService")
+    @patch(f"{MODULE}.Session")
+    @patch(f"{MODULE}.db")
+    def test_bad_mime_rejected_before_upload(self, mock_db, mock_session_cls, mock_file_service_cls):
+        """``image/bmp`` is outside the asset-library whitelist; upload must
+        not be attempted."""
+        _mock_session(mock_session_cls)
+        file_service = MagicMock()
+        mock_file_service_cls.return_value = file_service
+
+        with pytest.raises(UnsupportedMimeTypeError):
+            AssetLibraryService.create_file_asset(
+                tenant_id="tenant-a",
+                user=_make_user(),
+                file_content=b"x",
+                filename="hello.bmp",
+                mimetype="image/bmp",
+                asset_type=AssetType.IMAGE,
+                name="x",
+                description=None,
+                tags=[],
+                category=None,
+            )
+
+        mock_file_service_cls.assert_not_called()
+        file_service.upload_file.assert_not_called()
+
+    @patch(f"{MODULE}.FileService")
+    @patch(f"{MODULE}.Session")
+    @patch(f"{MODULE}.db")
+    def test_wrong_asset_type_for_mime_rejected(self, mock_db, mock_session_cls, mock_file_service_cls):
+        """``image/png`` is valid for IMAGE but not for AUDIO."""
+        _mock_session(mock_session_cls)
+        file_service = MagicMock()
+        mock_file_service_cls.return_value = file_service
+
+        with pytest.raises(UnsupportedMimeTypeError):
+            AssetLibraryService.create_file_asset(
+                tenant_id="tenant-a",
+                user=_make_user(),
+                file_content=b"x",
+                filename="oops.png",
+                mimetype="image/png",
+                asset_type=AssetType.AUDIO,
+                name="x",
+                description=None,
+                tags=[],
+                category=None,
+            )
+
+        file_service.upload_file.assert_not_called()
+
+    @patch(f"{MODULE}.extract_audio_metadata")
+    @patch(f"{MODULE}.FileService")
+    @patch(f"{MODULE}.Session")
+    @patch(f"{MODULE}.db")
+    def test_audio_happy_path(
+        self,
+        mock_db,
+        mock_session_cls,
+        mock_file_service_cls,
+        mock_extract_audio,
+    ):
+        _mock_session(mock_session_cls)
+        upload = _make_upload(file_id="up-audio-1", size=4321)
+        file_service = MagicMock()
+        file_service.upload_file.return_value = upload
+        mock_file_service_cls.return_value = file_service
+        mock_extract_audio.return_value = AudioMeta(duration=12.34)
+
+        result = AssetLibraryService.create_file_asset(
+            tenant_id="tenant-a",
+            user=_make_user("user-1"),
+            file_content=b"audio-bytes",
+            filename="clip.mp3",
+            mimetype="audio/mpeg",
+            asset_type=AssetType.AUDIO,
+            name="A clip",
+            description=None,
+            tags=[],
+            category=None,
+        )
+
+        assert result.asset_type == AssetType.AUDIO
+        assert result.upload_file_id == "up-audio-1"
+        assert result.duration == 12.34
+        assert result.width is None
+        assert result.height is None
+        assert result.cover_url is None
+        assert result.file_size == 4321
+
+    @patch(f"{MODULE}.extract_video_cover")
+    @patch(f"{MODULE}.extract_video_metadata")
+    @patch(f"{MODULE}.FileService")
+    @patch(f"{MODULE}.Session")
+    @patch(f"{MODULE}.db")
+    def test_video_happy_path_uploads_cover(
+        self,
+        mock_db,
+        mock_session_cls,
+        mock_file_service_cls,
+        mock_extract_video,
+        mock_extract_cover,
+    ):
+        _mock_session(mock_session_cls)
+        video_upload = _make_upload(file_id="up-video-1", size=9876)
+        cover_upload = _make_upload(file_id="up-cover-1", size=222)
+        file_service = MagicMock()
+        # First call: video file. Second call: cover JPEG.
+        file_service.upload_file.side_effect = [video_upload, cover_upload]
+        mock_file_service_cls.return_value = file_service
+        mock_extract_video.return_value = VideoMeta(width=1920, height=1080, duration=15.2)
+        mock_extract_cover.return_value = b"jpegbytes"
+
+        result = AssetLibraryService.create_file_asset(
+            tenant_id="tenant-a",
+            user=_make_user("user-1"),
+            file_content=b"video-bytes",
+            filename="movie.mp4",
+            mimetype="video/mp4",
+            asset_type=AssetType.VIDEO,
+            name="A movie",
+            description=None,
+            tags=[],
+            category=None,
+        )
+
+        assert result.asset_type == AssetType.VIDEO
+        assert result.upload_file_id == "up-video-1"
+        assert result.width == 1920
+        assert result.height == 1080
+        assert result.duration == 15.2
+        assert result.file_size == 9876
+        assert result.cover_url is not None
+        assert "up-cover-1" in result.cover_url
+
+        # FileService called twice — once for video, once for cover.
+        assert file_service.upload_file.call_count == 2
+
+    @patch(f"{MODULE}.extract_image_metadata")
+    @patch(f"{MODULE}.FileService")
+    @patch(f"{MODULE}.Session")
+    @patch(f"{MODULE}.db")
+    def test_metadata_extraction_failure_is_best_effort(
+        self,
+        mock_db,
+        mock_session_cls,
+        mock_file_service_cls,
+        mock_extract_image,
+    ):
+        """Extraction failure must NOT abort the upload — width/height
+        persist as ``None`` and the asset row is committed."""
+        _mock_session(mock_session_cls)
+        upload = _make_upload(file_id="up-id-2", size=42)
+        file_service = MagicMock()
+        file_service.upload_file.return_value = upload
+        mock_file_service_cls.return_value = file_service
+        mock_extract_image.side_effect = RuntimeError("boom")
+
+        result = AssetLibraryService.create_file_asset(
+            tenant_id="tenant-a",
+            user=_make_user(),
+            file_content=b"not-really-png",
+            filename="broken.png",
+            mimetype="image/png",
+            asset_type=AssetType.IMAGE,
+            name="broken",
+            description=None,
+            tags=[],
+            category=None,
+        )
+
+        assert isinstance(result, AssetLibrary)
+        assert result.upload_file_id == "up-id-2"
+        assert result.width is None
+        assert result.height is None
+        assert result.file_size == 42

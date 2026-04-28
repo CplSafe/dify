@@ -22,12 +22,20 @@ from sqlalchemy.orm import Session
 from extensions.ext_database import db
 from models import Account
 from models.asset_library import AssetLibrary
-from services.asset_library.constants import AssetType
+from services.asset_library.constants import AssetType, is_mime_allowed
+from services.asset_library.metadata_extractor import (
+    extract_audio_metadata,
+    extract_image_metadata,
+    extract_video_cover,
+    extract_video_metadata,
+)
 from services.asset_library.schemas import PromptVariableList
 from services.errors.asset_library import (
     AssetNotFoundError,
     InvalidPromptVariablesError,
+    UnsupportedMimeTypeError,
 )
+from services.file_service import FileService
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +91,88 @@ class AssetLibraryService:
             return asset
 
     @staticmethod
+    def create_file_asset(
+        *,
+        tenant_id: str,
+        user: Account,
+        file_content: bytes,
+        filename: str,
+        mimetype: str,
+        asset_type: AssetType,
+        name: str,
+        description: str | None,
+        tags: list[str],
+        category: str | None,
+    ) -> AssetLibrary:
+        """Validate, store, and persist a file-type asset (image / audio / video).
+
+        1. Reject MIME types outside the asset-library whitelist.
+        2. Delegate physical storage to ``FileService.upload_file`` so the
+           asset library doesn't duplicate Dify's storage abstraction.
+        3. Best-effort metadata extraction (Pillow / mutagen / ffprobe).
+           Failures log at WARNING and persist NULL — the upload succeeds.
+        4. For video: extract a cover frame and upload it as a sibling
+           ``upload_files`` row; ``cover_url`` references its id.
+
+        Raises:
+            UnsupportedMimeTypeError: ``mimetype`` is not allowed for
+                ``asset_type``.
+        """
+        if not is_mime_allowed(asset_type, mimetype):
+            raise UnsupportedMimeTypeError(mimetype)
+
+        file_service = FileService(db.engine)
+        upload = file_service.upload_file(
+            filename=filename,
+            content=file_content,
+            mimetype=mimetype,
+            user=user,
+        )
+
+        width: int | None = None
+        height: int | None = None
+        duration: float | None = None
+        cover_url: str | None = None
+
+        try:
+            if asset_type is AssetType.IMAGE:
+                image_meta = extract_image_metadata(file_content)
+                width, height = image_meta.width, image_meta.height
+            elif asset_type is AssetType.AUDIO:
+                duration = extract_audio_metadata(file_content).duration
+            elif asset_type is AssetType.VIDEO:
+                video_meta = extract_video_metadata(file_content)
+                width, height, duration = video_meta.width, video_meta.height, video_meta.duration
+                cover_url = _maybe_upload_video_cover(file_service, file_content, user)
+        except Exception:
+            logger.warning(
+                "asset-library metadata extraction failed for asset_type=%s",
+                asset_type,
+                exc_info=True,
+            )
+
+        with Session(db.engine, expire_on_commit=False) as session:
+            asset = AssetLibrary(
+                tenant_id=tenant_id,
+                created_by=user.id,
+                asset_type=asset_type,
+                name=name,
+                description=description,
+                tags=list(tags),
+                category=category,
+                upload_file_id=upload.id,
+                cover_url=cover_url,
+                duration=duration,
+                width=width,
+                height=height,
+                file_size=upload.size,
+            )
+            session.add(asset)
+            session.commit()
+            session.refresh(asset)
+            return asset
+
+    @staticmethod
     def get_asset(tenant_id: str, asset_id: str) -> AssetLibrary:
         """Fetch a single asset for the tenant.
 
@@ -103,3 +193,23 @@ class AssetLibraryService:
             if asset is None:
                 raise AssetNotFoundError(f"asset {asset_id} not found")
             return asset
+
+
+def _maybe_upload_video_cover(file_service: FileService, video_bytes: bytes, user: Account) -> str | None:
+    """Extract a JPEG cover from a video and upload as a sibling file.
+
+    Returns ``None`` (logs at WARNING) when ffmpeg fails — the parent
+    upload should not be aborted because of a missing thumbnail.
+    """
+    try:
+        cover_bytes = extract_video_cover(video_bytes)
+    except Exception:
+        logger.warning("asset-library video cover extraction failed", exc_info=True)
+        return None
+    cover_upload = file_service.upload_file(
+        filename="cover.jpg",
+        content=cover_bytes,
+        mimetype="image/jpeg",
+        user=user,
+    )
+    return f"upload_file_id:{cover_upload.id}"

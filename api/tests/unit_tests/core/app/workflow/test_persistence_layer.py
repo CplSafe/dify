@@ -28,9 +28,10 @@ from graphon.graph_events import (
     NodeRunSucceededEvent,
 )
 from graphon.node_events import NodeRunResult
+from graphon.model_runtime.entities.llm_entities import LLMUsage
 from graphon.runtime import GraphRuntimeState, ReadOnlyGraphRuntimeStateWrapper, VariablePool
 
-from core.app.entities.app_invoke_entities import WorkflowAppGenerateEntity
+from core.app.entities.app_invoke_entities import UserFrom, WorkflowAppGenerateEntity
 from core.app.workflow.layers.persistence import PersistenceWorkflowInfo, WorkflowPersistenceLayer
 from core.workflow.system_variables import SystemVariableKey, build_system_variables
 
@@ -39,16 +40,12 @@ class _RepoRecorder:
     def __init__(self) -> None:
         self.saved: list[object] = []
         self.saved_exec_data: list[object] = []
-        self.workflow_execution_results: list[object] = []
 
     def save(self, entity):
         self.saved.append(entity)
 
     def save_execution_data(self, entity):
         self.saved_exec_data.append(entity)
-
-    def get_by_workflow_execution(self, workflow_execution_id: str):
-        return self.workflow_execution_results
 
 
 def _naive_utc_now() -> datetime:
@@ -503,124 +500,26 @@ class TestWorkflowPersistenceLayer:
         assert exec_repo.saved
         assert not trace_tasks
 
-    def test_workflow_billing_uses_node_tokens_once_with_legacy_http_price(self):
-        layer, _, _, _ = _make_layer(
-            graph_data={
-                "nodes": [
-                    {
-                        "id": "http-node",
-                        "data": {
-                            "type": "http-request",
-                            "token_field_name": "usage.total_tokens",
-                            "billing_price_per_k_tokens": "0.069",
-                        },
-                    },
-                    {
-                        "id": "other-priced-node",
-                        "data": {
-                            "type": "http-request",
-                            "billing_price_per_k_tokens": "0.01",
-                        },
-                    },
-                ],
-                "edges": [],
+    def test_bill_workflow_run_uses_native_usage_price(self, monkeypatch):
+        calls: list[dict] = []
+        layer, _, _, runtime_state = _make_layer()
+        layer._application_generate_entity.user_from = UserFrom.ACCOUNT
+        runtime_state.llm_usage = LLMUsage.from_metadata(
+            {
+                "completion_tokens": 324900,
+                "total_tokens": 324900,
+                "completion_price": Decimal("22.4181"),
+                "total_price": Decimal("22.4181"),
+                "currency": "CNY",
             }
         )
-        layer._node_execution_cache = {
-            "http-exec": SimpleNamespace(
-                node_id="http-node",
-                outputs={
-                    "usage": {
-                        "completion_tokens": 324900,
-                        "total_tokens": 324900,
-                    }
-                },
-            )
-        }
-        execution = SimpleNamespace(total_tokens=650261)
 
-        billable_tokens, total_amount = layer._resolve_workflow_billing(execution)
-
-        assert billable_tokens == 324900
-        assert total_amount == Decimal("22.418100")
-
-    def test_workflow_billing_can_read_legacy_http_body_token_field(self):
-        layer, _, _, _ = _make_layer(
-            graph_data={
-                "nodes": [
-                    {
-                        "id": "http-node",
-                        "data": {
-                            "type": "http-request",
-                            "token_field_name": "usage.total_tokens",
-                            "billing_price_per_k_tokens": "0.069",
-                        },
-                    }
-                ],
-                "edges": [],
-            }
+        monkeypatch.setattr(
+            "services.user_billing_service.UserBillingService.deduct_for_workflow_run",
+            lambda **kwargs: calls.append(kwargs),
         )
-        layer._node_execution_cache = {
-            "http-exec": SimpleNamespace(
-                node_id="http-node",
-                outputs={
-                    "body": (
-                        '{"status":"succeeded","usage":'
-                        '{"completion_tokens":324900,"total_tokens":324900}}'
-                    )
-                },
-            )
-        }
-        execution = SimpleNamespace(total_tokens=324900)
 
-        billable_tokens, total_amount = layer._resolve_workflow_billing(execution)
+        layer._bill_workflow_run(SimpleNamespace(id_="run-id", total_tokens=324900))
 
-        assert billable_tokens == 324900
-        assert total_amount == Decimal("22.418100")
-
-    def test_workflow_billing_falls_back_to_persisted_http_body_tokens(self):
-        layer, _, node_repo, _ = _make_layer(
-            graph_data={
-                "nodes": [
-                    {
-                        "id": "http-node",
-                        "data": {
-                            "type": "http-request",
-                            "token_field_name": "usage.total_tokens",
-                            "billing_price_per_k_tokens": "0.069",
-                        },
-                    }
-                ],
-                "edges": [],
-            }
-        )
-        layer._node_execution_cache = {
-            "http-exec": SimpleNamespace(
-                id="http-exec",
-                node_id="http-node",
-                outputs={
-                    "body": (
-                        '{"id":"cgt","status":"running","created_at":1,'
-                        '"updated_at":1,"draft":false}'
-                    )
-                },
-            )
-        }
-        node_repo.workflow_execution_results = [
-            SimpleNamespace(
-                id="http-exec",
-                node_id="http-node",
-                outputs={
-                    "body": (
-                        '{"status":"succeeded","usage":'
-                        '{"completion_tokens":324900,"total_tokens":324900}}'
-                    )
-                },
-            )
-        ]
-        execution = SimpleNamespace(id_="run-id", total_tokens=519)
-
-        billable_tokens, total_amount = layer._resolve_workflow_billing(execution)
-
-        assert billable_tokens == 324900
-        assert total_amount == Decimal("22.418100")
+        assert calls[0]["total_tokens"] == 324900
+        assert calls[0]["price_per_1k_tokens"] == Decimal("0.069")

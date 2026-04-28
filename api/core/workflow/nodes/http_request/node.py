@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-import time
 from collections.abc import Mapping, Sequence
+from decimal import Decimal
 from typing import Any
 
 from graphon.enums import WorkflowNodeExecutionMetadataKey, WorkflowNodeExecutionStatus
@@ -13,8 +13,6 @@ from graphon.nodes.http_request.node import HttpRequestNode
 
 HTTP_NODE_OUTPUT_BODY_KEY = "body"
 HTTP_NODE_BILLING_CONFIG_KEY = "billing_config"
-HTTP_USAGE_RETRY_ATTEMPTS = 5
-HTTP_USAGE_RETRY_INTERVAL_SECONDS = 2.0
 
 
 def _resolve_nested_value(data: Any, path: str | None) -> Any:
@@ -58,6 +56,14 @@ def _coerce_token_value(value: Any) -> int:
     return max(coerced, 0)
 
 
+def _parse_decimal(value: Any) -> Decimal:
+    try:
+        parsed = Decimal(str(value if value is not None else "0").strip() or "0")
+    except Exception:
+        return Decimal("0")
+    return parsed if parsed > 0 else Decimal("0")
+
+
 def _parse_http_body(outputs: Mapping[str, Any]) -> Mapping[str, Any]:
     body = outputs.get(HTTP_NODE_OUTPUT_BODY_KEY)
     if isinstance(body, Mapping):
@@ -99,29 +105,12 @@ def _get_http_token_paths(node_data: Any) -> tuple[str, str]:
     return input_tokens_path, output_tokens_path
 
 
-def _has_http_usage_paths(node_data: Any) -> bool:
-    input_tokens_path, output_tokens_path = _get_http_token_paths(node_data)
-    return bool(input_tokens_path or output_tokens_path)
-
-
-def _is_get_method(node_data: Any) -> bool:
-    return str(_get_node_data_value(node_data, "method") or "").strip().lower() == "get"
-
-
-def _should_retry_terminal_http_usage(*, result: NodeRunResult, node_data: Any) -> bool:
-    if result.status != WorkflowNodeExecutionStatus.SUCCEEDED:
-        return False
-    if result.llm_usage.total_tokens > 0:
-        return False
-    if not isinstance(result.outputs, Mapping):
-        return False
-    if not _is_get_method(node_data):
-        return False
-    if not _has_http_usage_paths(node_data):
-        return False
-
-    body = _parse_http_body(result.outputs)
-    return str(body.get("status") or "").strip().lower() == "succeeded"
+def _get_http_output_price_per_1k(node_data: Any) -> Decimal:
+    raw_config = _get_http_billing_config(node_data)
+    price = _parse_decimal(raw_config.get("output_price_per_thousand"))
+    if price > 0:
+        return price
+    return _parse_decimal(_get_node_data_value(node_data, "billing_price_per_k_tokens"))
 
 
 def _extract_usage_from_http_result(*, result: NodeRunResult, node_data: Any) -> LLMUsage:
@@ -139,11 +128,18 @@ def _extract_usage_from_http_result(*, result: NodeRunResult, node_data: Any) ->
     if total_tokens <= 0:
         return LLMUsage.empty_usage()
 
+    output_price_per_1k = _get_http_output_price_per_1k(node_data)
+    completion_price = (Decimal(completion_tokens) / Decimal(1000)) * output_price_per_1k
+
     return LLMUsage.from_metadata(
         {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
+            "completion_unit_price": output_price_per_1k,
+            "completion_price_unit": Decimal("0.001"),
+            "completion_price": completion_price,
+            "total_price": completion_price,
             "currency": "CNY",
         }
     )
@@ -175,19 +171,7 @@ def apply_http_token_usage_to_result(*, result: NodeRunResult, node_data: Any) -
 
 
 class DifyHttpRequestNode(HttpRequestNode):
-    def _run_once(self) -> NodeRunResult:
-        return super()._run()
-
-    def _sleep_before_usage_retry(self) -> None:
-        time.sleep(HTTP_USAGE_RETRY_INTERVAL_SECONDS)
-
     def _run(self) -> NodeRunResult:
-        result = self._run_once()
+        result = super()._run()
         apply_http_token_usage_to_result(result=result, node_data=self.node_data)
-        for _ in range(HTTP_USAGE_RETRY_ATTEMPTS):
-            if not _should_retry_terminal_http_usage(result=result, node_data=self.node_data):
-                break
-            self._sleep_before_usage_retry()
-            result = self._run_once()
-            apply_http_token_usage_to_result(result=result, node_data=self.node_data)
         return result

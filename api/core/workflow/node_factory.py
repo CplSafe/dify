@@ -52,7 +52,6 @@ from core.workflow.nodes.agent.plugin_strategy_adapter import (
     PluginAgentStrategyResolver,
 )
 from core.workflow.nodes.agent.runtime_support import AgentRuntimeSupport
-from core.workflow.nodes.http_request import DifyHttpRequestNode
 from core.workflow.system_variables import SystemVariableKey, get_system_text, system_variable_selector
 from core.workflow.template_rendering import CodeExecutorJinja2TemplateRenderer
 from extensions.ext_database import db
@@ -331,8 +330,6 @@ class DifyNodeFactory(NodeFactory):
         node_data = typed_node_config["data"]
         node_class = self._resolve_node_class(node_type=node_data.type, node_version=str(node_data.version))
         node_type = node_data.type
-        if node_type == BuiltinNodeTypes.HTTP_REQUEST:
-            node_class = DifyHttpRequestNode
         node_init_kwargs_factories: Mapping[NodeType, Callable[[], dict[str, object]]] = {
             BuiltinNodeTypes.CODE: lambda: {
                 "code_executor": self._code_executor,

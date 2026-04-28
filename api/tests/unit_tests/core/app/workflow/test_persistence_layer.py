@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
-from graphon.entities import WorkflowNodeExecution
 from graphon.entities.pause_reason import SchedulingPause
 from graphon.enums import (
     BuiltinNodeTypes,
@@ -12,6 +11,11 @@ from graphon.enums import (
     WorkflowNodeExecutionStatus,
     WorkflowType,
 )
+
+from core.app.entities.app_invoke_entities import WorkflowAppGenerateEntity
+from core.app.workflow.layers.persistence import PersistenceWorkflowInfo, WorkflowPersistenceLayer
+from core.workflow.system_variables import SystemVariableKey, build_system_variables
+from graphon.entities import WorkflowNodeExecution
 from graphon.graph_events import (
     GraphRunAbortedEvent,
     GraphRunFailedEvent,
@@ -28,10 +32,6 @@ from graphon.graph_events import (
 )
 from graphon.node_events import NodeRunResult
 from graphon.runtime import GraphRuntimeState, ReadOnlyGraphRuntimeStateWrapper, VariablePool
-
-from core.app.entities.app_invoke_entities import WorkflowAppGenerateEntity
-from core.app.workflow.layers.persistence import PersistenceWorkflowInfo, WorkflowPersistenceLayer
-from core.workflow.system_variables import SystemVariableKey, build_system_variables
 
 
 class _RepoRecorder:
@@ -496,3 +496,303 @@ class TestWorkflowPersistenceLayer:
         layer._handle_graph_run_succeeded(GraphRunSucceededEvent(outputs={"ok": True}))
         assert exec_repo.saved
         assert not trace_tasks
+
+
+class TestHttpNodeUsageExtraction:
+    """Cover the BUG-1 fix: HTTP node billing is per-node priced, not averaged.
+
+    These tests construct a layer whose graph_data has two HTTP nodes with
+    distinct prices, drive a NodeRunSucceededEvent with a body that exposes
+    ``usage.total_tokens``, and assert the per-node amount accumulates.
+    Also covers the silent-skip log paths added for production diagnosis.
+    """
+
+    @staticmethod
+    def _http_layer(graph_nodes):
+        from decimal import Decimal
+
+        from graphon.entities import WorkflowExecution
+
+        layer, _, _, runtime_state = _make_layer()
+        layer._workflow_info = PersistenceWorkflowInfo(
+            workflow_id="workflow-id",
+            workflow_type=WorkflowType.WORKFLOW,
+            version="1",
+            graph_data={"nodes": graph_nodes, "edges": []},
+        )
+        # _handle_graph_run_started normally fills this; emulate it without touching repos.
+        layer._workflow_execution = WorkflowExecution.new(
+            id_="run-id",
+            workflow_id="workflow-id",
+            workflow_type=WorkflowType.WORKFLOW,
+            workflow_version="1",
+            graph={"nodes": graph_nodes, "edges": []},
+            inputs={},
+            started_at=_naive_utc_now(),
+        )
+        layer._http_tokens_accumulated = 0
+        layer._http_billing_amount_accumulated = Decimal(0)
+        return layer, runtime_state
+
+    @staticmethod
+    def _http_event(node_id: str, body: str):
+        return NodeRunSucceededEvent(
+            id="exec-id",
+            node_id=node_id,
+            node_type=BuiltinNodeTypes.HTTP_REQUEST,
+            node_title=f"HTTP {node_id}",
+            predecessor_node_id=None,
+            in_iteration_id=None,
+            in_loop_id="loop-1",
+            start_at=_naive_utc_now(),
+            finished_at=_naive_utc_now(),
+            node_run_result=NodeRunResult(
+                status=WorkflowNodeExecutionStatus.SUCCEEDED,
+                outputs={"status_code": 200, "body": body, "headers": {}, "files": []},
+            ),
+        )
+
+    def test_per_node_amount_accumulates_with_token_field_name(self):
+        from decimal import Decimal
+
+        layer, runtime_state = self._http_layer(
+            [
+                {
+                    "id": "node-A",
+                    "data": {
+                        "type": "http-request",
+                        "title": "HTTP A",
+                        "token_field_name": "usage.total_tokens",
+                        "billing_price_per_k_tokens": 0.069,
+                    },
+                },
+                {
+                    "id": "node-B",
+                    "data": {
+                        "type": "http-request",
+                        "title": "HTTP B",
+                        "token_field_name": "usage.total_tokens",
+                        "billing_price_per_k_tokens": 0.05,
+                    },
+                },
+            ]
+        )
+
+        body_a = '{"id":"x","status":"succeeded","usage":{"total_tokens":324900}}'
+        body_b = '{"id":"y","status":"succeeded","usage":{"total_tokens":1000}}'
+
+        layer._extract_http_node_tokens(self._http_event("node-A", body_a))
+        layer._extract_http_node_tokens(self._http_event("node-B", body_b))
+
+        # node-A: 324900 / 1000 * 0.069 = 22.4181
+        # node-B: 1000   / 1000 * 0.05  = 0.05
+        # total = 22.4681 — never the "average price 0.0595" the old code computed.
+        assert layer._http_tokens_accumulated == 325900
+        assert layer._http_billing_amount_accumulated == Decimal("22.468100")
+        assert runtime_state.total_tokens == 325900
+
+    def test_skip_when_token_field_missing_in_body(self, caplog):
+        import logging
+
+        layer, runtime_state = self._http_layer(
+            [
+                {
+                    "id": "node-A",
+                    "data": {
+                        "type": "http-request",
+                        "token_field_name": "usage.total_tokens",
+                        "billing_price_per_k_tokens": 0.069,
+                    },
+                }
+            ]
+        )
+
+        body_running = '{"id":"x","status":"running"}'
+
+        with caplog.at_level(logging.INFO):
+            layer._extract_http_node_tokens(self._http_event("node-A", body_running))
+
+        assert layer._http_tokens_accumulated == 0
+        assert runtime_state.total_tokens == 0
+        assert any("HTTP-USAGE skip[path-miss]" in rec.message for rec in caplog.records)
+
+    def test_skip_when_node_unconfigured(self, caplog):
+        import logging
+
+        layer, _ = self._http_layer([{"id": "node-A", "data": {"type": "http-request"}}])
+
+        body = '{"usage":{"total_tokens":10}}'
+        with caplog.at_level(logging.INFO):
+            layer._extract_http_node_tokens(self._http_event("node-A", body))
+
+        assert layer._http_tokens_accumulated == 0
+        assert any("HTTP-USAGE skip[no-token-field]" in rec.message for rec in caplog.records)
+
+    def test_skip_when_body_not_json(self, caplog):
+        import logging
+
+        layer, _ = self._http_layer(
+            [
+                {
+                    "id": "node-A",
+                    "data": {
+                        "type": "http-request",
+                        "token_field_name": "usage.total_tokens",
+                        "billing_price_per_k_tokens": 0.069,
+                    },
+                }
+            ]
+        )
+
+        with caplog.at_level(logging.INFO):
+            layer._extract_http_node_tokens(self._http_event("node-A", "<<not json>>"))
+
+        assert layer._http_tokens_accumulated == 0
+        assert any("HTTP-USAGE skip[body-not-json]" in rec.message for rec in caplog.records)
+
+    def test_zero_price_node_records_tokens_with_zero_amount(self):
+        from decimal import Decimal
+
+        layer, runtime_state = self._http_layer(
+            [
+                {
+                    "id": "node-A",
+                    "data": {
+                        "type": "http-request",
+                        "token_field_name": "usage.total_tokens",
+                        # No billing_price_per_k_tokens — token recorded for stats,
+                        # but no amount accrues.
+                    },
+                }
+            ]
+        )
+
+        body = '{"usage":{"total_tokens":1000}}'
+        layer._extract_http_node_tokens(self._http_event("node-A", body))
+
+        assert layer._http_tokens_accumulated == 1000
+        assert layer._http_billing_amount_accumulated == Decimal(0)
+        assert runtime_state.total_tokens == 1000
+
+
+class TestBillWorkflowRunSplitsHttpAndLlm:
+    """Cover the BUG-1 + BUG-2 fix at the deduction layer.
+
+    ``_bill_workflow_run`` now bills HTTP and LLM tokens separately so the
+    per-node price actually applies to HTTP and LLM keeps its 0.002 default —
+    no averaging across all nodes.
+    """
+
+    def test_http_amount_billed_verbatim_and_llm_billed_at_default(self, monkeypatch):
+        from decimal import Decimal
+
+        from core.app.entities.app_invoke_entities import UserFrom
+
+        layer, _, _, _ = _make_layer()
+        layer._application_generate_entity = layer._application_generate_entity.model_copy(
+            update={"user_from": UserFrom.ACCOUNT, "tenant_id": "tenant-id", "user_id": "account-id"}
+        )
+
+        # Pretend two HTTP nodes already extracted: total tokens 325900, amount 22.4681
+        layer._http_tokens_accumulated = 325900
+        layer._http_billing_amount_accumulated = Decimal("22.468100")
+
+        execution = SimpleNamespace(id_="run-1", total_tokens=326475)  # +575 LLM tokens
+
+        deductions: list[dict] = []
+
+        def fake_deduct(**kwargs):
+            deductions.append(kwargs)
+            return SimpleNamespace()
+
+        monkeypatch.setattr(
+            "services.user_billing_service.UserBillingService.deduct_for_workflow_run",
+            staticmethod(fake_deduct),
+        )
+
+        layer._bill_workflow_run(execution)
+
+        assert len(deductions) == 2
+        http_call, llm_call = deductions
+        assert http_call["total_tokens"] == 325900
+        # tokens × price/1000 == 22.468100, so reconstructed price/k stays the original.
+        billed_amount = (
+            Decimal(http_call["total_tokens"]) / Decimal(1000) * Decimal(str(http_call["price_per_1k_tokens"]))
+        )
+        assert billed_amount.quantize(Decimal("0.000001")) == Decimal("22.468100")
+
+        assert llm_call["total_tokens"] == 575
+        assert llm_call["price_per_1k_tokens"] == Decimal("0.002")
+
+    def test_no_deduction_when_no_tokens(self, monkeypatch):
+        from decimal import Decimal
+
+        from core.app.entities.app_invoke_entities import UserFrom
+
+        layer, _, _, _ = _make_layer()
+        layer._application_generate_entity = layer._application_generate_entity.model_copy(
+            update={"user_from": UserFrom.ACCOUNT, "tenant_id": "tenant-id", "user_id": "account-id"}
+        )
+
+        layer._http_tokens_accumulated = 0
+        layer._http_billing_amount_accumulated = Decimal(0)
+        execution = SimpleNamespace(id_="run-2", total_tokens=0)
+
+        deductions: list[dict] = []
+        monkeypatch.setattr(
+            "services.user_billing_service.UserBillingService.deduct_for_workflow_run",
+            staticmethod(lambda **kw: deductions.append(kw) or SimpleNamespace()),
+        )
+
+        layer._bill_workflow_run(execution)
+        assert deductions == []
+
+    def test_only_http_deduction_when_no_llm_tokens(self, monkeypatch):
+        from decimal import Decimal
+
+        from core.app.entities.app_invoke_entities import UserFrom
+
+        layer, _, _, _ = _make_layer()
+        layer._application_generate_entity = layer._application_generate_entity.model_copy(
+            update={"user_from": UserFrom.ACCOUNT, "tenant_id": "tenant-id", "user_id": "account-id"}
+        )
+
+        layer._http_tokens_accumulated = 1000
+        layer._http_billing_amount_accumulated = Decimal("0.069")
+        # total_tokens equals http_tokens — LLM share is zero, no LLM deduction.
+        execution = SimpleNamespace(id_="run-3", total_tokens=1000)
+
+        deductions: list[dict] = []
+        monkeypatch.setattr(
+            "services.user_billing_service.UserBillingService.deduct_for_workflow_run",
+            staticmethod(lambda **kw: deductions.append(kw) or SimpleNamespace()),
+        )
+
+        layer._bill_workflow_run(execution)
+
+        assert len(deductions) == 1
+        assert deductions[0]["total_tokens"] == 1000
+
+    def test_skips_when_user_is_not_account(self, monkeypatch):
+        from decimal import Decimal
+
+        from core.app.entities.app_invoke_entities import UserFrom
+
+        layer, _, _, _ = _make_layer()
+        # Default user_from is None — emulate end-user.
+        layer._application_generate_entity = layer._application_generate_entity.model_copy(
+            update={"user_from": UserFrom.END_USER, "tenant_id": "tenant-id", "user_id": "user-id"}
+        )
+
+        layer._http_tokens_accumulated = 1000
+        layer._http_billing_amount_accumulated = Decimal("0.069")
+        execution = SimpleNamespace(id_="run-4", total_tokens=1500)
+
+        called: list[dict] = []
+        monkeypatch.setattr(
+            "services.user_billing_service.UserBillingService.deduct_for_workflow_run",
+            staticmethod(lambda **kw: called.append(kw) or SimpleNamespace()),
+        )
+
+        layer._bill_workflow_run(execution)
+        assert called == []

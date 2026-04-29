@@ -78,6 +78,99 @@ describe('PromptDialog', () => {
     expect(screen.queryByLabelText('prompt.variableFields.name')).not.toBeInTheDocument()
   })
 
+  it('should add and remove tags', () => {
+    openDialog()
+
+    fireEvent.change(screen.getByLabelText('prompt.fields.tags'), {
+      target: { value: 'launch' },
+    })
+    fireEvent.keyDown(screen.getByLabelText('prompt.fields.tags'), {
+      key: 'Enter',
+    })
+
+    expect(screen.getByText('launch')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'filters.removeTag:launch' }))
+
+    expect(screen.queryByText('launch')).not.toBeInTheDocument()
+  })
+
+  it('should validate variable names before submit', () => {
+    openDialog()
+
+    fireEvent.change(screen.getByLabelText('prompt.fields.name'), {
+      target: { value: 'Title prompt' },
+    })
+    fireEvent.change(screen.getByLabelText('prompt.fields.content'), {
+      target: { value: 'Write a title' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'prompt.fields.addVariable' }))
+    fireEvent.change(screen.getByLabelText('prompt.variableFields.name'), {
+      target: { value: '1bad' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'prompt.create' }))
+
+    expect(screen.getByText('prompt.validation.variableNameInvalid')).toBeInTheDocument()
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('should submit optional metadata and variable field edits', async () => {
+    mockMutateAsync.mockResolvedValueOnce({})
+    render(<PromptDialog onCreated={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: 'prompt.newButton' }))
+
+    fireEvent.change(screen.getByLabelText('prompt.fields.name'), {
+      target: { value: 'Title prompt' },
+    })
+    fireEvent.change(screen.getByLabelText('prompt.fields.content'), {
+      target: { value: 'Write a title' },
+    })
+    fireEvent.change(screen.getByLabelText('prompt.fields.description'), {
+      target: { value: 'Useful for campaigns' },
+    })
+    fireEvent.change(screen.getByLabelText('prompt.fields.category'), {
+      target: { value: 'marketing' },
+    })
+    fireEvent.change(screen.getByLabelText('prompt.fields.tags'), {
+      target: { value: 'launch' },
+    })
+    fireEvent.keyDown(screen.getByLabelText('prompt.fields.tags'), {
+      key: 'Enter',
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'prompt.fields.addVariable' }))
+    fireEvent.change(screen.getByLabelText('prompt.variableFields.name'), {
+      target: { value: 'count' },
+    })
+    fireEvent.change(screen.getByLabelText('prompt.variableFields.type'), {
+      target: { value: 'number' },
+    })
+    fireEvent.change(screen.getByLabelText('prompt.variableFields.default'), {
+      target: { value: '3' },
+    })
+    fireEvent.change(screen.getByLabelText('prompt.variableFields.description'), {
+      target: { value: 'Item count' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'prompt.create' }))
+
+    await waitFor(() => {
+      expect(mockMutateAsync).toHaveBeenCalledWith({
+        name: 'Title prompt',
+        content: 'Write a title',
+        prompt_variables: [
+          {
+            name: 'count',
+            type: 'number',
+            default: '3',
+            description: 'Item count',
+          },
+        ],
+        description: 'Useful for campaigns',
+        tags: ['launch'],
+        category: 'marketing',
+      })
+    })
+  })
+
   it('should submit payload, close dialog, and call onCreated', async () => {
     mockMutateAsync.mockResolvedValueOnce({})
     const onCreated = vi.fn()

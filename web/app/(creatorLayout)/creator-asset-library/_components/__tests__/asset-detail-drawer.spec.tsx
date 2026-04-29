@@ -98,6 +98,23 @@ describe('AssetDetailDrawer', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
+  it('should render loading state while detail is pending', () => {
+    mockUseAssetDetail.mockReturnValue({
+      data: null,
+      isLoading: true,
+    })
+
+    render(
+      <AssetDetailDrawer
+        assetId="asset-1"
+        onClose={() => {}}
+        onMutated={() => {}}
+      />,
+    )
+
+    expect(screen.getByText('detail.loading')).toBeInTheDocument()
+  })
+
   it('should fetch and render detail form when assetId is provided', () => {
     renderDrawer(createAsset())
 
@@ -146,6 +163,79 @@ describe('AssetDetailDrawer', () => {
     })
     expect(onMutated).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('button', { name: 'detail.save' })).toBeDisabled()
+  })
+
+  it('should add and remove tags before saving', async () => {
+    renderDrawer(createAsset())
+
+    fireEvent.click(screen.getByRole('button', { name: 'filters.removeTag:hero' }))
+    fireEvent.change(screen.getByLabelText('prompt.fields.tags'), {
+      target: { value: 'launch' },
+    })
+    fireEvent.keyDown(screen.getByLabelText('prompt.fields.tags'), {
+      key: 'Enter',
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'detail.save' }))
+
+    await waitFor(() => {
+      expect(mockPatchMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            tags: ['launch'],
+          }),
+        }),
+        expect.any(Object),
+      )
+    })
+  })
+
+  it('should include prompt content and variables when saving prompt assets', async () => {
+    renderDrawer(createAsset({
+      asset_type: 'prompt',
+      category: null,
+      content: 'Old content',
+      description: null,
+      prompt_variables: [
+        {
+          name: 'product_name',
+          type: 'string',
+          default: null,
+          description: null,
+        },
+      ],
+      signed_url: null,
+      tags: [],
+      upload_file_id: null,
+    }))
+
+    fireEvent.change(screen.getByLabelText('prompt.fields.content'), {
+      target: { value: 'New content' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'detail.save' }))
+
+    await waitFor(() => {
+      expect(mockPatchMutate).toHaveBeenCalledWith(
+        {
+          asset_id: 'asset-1',
+          body: {
+            name: 'Hero image',
+            description: null,
+            tags: [],
+            category: null,
+            content: 'New content',
+            prompt_variables: [
+              {
+                name: 'product_name',
+                type: 'string',
+                default: null,
+                description: null,
+              },
+            ],
+          },
+        },
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+      )
+    })
   })
 
   it('should open confirm dialog and delete asset', async () => {

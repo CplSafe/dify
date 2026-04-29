@@ -15,6 +15,7 @@
   "errors.validationFailed": "校验失败：{{reason}}",
   "filters.categoryAll": "全部分类",
   "filters.categoryPlaceholder": "按分类筛选",
+  "filters.removeTag": "移除 {{tag}}",
   "filters.searchPlaceholder": "按名称或描述搜索",
   "filters.tagsPlaceholder": "输入标签后按回车添加",
   "pagination.next": "下一页",

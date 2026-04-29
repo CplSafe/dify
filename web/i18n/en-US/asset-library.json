@@ -15,6 +15,7 @@
   "errors.validationFailed": "Validation failed: {{reason}}",
   "filters.categoryAll": "All categories",
   "filters.categoryPlaceholder": "Filter by category",
+  "filters.removeTag": "Remove {{tag}}",
   "filters.searchPlaceholder": "Search by name or description",
   "filters.tagsPlaceholder": "Type a tag and press Enter",
   "pagination.next": "Next",

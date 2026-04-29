@@ -14,7 +14,9 @@ content-type-specific parsing stays separate.
 The model only stores ``created_by`` as a UUID string; the response
 serializer expects an ``Account``-shaped ``{id, name, avatar}`` dict
 (see ``fields.asset_library_fields.asset_creator_fields``). The
-``attach_creator`` helper performs that lookup before marshalling.
+``prepare_asset_response`` helper performs that lookup before marshalling and
+also materializes transient signed preview URLs from stored ``upload_file_id``
+references. The database row never stores these signed URLs.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from typing import Any
 
 from flask import request
 from flask_restx import Resource
+from graphon.file import helpers as file_helpers
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from werkzeug.exceptions import BadRequest, NotFound
@@ -73,6 +76,34 @@ def attach_creator(asset: AssetLibrary) -> AssetLibrary:
             "avatar": getattr(account, "avatar", None),
         }
     return asset
+
+
+def attach_file_urls(asset: AssetLibrary) -> AssetLibrary:
+    """Materialize transient file preview URLs before marshalling.
+
+    File assets persist only ``upload_file_id``. The API contract exposes
+    ``signed_url`` so browsers can render the media immediately. Video cover
+    extraction stores sibling cover files as ``cover_url="upload_file_id:<id>"``;
+    resolve that internal reference to a signed URL as well.
+    """
+    upload_file_id = getattr(asset, "upload_file_id", None)
+    if isinstance(upload_file_id, str) and upload_file_id:
+        asset.signed_url = file_helpers.get_signed_file_url(upload_file_id=upload_file_id)  # type: ignore[attr-defined]
+
+    cover_url = getattr(asset, "cover_url", None)
+    if isinstance(cover_url, str) and cover_url.startswith("upload_file_id:"):
+        cover_upload_file_id = cover_url.removeprefix("upload_file_id:")
+        if cover_upload_file_id:
+            asset.cover_url = file_helpers.get_signed_file_url(  # type: ignore[assignment]
+                upload_file_id=cover_upload_file_id
+            )
+
+    return asset
+
+
+def prepare_asset_response(asset: AssetLibrary) -> AssetLibrary:
+    """Attach transient response-only fields expected by ``asset_fields``."""
+    return attach_file_urls(attach_creator(asset))
 
 
 def _patch_args() -> dict[str, Any]:
@@ -132,7 +163,7 @@ class AssetListApi(Resource):
             page=page_arg,
             limit=limit_arg,
         )
-        items = [attach_creator(item) for item in page.items]
+        items = [prepare_asset_response(item) for item in page.items]
         return {
             "data": items,
             "total": page.total,
@@ -155,7 +186,7 @@ class AssetDetailApi(Resource):
             asset = AssetLibraryService.get_asset(tenant_id, asset_id)
         except AssetNotFoundError as exc:
             raise NotFound(str(exc)) from exc
-        return attach_creator(asset)
+        return prepare_asset_response(asset)
 
     @setup_required
     @login_required
@@ -175,7 +206,7 @@ class AssetDetailApi(Resource):
             raise NotFound(str(exc)) from exc
         except InvalidPromptVariablesError as exc:
             raise BadRequest(str(exc)) from exc
-        return attach_creator(asset)
+        return prepare_asset_response(asset)
 
     @setup_required
     @login_required

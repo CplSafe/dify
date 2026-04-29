@@ -130,7 +130,15 @@ def _install_current_account(module, monkeypatch, tenant_id: str = "tenant-1"):
 
 
 def _stubattach_creator(module, monkeypatch):
-    monkeypatch.setattr(module, "attach_creator", lambda asset: asset)
+    if hasattr(module, "attach_creator"):
+        monkeypatch.setattr(module, "attach_creator", lambda asset: asset)
+    else:
+        monkeypatch.setattr(module, "prepare_asset_response", lambda asset: asset)
+
+
+def _stub_prepare_asset_response_internals(module, monkeypatch):
+    """Keep response preparation real while avoiding the creator DB lookup."""
+    monkeypatch.setitem(module.prepare_asset_response.__globals__, "attach_creator", lambda asset: asset)
 
 
 def _multipart_env(
@@ -211,6 +219,33 @@ class TestAssetFileUploadHappyPath:
         assert captured["tags"] == ["a", "b"]
         assert captured["description"] is None
         assert captured["category"] is None
+
+    def test_returns_signed_preview_url_for_uploaded_file(self, flask_app, files_module, monkeypatch):
+        _install_current_account(files_module, monkeypatch)
+        _stub_prepare_asset_response_internals(files_module, monkeypatch)
+        asset = _make_asset(name="测试图")
+        monkeypatch.setattr(
+            files_module.AssetLibraryService,
+            "create_file_asset",
+            staticmethod(lambda **_kwargs: asset),
+        )
+        monkeypatch.setattr(
+            files_module.prepare_asset_response.__globals__["file_helpers"],
+            "get_signed_file_url",
+            lambda upload_file_id, **_kwargs: f"https://files.example/{upload_file_id}",
+        )
+
+        env = _multipart_env(
+            file_field=(b"png-bytes", "test.png", "image/png"),
+            asset_type="image",
+            name="测试图",
+        )
+
+        with flask_app.request_context(env):
+            body, status = files_module.AssetFileUploadApi().post()
+
+        assert status == 201
+        assert body.signed_url == "https://files.example/upload-1"
 
 
 # ---------------------------------------------------------------------------

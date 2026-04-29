@@ -170,6 +170,28 @@ class TestAssetList:
         assert captured["asset_type"] == "prompt"
         assert captured["tenant_id"] == "tenant-1"
 
+    def test_file_assets_include_signed_preview_url(self, flask_app, assets_module, monkeypatch):
+        _install_current_account(assets_module, monkeypatch)
+        _stubattach_creator(assets_module, monkeypatch)
+        asset = _make_asset(asset_type="image")
+        asset.upload_file_id = "upload-1"
+        page = AssetPage(items=[asset], total=1, page=1, limit=20)
+        monkeypatch.setattr(
+            assets_module.AssetLibraryService,
+            "list_assets",
+            staticmethod(lambda **kwargs: page),
+        )
+        monkeypatch.setattr(
+            assets_module.file_helpers,
+            "get_signed_file_url",
+            lambda upload_file_id, **_kwargs: f"https://files.example/{upload_file_id}",
+        )
+
+        with flask_app.test_request_context("/asset-library"):
+            body = assets_module.AssetListApi().get()
+
+        assert body["data"][0].signed_url == "https://files.example/upload-1"
+
     def test_has_more_true_when_more_pages_remain(self, flask_app, assets_module, monkeypatch):
         _install_current_account(assets_module, monkeypatch)
         _stubattach_creator(assets_module, monkeypatch)
@@ -210,6 +232,23 @@ class TestAssetDetail:
 
         assert result is asset
         assert captured == {"tenant_id": "tenant-1", "asset_id": "asset-1"}
+
+    def test_file_asset_detail_includes_signed_preview_url(self, flask_app, assets_module, monkeypatch):
+        _install_current_account(assets_module, monkeypatch)
+        _stubattach_creator(assets_module, monkeypatch)
+        asset = _make_asset(asset_type="image")
+        asset.upload_file_id = "upload-1"
+        monkeypatch.setattr(assets_module.AssetLibraryService, "get_asset", staticmethod(lambda *_args: asset))
+        monkeypatch.setattr(
+            assets_module.file_helpers,
+            "get_signed_file_url",
+            lambda upload_file_id, **_kwargs: f"https://files.example/{upload_file_id}",
+        )
+
+        with flask_app.test_request_context("/asset-library/asset-1"):
+            result = assets_module.AssetDetailApi().get("asset-1")
+
+        assert result.signed_url == "https://files.example/upload-1"
 
     def test_missing_asset_raises_not_found(self, flask_app, assets_module, monkeypatch):
         _install_current_account(assets_module, monkeypatch)

@@ -124,7 +124,10 @@ def _install_current_account(module, monkeypatch, tenant_id: str = "tenant-1"):
 
 
 def _stubattach_creator(module, monkeypatch):
-    monkeypatch.setattr(module, "attach_creator", lambda asset: asset)
+    if hasattr(module, "attach_creator"):
+        monkeypatch.setattr(module, "attach_creator", lambda asset: asset)
+    else:
+        monkeypatch.setattr(module, "prepare_asset_response", lambda asset: asset)
 
 
 def _json_env(payload):

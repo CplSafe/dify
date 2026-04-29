@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
+from graphon.entities import WorkflowNodeExecution
 from graphon.entities.pause_reason import SchedulingPause
 from graphon.enums import (
     BuiltinNodeTypes,
@@ -11,11 +12,6 @@ from graphon.enums import (
     WorkflowNodeExecutionStatus,
     WorkflowType,
 )
-
-from core.app.entities.app_invoke_entities import WorkflowAppGenerateEntity
-from core.app.workflow.layers.persistence import PersistenceWorkflowInfo, WorkflowPersistenceLayer
-from core.workflow.system_variables import SystemVariableKey, build_system_variables
-from graphon.entities import WorkflowNodeExecution
 from graphon.graph_events import (
     GraphRunAbortedEvent,
     GraphRunFailedEvent,
@@ -32,6 +28,10 @@ from graphon.graph_events import (
 )
 from graphon.node_events import NodeRunResult
 from graphon.runtime import GraphRuntimeState, ReadOnlyGraphRuntimeStateWrapper, VariablePool
+
+from core.app.entities.app_invoke_entities import WorkflowAppGenerateEntity
+from core.app.workflow.layers.persistence import PersistenceWorkflowInfo, WorkflowPersistenceLayer
+from core.workflow.system_variables import SystemVariableKey, build_system_variables
 
 
 class _RepoRecorder:
@@ -675,15 +675,76 @@ class TestHttpNodeUsageExtraction:
         assert runtime_state.total_tokens == 1000
 
 
-class TestBillWorkflowRunSplitsHttpAndLlm:
-    """Cover the BUG-1 + BUG-2 fix at the deduction layer.
+class TestNodeBillingExtraction:
+    """Node-level billing extraction keeps each node's configured price.
 
-    ``_bill_workflow_run`` now bills HTTP and LLM tokens separately so the
-    per-node price actually applies to HTTP and LLM keeps its 0.002 default —
-    no averaging across all nodes.
+    HTTP nodes expose their usage through response-body JSON, while LLM nodes
+    expose usage through ``NodeRunResult.llm_usage``. Both contribute to the
+    same run-level billing amount, but each node keeps its own configured
+    ``billing_price_per_k_tokens``.
     """
 
-    def test_http_amount_billed_verbatim_and_llm_billed_at_default(self, monkeypatch):
+    def test_llm_amount_accumulates_with_node_price(self):
+        from decimal import Decimal
+
+        from graphon.model_runtime.entities.llm_entities import LLMUsage
+
+        layer, _, _, _ = _make_layer()
+        layer._workflow_info = PersistenceWorkflowInfo(
+            workflow_id="workflow-id",
+            workflow_type=WorkflowType.WORKFLOW,
+            version="1",
+            graph_data={
+                "nodes": [
+                    {
+                        "id": "llm-node",
+                        "data": {
+                            "type": "llm",
+                            "title": "LLM",
+                            "billing_price_per_k_tokens": 0.01,
+                        },
+                    }
+                ],
+                "edges": [],
+            },
+        )
+
+        event = NodeRunSucceededEvent(
+            id="exec-id",
+            node_id="llm-node",
+            node_type=BuiltinNodeTypes.LLM,
+            node_title="LLM",
+            start_at=_naive_utc_now(),
+            finished_at=_naive_utc_now(),
+            node_run_result=NodeRunResult(
+                status=WorkflowNodeExecutionStatus.SUCCEEDED,
+                llm_usage=LLMUsage(
+                    prompt_tokens=200,
+                    prompt_unit_price=Decimal(0),
+                    prompt_price_unit=Decimal(0),
+                    prompt_price=Decimal(0),
+                    completion_tokens=265,
+                    completion_unit_price=Decimal(0),
+                    completion_price_unit=Decimal(0),
+                    completion_price=Decimal(0),
+                    total_tokens=465,
+                    total_price=Decimal(0),
+                    currency="USD",
+                    latency=1.0,
+                ),
+            ),
+        )
+
+        layer._extract_llm_node_tokens(event)
+
+        assert layer._llm_tokens_accumulated == 465
+        assert layer._llm_billing_amount_accumulated == Decimal("0.004650")
+
+
+class TestBillWorkflowRunCombinesNodeBilling:
+    """Deduction layer writes one ledger row while preserving per-node prices."""
+
+    def test_http_and_llm_amounts_are_billed_as_one_combined_deduction(self, monkeypatch):
         from decimal import Decimal
 
         from core.app.entities.app_invoke_entities import UserFrom
@@ -693,11 +754,15 @@ class TestBillWorkflowRunSplitsHttpAndLlm:
             update={"user_from": UserFrom.ACCOUNT, "tenant_id": "tenant-id", "user_id": "account-id"}
         )
 
-        # Pretend two HTTP nodes already extracted: total tokens 325900, amount 22.4681
+        # Pretend node extraction already ran:
+        # HTTP: 325900 tokens at mixed HTTP node prices => 22.468100
+        # LLM:     465 tokens at its node price 0.01/k => 0.004650
         layer._http_tokens_accumulated = 325900
         layer._http_billing_amount_accumulated = Decimal("22.468100")
+        layer._llm_tokens_accumulated = 465
+        layer._llm_billing_amount_accumulated = Decimal("0.004650")
 
-        execution = SimpleNamespace(id_="run-1", total_tokens=326475)  # +575 LLM tokens
+        execution = SimpleNamespace(id_="run-1", total_tokens=326365)
 
         deductions: list[dict] = []
 
@@ -712,17 +777,13 @@ class TestBillWorkflowRunSplitsHttpAndLlm:
 
         layer._bill_workflow_run(execution)
 
-        assert len(deductions) == 2
-        http_call, llm_call = deductions
-        assert http_call["total_tokens"] == 325900
-        # tokens × price/1000 == 22.468100, so reconstructed price/k stays the original.
+        assert len(deductions) == 1
+        call = deductions[0]
+        assert call["total_tokens"] == 326365
         billed_amount = (
-            Decimal(http_call["total_tokens"]) / Decimal(1000) * Decimal(str(http_call["price_per_1k_tokens"]))
+            Decimal(call["total_tokens"]) / Decimal(1000) * Decimal(str(call["price_per_1k_tokens"]))
         )
-        assert billed_amount.quantize(Decimal("0.000001")) == Decimal("22.468100")
-
-        assert llm_call["total_tokens"] == 575
-        assert llm_call["price_per_1k_tokens"] == Decimal("0.002")
+        assert billed_amount.quantize(Decimal("0.000001")) == Decimal("22.472750")
 
     def test_no_deduction_when_no_tokens(self, monkeypatch):
         from decimal import Decimal
@@ -736,6 +797,8 @@ class TestBillWorkflowRunSplitsHttpAndLlm:
 
         layer._http_tokens_accumulated = 0
         layer._http_billing_amount_accumulated = Decimal(0)
+        layer._llm_tokens_accumulated = 0
+        layer._llm_billing_amount_accumulated = Decimal(0)
         execution = SimpleNamespace(id_="run-2", total_tokens=0)
 
         deductions: list[dict] = []
@@ -759,6 +822,8 @@ class TestBillWorkflowRunSplitsHttpAndLlm:
 
         layer._http_tokens_accumulated = 1000
         layer._http_billing_amount_accumulated = Decimal("0.069")
+        layer._llm_tokens_accumulated = 0
+        layer._llm_billing_amount_accumulated = Decimal(0)
         # total_tokens equals http_tokens — LLM share is zero, no LLM deduction.
         execution = SimpleNamespace(id_="run-3", total_tokens=1000)
 
@@ -786,6 +851,8 @@ class TestBillWorkflowRunSplitsHttpAndLlm:
 
         layer._http_tokens_accumulated = 1000
         layer._http_billing_amount_accumulated = Decimal("0.069")
+        layer._llm_tokens_accumulated = 500
+        layer._llm_billing_amount_accumulated = Decimal("0.005")
         execution = SimpleNamespace(id_="run-4", total_tokens=1500)
 
         called: list[dict] = []

@@ -12,7 +12,7 @@ Includes:
 """
 
 import enum
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -22,6 +22,20 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import TypeBase
 from .types import LongText, StringUUID
+
+
+def _isoformat_utc(value: datetime) -> str:
+    """Serialize database timestamps with an explicit UTC offset.
+
+    PostgreSQL ``timestamp without time zone`` columns are used throughout
+    these creator tables and are populated with UTC values. SQLAlchemy returns
+    them as naive ``datetime`` objects, so the API must attach ``+00:00``;
+    otherwise browsers parse the string as local time and show an 8-hour shift
+    for China Standard Time viewers.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.isoformat()
 
 
 class BillingRecordType(enum.StrEnum):
@@ -142,7 +156,7 @@ class BillingRecord(TypeBase):
             "record_type": self.record_type,
             "description": self.description,
             "scope": self.scope,
-            "created_at": self.created_at.isoformat(),
+            "created_at": _isoformat_utc(self.created_at),
         }
 
 

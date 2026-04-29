@@ -1,4 +1,6 @@
 """Unit tests for payment-related models."""
+
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from models.creator import (
@@ -91,7 +93,20 @@ class TestBillingRecordScope:
     def test_to_dict_includes_scope(self):
         r = BillingRecord(account_id="a1", amount=Decimal(1), record_type="topup")
         # created_at is server-assigned; to_dict needs a value to call isoformat()
-        from datetime import datetime
-
         r.created_at = datetime(2026, 1, 1)
         assert r.to_dict()["scope"] == "user"
+
+    def test_to_dict_serializes_naive_database_timestamp_as_utc(self):
+        r = BillingRecord(account_id="a1", amount=Decimal(1), record_type="topup")
+        # SQLAlchemy returns PostgreSQL ``timestamp without time zone`` values
+        # as naive UTC datetimes. The API must include UTC offset so browsers
+        # convert them to the viewer's local time instead of showing UTC as local.
+        r.created_at = datetime(2026, 4, 29, 6, 30)
+
+        assert r.to_dict()["created_at"] == "2026-04-29T06:30:00+00:00"
+
+    def test_to_dict_preserves_aware_timestamp_timezone(self):
+        r = BillingRecord(account_id="a1", amount=Decimal(1), record_type="topup")
+        r.created_at = datetime(2026, 4, 29, 6, 30, tzinfo=UTC)
+
+        assert r.to_dict()["created_at"] == "2026-04-29T06:30:00+00:00"

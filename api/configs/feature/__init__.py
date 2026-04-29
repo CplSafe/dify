@@ -207,6 +207,17 @@ class CodeExecutionSandboxConfig(BaseSettings):
     )
 
 
+class CreatorTaskConfig(BaseSettings):
+    CREATOR_TASK_MAX_IN_PROGRESS: PositiveInt = Field(
+        description="Maximum in-progress creator tasks allowed per account",
+        default=20,
+    )
+    CREATOR_TASK_TIMEOUT_HOURS: PositiveInt = Field(
+        description="Hours before in-progress creator tasks are marked failed by the timeout task",
+        default=2,
+    )
+
+
 class TriggerConfig(BaseSettings):
     """
     Configuration for trigger
@@ -1377,6 +1388,14 @@ class CeleryScheduleTasksConfig(BaseSettings):
         description="Interval in minutes for the payment order expiry scan",
         default=5,
     )
+    ENABLE_CREATOR_TASK_TIMEOUT_TASK: bool = Field(
+        description="Enable scheduled failing of stale creator tasks",
+        default=True,
+    )
+    CREATOR_TASK_TIMEOUT_TASK_INTERVAL: PositiveInt = Field(
+        description="Interval in minutes for the creator task timeout scan",
+        default=5,
+    )
     ENABLE_CHECK_UPGRADABLE_PLUGIN_TASK: bool = Field(
         description="Enable check upgradable plugin task",
         default=True,
@@ -1616,6 +1635,7 @@ class FeatureConfig(
     AuthConfig,  # Changed from OAuthConfig to AuthConfig
     BillingConfig,
     CodeExecutionSandboxConfig,
+    CreatorTaskConfig,
     TriggerConfig,
     AsyncWorkflowConfig,
     PluginConfig,

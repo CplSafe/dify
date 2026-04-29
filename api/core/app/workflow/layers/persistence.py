@@ -14,21 +14,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Union
 
+from graphon.entities import WorkflowExecution, WorkflowNodeExecution
 from graphon.enums import (
     WorkflowExecutionStatus,
     WorkflowNodeExecutionMetadataKey,
     WorkflowNodeExecutionStatus,
     WorkflowType,
 )
-
-from core.app.entities.app_invoke_entities import AdvancedChatAppGenerateEntity, UserFrom, WorkflowAppGenerateEntity
-from core.ops.entities.trace_entity import TraceTaskName
-from core.ops.ops_trace_manager import TraceQueueManager, TraceTask
-from core.repositories.factory import WorkflowExecutionRepository, WorkflowNodeExecutionRepository
-from core.workflow.system_variables import SystemVariableKey
-from core.workflow.variable_prefixes import SYSTEM_VARIABLE_NODE_ID
-from core.workflow.workflow_run_outputs import project_node_outputs_for_workflow_run
-from graphon.entities import WorkflowExecution, WorkflowNodeExecution
 from graphon.graph_engine.layers import GraphEngineLayer
 from graphon.graph_events import (
     GraphEngineEvent,
@@ -46,6 +38,14 @@ from graphon.graph_events import (
     NodeRunSucceededEvent,
 )
 from graphon.node_events import NodeRunResult
+
+from core.app.entities.app_invoke_entities import AdvancedChatAppGenerateEntity, UserFrom, WorkflowAppGenerateEntity
+from core.ops.entities.trace_entity import TraceTaskName
+from core.ops.ops_trace_manager import TraceQueueManager, TraceTask
+from core.repositories.factory import WorkflowExecutionRepository, WorkflowNodeExecutionRepository
+from core.workflow.system_variables import SystemVariableKey
+from core.workflow.variable_prefixes import SYSTEM_VARIABLE_NODE_ID
+from core.workflow.workflow_run_outputs import project_node_outputs_for_workflow_run
 from libs.datetime_utils import naive_utc_now
 
 
@@ -101,14 +101,16 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
         # add_tokens calls into this counter so completion stats can fall
         # back to it when runtime_state lost the data.
         self._http_tokens_accumulated: int = 0
-        # Per-run cumulative billing amount for HTTP nodes, computed at
-        # extraction time using each node's own ``billing_price_per_k_tokens``.
-        # Keeps the bookkeeping simple — no averaging across nodes, no second
-        # pass over outputs at billing time. ``_bill_workflow_run`` consumes
-        # this and the LLM token total separately.
+        # Per-run cumulative billing amount for externally priced nodes,
+        # computed at extraction time using each node's own
+        # ``billing_price_per_k_tokens``. ``_bill_workflow_run`` folds these
+        # node amounts into one ledger deduction so the UI shows one run-level
+        # bill without losing per-node pricing.
         from decimal import Decimal as _Decimal
 
         self._http_billing_amount_accumulated: _Decimal = _Decimal(0)
+        self._llm_tokens_accumulated: int = 0
+        self._llm_billing_amount_accumulated: _Decimal = _Decimal(0)
 
     # ------------------------------------------------------------------
     # GraphEngineLayer lifecycle
@@ -122,6 +124,8 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
         self._node_sequence = 0
         self._http_tokens_accumulated = 0
         self._http_billing_amount_accumulated = _Decimal(0)
+        self._llm_tokens_accumulated = 0
+        self._llm_billing_amount_accumulated = _Decimal(0)
 
     def on_event(self, event: GraphEngineEvent) -> None:
         if isinstance(event, GraphRunStartedEvent):
@@ -298,9 +302,13 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
             WorkflowNodeExecutionStatus.SUCCEEDED,
             finished_at=event.finished_at,
         )
-        # Extract tokens from HTTP request node response body when token_field_name is configured
-        if event.node_type == "http-request":
+        # Extract marketplace billing tokens from nodes whose usage is not
+        # already represented as a concrete ledger amount elsewhere.
+        node_type = getattr(event.node_type, "value", event.node_type)
+        if node_type == "http-request":
             self._extract_http_node_tokens(event)
+        elif node_type == "llm":
+            self._extract_llm_node_tokens(event)
 
     def _handle_node_failed(self, event: NodeRunFailedEvent) -> None:
         domain_execution = self._get_node_execution(event.id)
@@ -505,6 +513,109 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
                 exc,
             )
 
+    def _extract_llm_node_tokens(self, event: NodeRunSucceededEvent) -> None:
+        """Extract token count + billing amount from an LLM node result.
+
+        LLM nodes expose usage in ``NodeRunResult.llm_usage`` (falling back to
+        metadata's ``total_tokens`` when needed) rather than an HTTP body. If
+        the graph node has a ``billing_price_per_k_tokens`` value, we price the
+        node immediately and accumulate that amount for the single run-level
+        deduction. Nodes without a configured price are left for the default
+        LLM fallback in ``_bill_workflow_run`` so older workflows keep billing.
+        """
+        import logging
+        from decimal import Decimal, InvalidOperation
+
+        logger = logging.getLogger(__name__)
+
+        run_id = getattr(self._workflow_execution, "id_", None) or "?"
+        loop_id = getattr(event, "in_loop_id", None)
+        try:
+            graph_data = self._workflow_info.graph_data or {}
+            nodes = graph_data.get("nodes", [])
+            node_config: dict[str, Any] | None = None
+            for n in nodes:
+                if n.get("id") == event.node_id:
+                    node_config = n.get("data", {})
+                    break
+
+            if not node_config:
+                logger.info(
+                    "LLM-USAGE skip[no-graph-config] run=%s node=%s loop=%s graph_nodes=%d",
+                    run_id,
+                    event.node_id,
+                    loop_id,
+                    len(nodes),
+                )
+                return
+
+            raw_price = node_config.get("billing_price_per_k_tokens")
+            if raw_price is None or raw_price == "":
+                logger.info(
+                    "LLM-USAGE skip[no-node-price] run=%s node=%s loop=%s",
+                    run_id,
+                    event.node_id,
+                    loop_id,
+                )
+                return
+
+            try:
+                price_per_k = Decimal(str(raw_price))
+            except (InvalidOperation, ValueError):
+                price_per_k = Decimal(0)
+
+            tokens = 0
+            usage = event.node_run_result.llm_usage
+            try:
+                tokens = int(getattr(usage, "total_tokens", 0) or 0)
+            except (TypeError, ValueError):
+                tokens = 0
+
+            if tokens <= 0:
+                metadata = event.node_run_result.metadata or {}
+                raw_tokens = metadata.get(WorkflowNodeExecutionMetadataKey.TOTAL_TOKENS) or metadata.get(
+                    "total_tokens"
+                )
+                try:
+                    tokens = int(raw_tokens or 0)
+                except (TypeError, ValueError):
+                    tokens = 0
+
+            if tokens <= 0:
+                logger.info(
+                    "LLM-USAGE skip[non-positive] run=%s node=%s loop=%s tokens=%d",
+                    run_id,
+                    event.node_id,
+                    loop_id,
+                    tokens,
+                )
+                return
+
+            amount = (Decimal(tokens) / Decimal(1000) * price_per_k).quantize(Decimal("0.000001"))
+            self._llm_tokens_accumulated += tokens
+            self._llm_billing_amount_accumulated += amount
+
+            logger.info(
+                "LLM-USAGE applied run=%s node=%s loop=%s tokens=+%d price/k=%s amount=+%s "
+                "mirror_tokens=%d mirror_amount=%s",
+                run_id,
+                event.node_id,
+                loop_id,
+                tokens,
+                str(price_per_k),
+                str(amount),
+                self._llm_tokens_accumulated,
+                str(self._llm_billing_amount_accumulated),
+            )
+        except Exception as exc:
+            logger.warning(
+                "LLM-USAGE error run=%s node=%s loop=%s: %s",
+                run_id,
+                event.node_id,
+                loop_id,
+                exc,
+            )
+
     def _get_execution_id(self) -> str:
         workflow_execution_id = self._system_variables().get(SystemVariableKey.WORKFLOW_EXECUTION_ID)
         if not workflow_execution_id:
@@ -641,17 +752,13 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
     def _bill_workflow_run(self, execution: "WorkflowExecution") -> None:
         """Deduct billing for consumed tokens after any terminal workflow state.
 
-        Two independent deductions:
-
-        - **HTTP nodes**: amount already computed at extraction time using
-          each node's own ``billing_price_per_k_tokens`` and accumulated in
-          ``self._http_billing_amount_accumulated``. Deducted here in one
-          call so the ledger gets a single ``BillingRecord`` per run.
-        - **LLM nodes**: tokens accumulated by graphon's runtime
-          ``total_tokens`` minus the HTTP share (which we mirror in
-          ``self._http_tokens_accumulated``). Deducted at the platform
-          default rate of 0.002 CNY/1k — LLM pricing is otherwise handled
-          upstream and we don't double-bill.
+        Writes one ledger deduction per workflow run. HTTP and configured LLM
+        nodes compute their own amounts at node completion using each node's
+        ``billing_price_per_k_tokens``; this method sums those amounts and
+        passes a blended effective price to ``UserBillingService`` so the
+        final ``BillingRecord`` amount remains exact while the UI shows a
+        single run-level row. Any remaining LLM tokens from older workflows
+        without node-level billing config use the legacy 0.002 CNY/1k fallback.
 
         Runs for succeeded, partial-succeeded, failed, and aborted states so
         tokens consumed before an early termination are still billed.
@@ -678,38 +785,45 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
 
             http_tokens = self._http_tokens_accumulated
             http_amount = self._http_billing_amount_accumulated
+            llm_node_tokens = self._llm_tokens_accumulated
+            llm_node_amount = self._llm_billing_amount_accumulated
             total_tokens = execution.total_tokens or 0
-            llm_tokens = max(total_tokens - http_tokens, 0)
+            node_priced_tokens = http_tokens + llm_node_tokens
+            node_priced_amount = http_amount + llm_node_amount
+
+            fallback_llm_tokens = max(total_tokens - node_priced_tokens, 0)
+            fallback_llm_amount = (
+                Decimal(fallback_llm_tokens) / Decimal(1000) * Decimal("0.002")
+            ).quantize(Decimal("0.000001"))
+
+            billable_tokens = node_priced_tokens + fallback_llm_tokens
+            billable_amount = node_priced_amount + fallback_llm_amount
 
             logger.info(
-                "BILL summary run=%s total_tokens=%d http_tokens=%d llm_tokens=%d http_amount=%s",
+                "BILL summary run=%s total_tokens=%d http_tokens=%d llm_node_tokens=%d "
+                "fallback_llm_tokens=%d http_amount=%s llm_node_amount=%s fallback_llm_amount=%s "
+                "billable_tokens=%d billable_amount=%s",
                 run_id,
                 total_tokens,
                 http_tokens,
-                llm_tokens,
+                llm_node_tokens,
+                fallback_llm_tokens,
                 str(http_amount),
+                str(llm_node_amount),
+                str(fallback_llm_amount),
+                billable_tokens,
+                str(billable_amount),
             )
 
-            # 1) HTTP-node deduction: per-node priced amount, billed verbatim.
-            if http_amount > Decimal(0):
-                UserBillingService.deduct_for_workflow_run(
-                    account_id=account_id,
-                    tenant_id=tenant_id,
-                    workflow_run_id=run_id,
-                    total_tokens=http_tokens,
-                    price_per_1k_tokens=(
-                        (http_amount * Decimal(1000) / Decimal(http_tokens)) if http_tokens > 0 else Decimal(0)
-                    ),
-                )
+            if billable_tokens <= 0 or billable_amount <= Decimal(0):
+                return
 
-            # 2) LLM-node deduction: platform-default rate over remaining tokens.
-            if llm_tokens > 0:
-                UserBillingService.deduct_for_workflow_run(
-                    account_id=account_id,
-                    tenant_id=tenant_id,
-                    workflow_run_id=run_id,
-                    total_tokens=llm_tokens,
-                    price_per_1k_tokens=Decimal("0.002"),
-                )
+            UserBillingService.deduct_for_workflow_run(
+                account_id=account_id,
+                tenant_id=tenant_id,
+                workflow_run_id=run_id,
+                total_tokens=billable_tokens,
+                price_per_1k_tokens=billable_amount * Decimal(1000) / Decimal(billable_tokens),
+            )
         except Exception:
             logger.exception("Failed to bill workflow run %s", execution.id_)

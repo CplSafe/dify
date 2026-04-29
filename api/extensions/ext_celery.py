@@ -200,6 +200,12 @@ def init_app(app: DifyApp) -> Celery:
             "task": "payment_order_expiry.close_expired",
             "schedule": timedelta(minutes=dify_config.PAYMENT_ORDER_EXPIRY_TASK_INTERVAL),
         }
+    if dify_config.ENABLE_CREATOR_TASK_TIMEOUT_TASK:
+        imports.append("tasks.creator_task_timeout_tasks")
+        beat_schedule["creator_task_timeout"] = {
+            "task": "creator_task_timeout.fail_stale",
+            "schedule": timedelta(minutes=dify_config.CREATOR_TASK_TIMEOUT_TASK_INTERVAL),
+        }
     if dify_config.ENABLE_CHECK_UPGRADABLE_PLUGIN_TASK and dify_config.MARKETPLACE_ENABLED:
         imports.append("schedule.check_upgradable_plugin_task")
         imports.append("tasks.process_tenant_plugin_autoupgrade_check_task")

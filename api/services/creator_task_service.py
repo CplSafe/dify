@@ -1,7 +1,8 @@
 """Creator task service.
 
 Handles task creation, status updates (with optimistic locking), and queries.
-Enforces the per-user concurrent task limit.
+Enforces the per-account concurrent task limit from ``configs.dify_config``
+and provides the stale-task cleanup entry point used by Celery beat.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -9,17 +10,21 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 from werkzeug.exceptions import Conflict, NotFound, TooManyRequests
 
+from configs import dify_config
 from extensions.ext_database import db
 from models.creator_task import CreatorTask, CreatorTaskStatus
 
-MAX_IN_PROGRESS_TASKS = 10
 MAX_COMPLETED_TASKS = 50
 LIST_PAGE_SIZE = 20
-TASK_TIMEOUT_HOURS = 24
+
+IN_PROGRESS_STATUSES = (
+    CreatorTaskStatus.RUNNING.value,
+    CreatorTaskStatus.WAITING_INPUT.value,
+    CreatorTaskStatus.PENDING.value,
+)
 
 
 class CreatorTaskService:
-
     @staticmethod
     def create_task(
         account_id: str,
@@ -30,25 +35,31 @@ class CreatorTaskService:
         workflow_run_id: str | None,
         title: str | None,
     ) -> CreatorTask:
-        """Create a new task. Raises TooManyRequests if concurrent limit exceeded."""
-        in_progress_count = db.session.scalar(
-            select(func.count()).select_from(
-                select(CreatorTask)
-                .where(
-                    CreatorTask.account_id == account_id,
-                    CreatorTask.status.in_([
-                        CreatorTaskStatus.RUNNING.value,
-                        CreatorTaskStatus.WAITING_INPUT.value,
-                        CreatorTaskStatus.PENDING.value,
-                    ]),
-                )
-                .subquery()
-            )
-        ) or 0
+        """Create a new task.
 
-        if in_progress_count >= MAX_IN_PROGRESS_TASKS:
+        Raises ``TooManyRequests`` when the account already has
+        ``CREATOR_TASK_MAX_IN_PROGRESS`` non-terminal tasks. The limit is
+        account-wide because creator tasks are displayed and resumed per user,
+        independent of the app's own workflow active-count settings.
+        """
+        in_progress_count = (
+            db.session.scalar(
+                select(func.count()).select_from(
+                    select(CreatorTask)
+                    .where(
+                        CreatorTask.account_id == account_id,
+                        CreatorTask.status.in_(IN_PROGRESS_STATUSES),
+                    )
+                    .subquery()
+                )
+            )
+            or 0
+        )
+
+        max_in_progress = dify_config.CREATOR_TASK_MAX_IN_PROGRESS
+        if in_progress_count >= max_in_progress:
             raise TooManyRequests(
-                f"Maximum of {MAX_IN_PROGRESS_TASKS} concurrent tasks allowed. "
+                f"Maximum of {max_in_progress} concurrent tasks allowed. "
                 "Please wait for a task to complete before starting a new one."
             )
 
@@ -148,11 +159,14 @@ class CreatorTaskService:
             ).all()
         )
 
-        total = db.session.scalar(
-            select(func.count()).select_from(
-                select(CreatorTask).where(CreatorTask.account_id == account_id).subquery()
+        total = (
+            db.session.scalar(
+                select(func.count()).select_from(
+                    select(CreatorTask).where(CreatorTask.account_id == account_id).subquery()
+                )
             )
-        ) or 0
+            or 0
+        )
 
         in_progress_count = sum(1 for t in tasks if t.is_in_progress)
 
@@ -183,16 +197,19 @@ class CreatorTaskService:
 
     @staticmethod
     def timeout_stale_tasks() -> int:
-        """Mark tasks older than TASK_TIMEOUT_HOURS as failed. Returns count updated."""
-        cutoff = datetime.now(UTC) - timedelta(hours=TASK_TIMEOUT_HOURS)
+        """Mark stale non-terminal creator tasks as failed.
+
+        This cleanup is intentionally coarse-grained and DB-backed: creator
+        tasks can outlive the browser tab that created them, and some legacy
+        rows have no ``workflow_run_id`` to reconcile against. The configured
+        timeout is therefore the source of truth for freeing abandoned
+        creator-task concurrency slots.
+        """
+        cutoff = datetime.now(UTC) - timedelta(hours=dify_config.CREATOR_TASK_TIMEOUT_HOURS)
         stale_tasks = list(
             db.session.scalars(
                 select(CreatorTask).where(
-                    CreatorTask.status.in_([
-                        CreatorTaskStatus.RUNNING.value,
-                        CreatorTaskStatus.WAITING_INPUT.value,
-                        CreatorTaskStatus.PENDING.value,
-                    ]),
+                    CreatorTask.status.in_(IN_PROGRESS_STATUSES),
                     CreatorTask.created_at < cutoff,
                 )
             ).all()

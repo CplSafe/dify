@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import type { AssetLibraryItem } from '@/contract/console/asset-library'
 import { useTranslation } from 'react-i18next'
 import AssetCard from './asset-card'
@@ -8,12 +9,14 @@ const SKELETON_KEYS = ['one', 'two', 'three', 'four', 'five', 'six']
 
 type AssetGridProps = {
   items: AssetLibraryItem[]
+  leading?: ReactNode
   loading: boolean
   onSelect: (id: string) => void
 }
 
 export default function AssetGrid({
   items,
+  leading,
   loading,
   onSelect,
 }: AssetGridProps) {
@@ -33,7 +36,7 @@ export default function AssetGrid({
     )
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && !leading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-text-tertiary">
         <p>{t('empty.all')}</p>
@@ -43,6 +46,7 @@ export default function AssetGrid({
 
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
+      {leading}
       {items.map(item => (
         <AssetCard key={item.id} item={item} onSelect={onSelect} />
       ))}

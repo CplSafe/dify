@@ -30,9 +30,25 @@ type ProgressItem = {
 type UploadDropzoneProps = {
   defaultAssetType: Exclude<AssetType, 'prompt'>
   onUploaded: () => void
+  variant?: 'bar' | 'tile' | 'list-item'
 }
 
-export default function UploadDropzone({ onUploaded }: UploadDropzoneProps) {
+const DROPZONE_CLASS_BY_VARIANT = {
+  'bar': 'flex h-28 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors',
+  'list-item': 'flex h-14 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed transition-colors',
+  'tile': 'flex aspect-4/3 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors',
+}
+
+const WRAPPER_CLASS_BY_VARIANT = {
+  'bar': 'my-3',
+  'list-item': '',
+  'tile': '',
+}
+
+export default function UploadDropzone({
+  onUploaded,
+  variant = 'bar',
+}: UploadDropzoneProps) {
   const { t } = useTranslation('assetLibrary')
   const upload = useUploadAssetFile()
   const [dragging, setDragging] = useState(false)
@@ -86,7 +102,7 @@ export default function UploadDropzone({ onUploaded }: UploadDropzoneProps) {
   }
 
   return (
-    <div className="my-3">
+    <div className={WRAPPER_CLASS_BY_VARIANT[variant]}>
       <label
         data-testid="asset-dropzone"
         onDragEnter={(event) => {
@@ -104,7 +120,7 @@ export default function UploadDropzone({ onUploaded }: UploadDropzoneProps) {
           handleFiles(event.dataTransfer.files)
         }}
         className={[
-          'flex h-28 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors',
+          DROPZONE_CLASS_BY_VARIANT[variant],
           dragging
             ? 'border-primary-600 bg-primary-50'
             : 'border-divider-subtle bg-background-section',
@@ -121,7 +137,10 @@ export default function UploadDropzone({ onUploaded }: UploadDropzoneProps) {
         />
         <span
           aria-hidden
-          className="mb-1 i-ri-upload-cloud-2-line h-6 w-6 text-text-tertiary"
+          className={[
+            'i-ri-upload-cloud-2-line h-6 w-6 text-text-tertiary',
+            variant === 'list-item' ? '' : 'mb-1',
+          ].join(' ')}
         />
         <span className="text-sm text-text-tertiary">
           {dragging ? t('upload.dropzoneActive') : t('upload.dropzoneIdle')}

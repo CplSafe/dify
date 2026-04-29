@@ -82,14 +82,17 @@ vi.mock('../asset-filter-bar', () => ({
 vi.mock('../asset-grid', () => ({
   default: ({
     items,
+    leading,
     loading,
     onSelect,
   }: {
     items: unknown[]
+    leading?: React.ReactNode
     loading: boolean
     onSelect: (id: string) => void
   }) => (
     <div data-testid="grid" data-count={items.length} data-loading={loading}>
+      {leading}
       <button type="button" onClick={() => onSelect('asset-1')}>
         select-grid-asset
       </button>
@@ -100,14 +103,17 @@ vi.mock('../asset-grid', () => ({
 vi.mock('../asset-list', () => ({
   default: ({
     items,
+    leading,
     loading,
     onSelect,
   }: {
     items: unknown[]
+    leading?: React.ReactNode
     loading: boolean
     onSelect: (id: string) => void
   }) => (
     <div data-testid="list" data-count={items.length} data-loading={loading}>
+      {leading}
       <button type="button" onClick={() => onSelect('asset-3')}>
         select-list-asset
       </button>
@@ -223,6 +229,16 @@ describe('AssetLibraryPage', () => {
       page: 1,
       limit: 20,
     })
+  })
+
+  it('should render the upload entry inside the active content surface', () => {
+    render(<AssetLibraryPage />)
+
+    expect(screen.getByTestId('grid')).toContainElement(screen.getByTestId('upload'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'audio-tab' }))
+
+    expect(screen.getByTestId('list')).toContainElement(screen.getByTestId('upload'))
   })
 
   it('should switch tabs and choose the matching list surface', () => {

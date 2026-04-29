@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import type { AssetLibraryItem } from '@/contract/console/asset-library'
 import { useTranslation } from 'react-i18next'
 import AssetRow from './asset-row'
@@ -8,12 +9,14 @@ const SKELETON_KEYS = ['one', 'two', 'three', 'four', 'five']
 
 type AssetListProps = {
   items: AssetLibraryItem[]
+  leading?: ReactNode
   loading: boolean
   onSelect: (id: string) => void
 }
 
 export default function AssetList({
   items,
+  leading,
   loading,
   onSelect,
 }: AssetListProps) {
@@ -33,7 +36,7 @@ export default function AssetList({
     )
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && !leading) {
     return (
       <div className="py-16 text-center text-text-tertiary">
         {t('empty.all')}
@@ -43,6 +46,7 @@ export default function AssetList({
 
   return (
     <div className="flex flex-col gap-1">
+      {leading}
       {items.map(item => (
         <AssetRow key={item.id} item={item} onSelect={onSelect} />
       ))}

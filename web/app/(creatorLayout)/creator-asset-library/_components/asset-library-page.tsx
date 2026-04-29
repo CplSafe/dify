@@ -77,9 +77,17 @@ export default function AssetLibraryPage() {
   }
 
   const isGridMode = tab === 'all' || tab === 'image' || tab === 'video'
-  const uploadAssetType: UploadableAssetType = tab === 'all'
-    ? 'image'
-    : tab as UploadableAssetType
+  const uploadAssetType: UploadableAssetType
+    = tab === 'audio' || tab === 'image' || tab === 'video' ? tab : 'image'
+  const uploadEntry = tab !== 'prompt'
+    ? (
+        <UploadDropzone
+          defaultAssetType={uploadAssetType}
+          variant={isGridMode ? 'tile' : 'list-item'}
+          onUploaded={() => list.refetch()}
+        />
+      )
+    : null
 
   return (
     <div className="flex h-full min-h-0 flex-col px-8 py-6">
@@ -102,18 +110,12 @@ export default function AssetLibraryPage() {
         onTagsChange={handleTagsChange}
       />
 
-      {tab !== 'prompt' && (
-        <UploadDropzone
-          defaultAssetType={uploadAssetType}
-          onUploaded={() => list.refetch()}
-        />
-      )}
-
       <div className="min-h-0 flex-1 overflow-y-auto">
         {isGridMode
           ? (
               <AssetGrid
                 items={list.data?.data ?? []}
+                leading={uploadEntry}
                 loading={list.isLoading}
                 onSelect={setDetailAssetId}
               />
@@ -121,6 +123,7 @@ export default function AssetLibraryPage() {
           : (
               <AssetList
                 items={list.data?.data ?? []}
+                leading={uploadEntry}
                 loading={list.isLoading}
                 onSelect={setDetailAssetId}
               />

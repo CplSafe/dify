@@ -45,6 +45,20 @@ describe('AssetGrid', () => {
     expect(screen.getByText('empty.all')).toBeInTheDocument()
   })
 
+  it('should render a leading placeholder inside the grid', () => {
+    render(
+      <AssetGrid
+        items={[]}
+        leading={<div data-testid="upload-placeholder" />}
+        loading={false}
+        onSelect={() => {}}
+      />,
+    )
+
+    expect(screen.getByTestId('upload-placeholder')).toBeInTheDocument()
+    expect(screen.queryByText('empty.all')).not.toBeInTheDocument()
+  })
+
   it('should call onSelect when a card is clicked', () => {
     const onSelect = vi.fn()
     render(<AssetGrid items={[createAsset()]} loading={false} onSelect={onSelect} />)

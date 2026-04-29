@@ -7,6 +7,7 @@
   "detail.deleteConfirmBody": "确定删除「{{name}}」？此操作不可撤销。",
   "detail.deleteConfirmTitle": "删除素材",
   "detail.deletedToast": "已删除",
+  "detail.loading": "正在加载素材...",
   "detail.save": "保存",
   "detail.savedToast": "已保存",
   "empty.all": "还没有素材 —— 拖拽文件上传或新建提示词",

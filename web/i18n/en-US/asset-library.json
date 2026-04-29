@@ -7,6 +7,7 @@
   "detail.deleteConfirmBody": "Are you sure you want to delete '{{name}}'? This cannot be undone.",
   "detail.deleteConfirmTitle": "Delete asset",
   "detail.deletedToast": "Deleted",
+  "detail.loading": "Loading asset...",
   "detail.save": "Save",
   "detail.savedToast": "Saved",
   "empty.all": "Nothing here yet - drag files in or create a prompt",

@@ -90,6 +90,11 @@ describe('EmbeddedChatbot Header', () => {
     enable_explore_banner: false,
     enable_sms_code_login: false,
     social_publish_enabled: false,
+    signup_bonus: {
+      enabled: false,
+      amount: '0',
+      currency: 'CNY',
+    },
   }
 
   const setupIframe = () => {

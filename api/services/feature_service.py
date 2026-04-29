@@ -156,6 +156,12 @@ class PluginManagerModel(BaseModel):
     enabled: bool = False
 
 
+class SignupBonusModel(BaseModel):
+    enabled: bool = False
+    amount: str = "0"
+    currency: str = "CNY"
+
+
 class SystemFeatureModel(BaseModel):
     sso_enforced_for_signin: bool = False
     sso_enforced_for_signin_protocol: str = ""
@@ -181,6 +187,11 @@ class SystemFeatureModel(BaseModel):
     # default; the controllers also short-circuit on the same flag, so the
     # frontend can hide nav entries before the user even attempts a request.
     social_publish_enabled: bool = False
+    # Mirrors api SIGNUP_BONUS_ENABLED + SIGNUP_BONUS_AMOUNT so the signup /
+    # SMS-login UI can hide bonus copy when ops disabled the grant in .env.
+    # `amount` is a string to dodge JSON float drift (Decimal serialises
+    # cleanly as a literal like "50" or "12.34").
+    signup_bonus: SignupBonusModel = SignupBonusModel()
 
 
 class FeatureService:
@@ -252,6 +263,17 @@ class FeatureService:
         system_features.enable_sms_code_login = dify_config.ENABLE_SMS_CODE_LOGIN
         system_features.is_allow_register = dify_config.ALLOW_REGISTER
         system_features.is_allow_create_workspace = dify_config.ALLOW_CREATE_WORKSPACE
+        # Surface signup bonus settings so the login / signup UI can render
+        # accurate copy. The bonus only shows up to the user when both the
+        # switch is on AND the amount is positive — same rule the auth
+        # controllers apply server-side before crediting.
+        from decimal import Decimal as _Decimal
+
+        bonus_amount = dify_config.SIGNUP_BONUS_AMOUNT
+        system_features.signup_bonus.enabled = (
+            dify_config.SIGNUP_BONUS_ENABLED and bonus_amount > _Decimal(0)
+        )
+        system_features.signup_bonus.amount = str(bonus_amount)
         system_features.is_email_setup = dify_config.MAIL_TYPE is not None and dify_config.MAIL_TYPE != ""
         system_features.trial_models = cls._fulfill_trial_models_from_env()
         system_features.enable_trial_app = dify_config.ENABLE_TRIAL_APP

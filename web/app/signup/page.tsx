@@ -1,6 +1,7 @@
 'use client'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useGlobalPublicStore } from '@/context/global-public-context'
 import { useRouter, useSearchParams } from '@/next/navigation'
 import MailForm from './components/input-mail'
 
@@ -15,39 +16,55 @@ const Signup = () => {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { t } = useTranslation()
+  const { systemFeatures } = useGlobalPublicStore()
+  const showSignupBonus = systemFeatures.signup_bonus.enabled
+  const bonusAmount = systemFeatures.signup_bonus.amount
 
-  const handleInputMailSubmitted = useCallback((email: string, result: string) => {
-    const params = new URLSearchParams(searchParams)
-    params.set('token', encodeURIComponent(result))
-    params.set('email', encodeURIComponent(email))
+  const handleInputMailSubmitted = useCallback(
+    (email: string, result: string) => {
+      const params = new URLSearchParams(searchParams)
+      params.set('token', encodeURIComponent(result))
+      params.set('email', encodeURIComponent(email))
 
-    // 保留 URL 中已有的 invite_code（从分享链接带入），不再从用户输入获取
-    router.push(`/signup/check-code?${params.toString()}`)
-  }, [router, searchParams])
+      // 保留 URL 中已有的 invite_code（从分享链接带入），不再从用户输入获取
+      router.push(`/signup/check-code?${params.toString()}`)
+    },
+    [router, searchParams],
+  )
 
   return (
     <div className="mx-auto mt-8 w-full">
       <div className="mx-auto mb-6 w-full">
-        <h2 className="title-4xl-semi-bold text-text-primary">{t('signup.createAccount', { ns: 'login' })}</h2>
-        <p className="body-md-regular mt-2 text-text-tertiary">{t('signup.welcome', { ns: 'login' })}</p>
+        <h2 className="title-4xl-semi-bold text-text-primary">
+          {t('signup.createAccount', { ns: 'login' })}
+        </h2>
+        <p className="body-md-regular mt-2 text-text-tertiary">
+          {t('signup.welcome', { ns: 'login' })}
+        </p>
       </div>
 
-      {/* 注册福利提示 */}
-      <div className="mb-6 rounded-lg border border-primary-100 bg-primary-50/60 px-4 py-3">
-        <div className="flex items-start gap-2">
-          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-600 text-[11px] font-bold text-white">
-            ¥
-          </span>
-          <div>
-            <div className="system-sm-semibold text-primary-700">
-              新用户注册赠送体验额度 50 元
-            </div>
-            <div className="mt-0.5 system-xs-regular text-text-tertiary">
-              注册成功后自动到账，可直接用于体验平台功能
+      {/* 注册福利提示（由后端 SIGNUP_BONUS_ENABLED + AMOUNT 控制是否显示） */}
+      {showSignupBonus && (
+        <div className="mb-6 rounded-lg border border-primary-100 bg-primary-50/60 px-4 py-3">
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-600 text-[11px] font-bold text-white">
+              ¥
+            </span>
+            <div>
+              <div className="system-sm-semibold text-primary-700">
+                新用户注册赠送体验额度
+                {' '}
+                {bonusAmount}
+                {' '}
+                元
+              </div>
+              <div className="mt-0.5 system-xs-regular text-text-tertiary">
+                注册成功后自动到账，可直接用于体验平台功能
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       <MailForm onSuccess={handleInputMailSubmitted} />
     </div>

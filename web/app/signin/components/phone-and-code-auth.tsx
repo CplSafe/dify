@@ -8,6 +8,7 @@ import Input from '@/app/components/base/input'
 import { toast } from '@/app/components/base/ui/toast'
 import { resolvePostLoginRedirect } from '@/app/signin/utils/post-login-redirect'
 import { resolveHomeRoute } from '@/app/signin/utils/resolve-home-route'
+import { useGlobalPublicStore } from '@/context/global-public-context'
 import { useRouter, useSearchParams } from '@/next/navigation'
 import { sendSmsLoginCode, smsLoginVerify } from '@/service/common'
 
@@ -17,6 +18,9 @@ export default function PhoneAndCodeAuth() {
   const { t } = useTranslation()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { systemFeatures } = useGlobalPublicStore()
+  const showSignupBonus = systemFeatures.signup_bonus.enabled
+  const bonusAmount = systemFeatures.signup_bonus.amount
   const [phone, setPhone] = useState('')
   const [code, setCode] = useState('')
   const [codeSent, setCodeSent] = useState(false)
@@ -93,22 +97,27 @@ export default function PhoneAndCodeAuth() {
 
   return (
     <form onSubmit={handleSubmit}>
-      {/* 注册福利提示 */}
-      <div className="mb-4 rounded-lg border border-primary-100 bg-primary-50/60 px-4 py-3">
-        <div className="flex items-start gap-2">
-          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-600 text-[11px] font-bold text-white">
-            ¥
-          </span>
-          <div>
-            <div className="system-sm-semibold text-primary-700">
-              {t('sms.signupBonusTitle', { ns: 'login' })}
-            </div>
-            <div className="mt-0.5 system-xs-regular text-text-tertiary">
-              {t('sms.signupBonusDesc', { ns: 'login' })}
+      {/* 注册福利提示（由后端 SIGNUP_BONUS_ENABLED + AMOUNT 控制是否显示） */}
+      {showSignupBonus && (
+        <div className="mb-4 rounded-lg border border-primary-100 bg-primary-50/60 px-4 py-3">
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-600 text-[11px] font-bold text-white">
+              ¥
+            </span>
+            <div>
+              <div className="system-sm-semibold text-primary-700">
+                {t('sms.signupBonusTitle', {
+                  ns: 'login',
+                  amount: bonusAmount,
+                })}
+              </div>
+              <div className="mt-0.5 system-xs-regular text-text-tertiary">
+                {t('sms.signupBonusDesc', { ns: 'login' })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
       <div className="mb-2">
         <label
           htmlFor="phone"
@@ -173,7 +182,9 @@ export default function PhoneAndCodeAuth() {
         </Button>
       </div>
       <p className="mt-3 text-center system-xs-regular text-text-tertiary">
-        {t('sms.autoRegisterTip', { ns: 'login' })}
+        {showSignupBonus
+          ? t('sms.autoRegisterTip', { ns: 'login', amount: bonusAmount })
+          : t('sms.autoRegisterTipNoBonus', { ns: 'login' })}
       </p>
     </form>
   )

@@ -72,6 +72,13 @@ export type SystemFeatures = {
   enable_trial_app: boolean
   enable_explore_banner: boolean
   social_publish_enabled: boolean
+  signup_bonus: SignupBonus
+}
+
+export type SignupBonus = {
+  enabled: boolean
+  amount: string
+  currency: string
 }
 
 export const defaultSystemFeatures: SystemFeatures = {
@@ -116,4 +123,9 @@ export const defaultSystemFeatures: SystemFeatures = {
   enable_trial_app: false,
   enable_explore_banner: false,
   social_publish_enabled: false,
+  signup_bonus: {
+    enabled: false,
+    amount: '0',
+    currency: 'CNY',
+  },
 }

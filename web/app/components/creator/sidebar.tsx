@@ -1,8 +1,9 @@
 'use client'
 /* eslint-disable tailwindcss/enforce-consistent-class-order -- TODO(wallet): preexisting issues tracked for a follow-up cleanup */
 
-import { RiHome4Line, RiVideoLine } from '@remixicon/react'
+import { RiFolderImageLine, RiHome4Line, RiVideoLine } from '@remixicon/react'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Tooltip,
   TooltipContent,
@@ -70,6 +71,7 @@ function NavItem({ href, icon: Icon, label, active, collapsed }: NavItemProps) {
 }
 
 export default function CreatorSidebar() {
+  const { t } = useTranslation('assetLibrary')
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [collapsed, setCollapsed] = useState(false)
@@ -77,6 +79,7 @@ export default function CreatorSidebar() {
   const selectedAppId = searchParams.get('app_id')
   const isCreatorHome = pathname === '/creator' && !selectedAppId
   const isCreatorWorks = pathname === '/creator-works'
+  const isAssetLibrary = pathname === '/creator-asset-library'
 
   // Hydrate collapsed state from localStorage on mount (client-only to avoid SSR mismatch)
   useEffect(() => {
@@ -200,6 +203,13 @@ export default function CreatorSidebar() {
               icon={RiVideoLine}
               label="发布作品"
               active={isCreatorWorks}
+              collapsed={collapsed}
+            />
+            <NavItem
+              href="/creator-asset-library"
+              icon={RiFolderImageLine}
+              label={t('sidebar')}
+              active={isAssetLibrary}
               collapsed={collapsed}
             />
           </div>

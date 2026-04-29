@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 from enum import StrEnum
 from typing import Literal
 
@@ -801,6 +802,16 @@ class BillingConfig(BaseSettings):
         default=False,
     )
 
+    SIGNUP_BONUS_ENABLED: bool = Field(
+        description="Grant a one-time bonus credit to a new account's workspace on registration",
+        default=False,
+    )
+
+    SIGNUP_BONUS_AMOUNT: Decimal = Field(
+        description="CNY amount granted to new users when SIGNUP_BONUS_ENABLED is true",
+        default=Decimal(0),
+    )
+
 
 class UpdateConfig(BaseSettings):
     """
@@ -934,18 +945,14 @@ class RepositoryConfig(BaseSettings):
         description="Service-layer repository implementation for SocialPublishAccount operations. "
         "Specify as a module path",
         default=(
-            "repositories.sqlalchemy_social_publish_account_repository."
-            "DifyAPISQLAlchemySocialPublishAccountRepository"
+            "repositories.sqlalchemy_social_publish_account_repository.DifyAPISQLAlchemySocialPublishAccountRepository"
         ),
     )
 
     API_SOCIAL_PUBLISH_TASK_REPOSITORY: str = Field(
         description="Service-layer repository implementation for SocialPublishTask operations. "
         "Specify as a module path",
-        default=(
-            "repositories.sqlalchemy_social_publish_task_repository."
-            "DifyAPISQLAlchemySocialPublishTaskRepository"
-        ),
+        default=("repositories.sqlalchemy_social_publish_task_repository.DifyAPISQLAlchemySocialPublishTaskRepository"),
     )
 
     SAU_PUBLISH_HTTP_TIMEOUT_SECONDS: float = Field(
@@ -1019,8 +1026,7 @@ class RepositoryConfig(BaseSettings):
     )
 
     SOCIAL_PUBLISH_ENABLED: bool = Field(
-        description="Master switch for the publish-center. Off by default; "
-        "operators flip it on once sau is reachable.",
+        description="Master switch for the publish-center. Off by default; operators flip it on once sau is reachable.",
         default=False,
     )
 

@@ -7,6 +7,7 @@ from flask import make_response, request
 from flask_restx import Resource
 from pydantic import BaseModel, Field
 
+from configs import dify_config
 from constants.languages import languages
 from controllers.console import console_ns
 from controllers.console.error import AccountBannedError, NotAllowedCreateWorkspace, WorkspacesLimitExceeded
@@ -188,12 +189,21 @@ class SmsLoginVerifyApi(Resource):
         return account
 
     def _grant_signup_bonus(self, account: Account) -> None:
+        # Driven by SIGNUP_BONUS_ENABLED + SIGNUP_BONUS_AMOUNT in .env so the
+        # default behavior is no grant; ops can flip it on per environment.
+        if not dify_config.SIGNUP_BONUS_ENABLED or Decimal(0) >= dify_config.SIGNUP_BONUS_AMOUNT:
+            return
         try:
             tenant_id = str(account.current_tenant_id)
-            SIGNUP_BONUS = Decimal(50)
-            TenantBalanceService.topup(tenant_id=tenant_id, amount=SIGNUP_BONUS)
+            bonus_amount = dify_config.SIGNUP_BONUS_AMOUNT
+            TenantBalanceService.topup(tenant_id=tenant_id, amount=bonus_amount)
             db.session.commit()
-            logger.info("Signup bonus ¥%s granted to tenant=%s account=%s", SIGNUP_BONUS, tenant_id, account.id)
+            logger.info(
+                "Signup bonus ¥%s granted to tenant=%s account=%s",
+                bonus_amount,
+                tenant_id,
+                account.id,
+            )
         except Exception:
             db.session.rollback()
             logger.exception("Failed to grant signup bonus for account=%s", account.id)

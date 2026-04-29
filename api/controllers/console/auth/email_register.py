@@ -212,20 +212,26 @@ class EmailRegisterResetApi(Resource):
                     )
             except Exception:
                 db.session.rollback()
-                logger.exception(
-                    "Invite bind errored during registration account=%s", account.id
-                )
+                logger.exception("Invite bind errored during registration account=%s", account.id)
 
-        # Grant signup bonus (¥50) to the new user's workspace.
-        try:
-            tenant_id = str(account.current_tenant_id)
-            SIGNUP_BONUS = Decimal(50)
-            TenantBalanceService.topup(tenant_id=tenant_id, amount=SIGNUP_BONUS)
-            db.session.commit()
-            logger.info("Signup bonus ¥%s granted to tenant=%s account=%s", SIGNUP_BONUS, tenant_id, account.id)
-        except Exception:
-            db.session.rollback()
-            logger.exception("Failed to grant signup bonus for account=%s", account.id)
+        # Grant signup bonus to the new user's workspace when configured.
+        # Driven by SIGNUP_BONUS_ENABLED + SIGNUP_BONUS_AMOUNT in .env so the
+        # default behavior is no grant; ops can flip it on per environment.
+        if dify_config.SIGNUP_BONUS_ENABLED and Decimal(0) < dify_config.SIGNUP_BONUS_AMOUNT:
+            try:
+                tenant_id = str(account.current_tenant_id)
+                bonus_amount = dify_config.SIGNUP_BONUS_AMOUNT
+                TenantBalanceService.topup(tenant_id=tenant_id, amount=bonus_amount)
+                db.session.commit()
+                logger.info(
+                    "Signup bonus ¥%s granted to tenant=%s account=%s",
+                    bonus_amount,
+                    tenant_id,
+                    account.id,
+                )
+            except Exception:
+                db.session.rollback()
+                logger.exception("Failed to grant signup bonus for account=%s", account.id)
 
         # Set auth cookies so the browser is logged in immediately —
         # no separate login step required after registration.

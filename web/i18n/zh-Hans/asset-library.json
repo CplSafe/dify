@@ -46,6 +46,7 @@
   "tabs.prompt": "提示词",
   "tabs.video": "视频",
   "title": "素材库",
+  "upload.dismissProgress": "关闭上传状态",
   "upload.dropzoneActive": "松开以上传",
   "upload.dropzoneIdle": "拖拽文件到此处，或点击选择",
   "upload.fileTooLarge": "文件过大（最大 200MB）",

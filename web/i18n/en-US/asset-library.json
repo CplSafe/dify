@@ -46,6 +46,7 @@
   "tabs.prompt": "Prompts",
   "tabs.video": "Videos",
   "title": "Asset Library",
+  "upload.dismissProgress": "Dismiss upload status",
   "upload.dropzoneActive": "Release to upload",
   "upload.dropzoneIdle": "Drag files here or click to select",
   "upload.fileTooLarge": "File too large (max 200MB)",

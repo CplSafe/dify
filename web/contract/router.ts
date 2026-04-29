@@ -1,5 +1,12 @@
 import type { InferContractRouterInputs } from '@orpc/contract'
 import { appDeleteContract } from './console/apps'
+import {
+  assetLibraryCreatePromptContract,
+  assetLibraryDeleteContract,
+  assetLibraryDetailContract,
+  assetLibraryListContract,
+  assetLibraryPatchContract,
+} from './console/asset-library'
 import { bindPartnerStackContract, invoicesContract } from './console/billing'
 import {
   exploreAppDetailContract,
@@ -12,9 +19,18 @@ import {
   exploreInstalledAppsContract,
   exploreInstalledAppUninstallContract,
 } from './console/explore'
-import { changePreferredProviderTypeContract, modelProvidersModelsContract } from './console/model-providers'
-import { notificationContract, notificationDismissContract } from './console/notification'
-import { pluginCheckInstalledContract, pluginLatestVersionsContract } from './console/plugins'
+import {
+  changePreferredProviderTypeContract,
+  modelProvidersModelsContract,
+} from './console/model-providers'
+import {
+  notificationContract,
+  notificationDismissContract,
+} from './console/notification'
+import {
+  pluginCheckInstalledContract,
+  pluginLatestVersionsContract,
+} from './console/plugins'
 import { systemFeaturesContract } from './console/system'
 import {
   triggerOAuthConfigContract,
@@ -33,8 +49,17 @@ import {
   triggerSubscriptionUpdateContract,
   triggerSubscriptionVerifyContract,
 } from './console/trigger'
-import { trialAppDatasetsContract, trialAppInfoContract, trialAppParametersContract, trialAppWorkflowsContract } from './console/try-app'
-import { collectionPluginsContract, collectionsContract, searchAdvancedContract } from './marketplace'
+import {
+  trialAppDatasetsContract,
+  trialAppInfoContract,
+  trialAppParametersContract,
+  trialAppWorkflowsContract,
+} from './console/try-app'
+import {
+  collectionPluginsContract,
+  collectionsContract,
+  searchAdvancedContract,
+} from './marketplace'
 
 export const marketplaceRouterContract = {
   collections: collectionsContract,
@@ -42,12 +67,21 @@ export const marketplaceRouterContract = {
   searchAdvanced: searchAdvancedContract,
 }
 
-export type MarketPlaceInputs = InferContractRouterInputs<typeof marketplaceRouterContract>
+export type MarketPlaceInputs = InferContractRouterInputs<
+  typeof marketplaceRouterContract
+>
 
 export const consoleRouterContract = {
   systemFeatures: systemFeaturesContract,
   apps: {
     deleteApp: appDeleteContract,
+  },
+  assetLibrary: {
+    list: assetLibraryListContract,
+    detail: assetLibraryDetailContract,
+    patch: assetLibraryPatchContract,
+    delete: assetLibraryDeleteContract,
+    createPrompt: assetLibraryCreatePromptContract,
   },
   explore: {
     apps: exploreAppsContract,
@@ -86,7 +120,8 @@ export const consoleRouterContract = {
     subscriptions: triggerSubscriptionsContract,
     subscriptionBuilderCreate: triggerSubscriptionBuilderCreateContract,
     subscriptionBuilderUpdate: triggerSubscriptionBuilderUpdateContract,
-    subscriptionBuilderVerifyUpdate: triggerSubscriptionBuilderVerifyUpdateContract,
+    subscriptionBuilderVerifyUpdate:
+      triggerSubscriptionBuilderVerifyUpdateContract,
     subscriptionVerify: triggerSubscriptionVerifyContract,
     subscriptionBuild: triggerSubscriptionBuildContract,
     subscriptionDelete: triggerSubscriptionDeleteContract,

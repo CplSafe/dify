@@ -4,6 +4,7 @@ import type appDebug from '../i18n/en-US/app-debug.json'
 import type appLog from '../i18n/en-US/app-log.json'
 import type appOverview from '../i18n/en-US/app-overview.json'
 import type app from '../i18n/en-US/app.json'
+import type assetLibrary from '../i18n/en-US/asset-library.json'
 import type billing from '../i18n/en-US/billing.json'
 import type common from '../i18n/en-US/common.json'
 import type custom from '../i18n/en-US/custom.json'
@@ -38,6 +39,7 @@ export type Resources = {
   appDebug: typeof appDebug
   appLog: typeof appLog
   appOverview: typeof appOverview
+  assetLibrary: typeof assetLibrary
   billing: typeof billing
   common: typeof common
   custom: typeof custom
@@ -72,6 +74,7 @@ export const namespaces = [
   'appDebug',
   'appLog',
   'appOverview',
+  'assetLibrary',
   'billing',
   'common',
   'custom',

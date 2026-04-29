@@ -83,9 +83,7 @@ class UserBillingService:
             return balance
 
         insert_stmt = (
-            pg_insert(UserBalance)
-            .values(account_id=account_id)
-            .on_conflict_do_nothing(index_elements=["account_id"])
+            pg_insert(UserBalance).values(account_id=account_id).on_conflict_do_nothing(index_elements=["account_id"])
         )
         db.session.execute(insert_stmt)
         stmt = select(UserBalance).where(UserBalance.account_id == account_id)
@@ -275,10 +273,7 @@ class UserBillingService:
         assert error_code is not None  # narrow for the type checker
         raise WorkflowBudgetExceeded(
             error_code=error_code,
-            message=(
-                f"workflow run blocked for account={account_id} tenant={tenant_id}: "
-                f"{error_code}"
-            ),
+            message=(f"workflow run blocked for account={account_id} tenant={tenant_id}: {error_code}"),
         )
 
     @classmethod
@@ -290,6 +285,7 @@ class UserBillingService:
         workflow_run_id: str,
         total_tokens: int,
         price_per_1k_tokens: Decimal,
+        app_name: str | None = None,
     ) -> BillingRecord | None:
         """Deduct cost of a workflow run from the caller's effective wallet.
 
@@ -324,7 +320,10 @@ class UserBillingService:
         if amount <= Decimal(0):
             return None
 
-        description = f"Workflow run {workflow_run_id}: {total_tokens} tokens"
+        # Customer-facing description shown on the billing page. Tokens are
+        # implementation detail; surface the originating app name instead.
+        # workflow_run_id is kept off-screen — we only persist a short label.
+        description = f"使用「{app_name}」消费" if app_name else "工作流消费"
 
         billing_tenant_id = cls.resolve_billing_tenant_id(account_id, tenant_id)
         if billing_tenant_id is None:
@@ -351,8 +350,7 @@ class UserBillingService:
 
             if tenant_balance.balance < Decimal(0):
                 logger.warning(
-                    "Tenant balance went negative after owner workflow deduction "
-                    "tenant=%s balance=%s",
+                    "Tenant balance went negative after owner workflow deduction tenant=%s balance=%s",
                     tenant_id,
                     str(tenant_balance.balance),
                 )
@@ -470,13 +468,9 @@ class UserBillingService:
     ) -> tuple[list[BillingRecord], int]:
         """Return billing records for an account with total count."""
         base_query = select(BillingRecord).where(BillingRecord.account_id == account_id)
-        total = db.session.scalar(
-            select(db.func.count()).select_from(base_query.subquery())
-        ) or 0
+        total = db.session.scalar(select(db.func.count()).select_from(base_query.subquery())) or 0
         records = list(
-            db.session.scalars(
-                base_query.order_by(BillingRecord.created_at.desc()).limit(limit).offset(offset)
-            ).all()
+            db.session.scalars(base_query.order_by(BillingRecord.created_at.desc()).limit(limit).offset(offset)).all()
         )
         return records, total
 
@@ -495,20 +489,14 @@ class UserBillingService:
             base_query = base_query.where(BillingRecord.tenant_id == tenant_id)
         if account_id:
             base_query = base_query.where(BillingRecord.account_id == account_id)
-        total = db.session.scalar(
-            select(db.func.count()).select_from(base_query.subquery())
-        ) or 0
+        total = db.session.scalar(select(db.func.count()).select_from(base_query.subquery())) or 0
         records = list(
-            db.session.scalars(
-                base_query.order_by(BillingRecord.created_at.desc()).limit(limit).offset(offset)
-            ).all()
+            db.session.scalars(base_query.order_by(BillingRecord.created_at.desc()).limit(limit).offset(offset)).all()
         )
         return records, total
 
     @classmethod
-    def list_admin_account_balances(
-        cls, *, limit: int = 50, offset: int = 0
-    ) -> tuple[list[AdminBalanceRow], int]:
+    def list_admin_account_balances(cls, *, limit: int = 50, offset: int = 0) -> tuple[list[AdminBalanceRow], int]:
         """Enumerate accounts with their authoritative balance for the super admin view.
 
         Driven by ``accounts`` (one row per user), LEFT JOIN the current
@@ -525,9 +513,7 @@ class UserBillingService:
         # Total count is "every account", paginated below. We deliberately do
         # NOT filter out BANNED/CLOSED accounts here — operators need to see
         # them to debug billing disputes. UI can filter client-side if desired.
-        total = db.session.scalar(
-            select(func.count()).select_from(Account)
-        ) or 0
+        total = db.session.scalar(select(func.count()).select_from(Account)) or 0
 
         # Pick the account's "current" tenant/role (one current row per
         # account by convention) so the balance shown matches which wallet
@@ -571,10 +557,17 @@ class UserBillingService:
 
         result: list[AdminBalanceRow] = []
         for (
-            acc_id, acc_name, acc_email,
-            tenant_id, role,
-            ub_balance, ub_currency, ub_updated,
-            tb_balance, tb_currency, tb_updated,
+            acc_id,
+            acc_name,
+            acc_email,
+            tenant_id,
+            role,
+            ub_balance,
+            ub_currency,
+            ub_updated,
+            tb_balance,
+            tb_currency,
+            tb_updated,
         ) in rows:
             is_owner = role == TenantAccountRole.OWNER.value
             if is_owner:

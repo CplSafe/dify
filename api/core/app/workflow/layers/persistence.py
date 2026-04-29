@@ -818,12 +818,32 @@ class WorkflowPersistenceLayer(GraphEngineLayer):
             if billable_tokens <= 0 or billable_amount <= Decimal(0):
                 return
 
+            # Look up the originating app's display name so the billing page
+            # can render "使用「<app>」消费" instead of a raw run uuid.
+            # Best-effort — never fail the deduction over a missing/renamed app.
+            app_name: str | None = None
+            try:
+                from sqlalchemy import select as _select
+                from sqlalchemy.orm import Session as _Session
+
+                from extensions.ext_database import db as _db
+                from models.model import App as _App
+
+                app_id_for_name = self._application_generate_entity.app_config.app_id
+                with _Session(_db.engine, expire_on_commit=False) as _s:
+                    app_name = _s.execute(
+                        _select(_App.name).where(_App.id == app_id_for_name)
+                    ).scalar_one_or_none()
+            except Exception:
+                logger.debug("Failed to resolve app name for billing description", exc_info=True)
+
             UserBillingService.deduct_for_workflow_run(
                 account_id=account_id,
                 tenant_id=tenant_id,
                 workflow_run_id=run_id,
                 total_tokens=billable_tokens,
                 price_per_1k_tokens=billable_amount * Decimal(1000) / Decimal(billable_tokens),
+                app_name=app_name,
             )
         except Exception:
             logger.exception("Failed to bill workflow run %s", execution.id_)

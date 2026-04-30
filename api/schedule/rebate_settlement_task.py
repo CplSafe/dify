@@ -3,14 +3,19 @@
 Runs once per day (the celery beat schedule is built from
 ``RebateConfig.settlement_hour`` at worker boot time — see ext_celery).
 Calculates rebates based on each invitee's **consumption** (deductions)
-from the previous day, then parks the rebate in the inviter's
-``UserBalance.rebate_pending`` (frozen) bucket.
+from the previous day, then writes a PENDING ``RebateRecord`` row tagged
+with the invitee's authorised agent.
 
-The rebate does NOT become spendable here — the companion task
-``rebate_unfreeze_task`` moves funds from ``rebate_pending`` to ``balance``
-after ``RebateConfig.freeze_days`` elapse. Operators can cancel a pending
-record during the freeze window to reverse rebates tied to abusive
-invitees.
+Filters non-agent invitations:
+  Only invitees bound to an ACTIVE ``Agent`` row earn rebates. The
+  ``agents`` JOIN is the database-layer enforcement of design §3.3 —
+  upstream callers cannot bypass it.
+
+The rebate is NOT credited to the agent's wallet here — the companion
+task ``rebate_unfreeze_task`` moves funds from PENDING records into
+``AgentWallet.withdrawable`` after ``RebateConfig.freeze_days`` elapse.
+Operators can cancel a pending record during the freeze window to
+reverse rebates tied to abusive invitees.
 
 Formula:
   If cost_rate > 0:
@@ -31,6 +36,7 @@ from celery import shared_task
 from sqlalchemy import and_, func, select
 
 from extensions.ext_database import db
+from models.agent import Agent, AgentStatus
 from models.creator import (
     AccountInvitation,
     BillingRecord,
@@ -38,7 +44,6 @@ from models.creator import (
     RebateConfig,
     RebateRecord,
     RebateRecordStatus,
-    UserBalance,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,24 +74,37 @@ def rebate_settlement_task():
 
     click.echo(f"Settlement date: {settlement_date_str}, rate: {rebate_rate}%, cost: {cost_rate}%")
 
-    # 3. Find all invitees (users who were invited by someone)
+    # 3. Find all invitees bound to ACTIVE agents.
+    #
+    # The JOIN against ``agents`` is the hard execution point of the
+    # design's "only authorized agents earn rebates" rule (§3.3).
+    # Suspended agents and orphan invitations (the agent was deleted)
+    # are filtered out at the database layer — no upstream caller can
+    # bypass it.
     used_invitations = db.session.scalars(
-        select(AccountInvitation).where(
-            AccountInvitation.status == "used"
+        select(AccountInvitation)
+        .join(Agent, Agent.id == AccountInvitation.agent_id)
+        .where(
+            and_(
+                AccountInvitation.status == "used",
+                AccountInvitation.invitee_account_id.isnot(None),
+                Agent.status == AgentStatus.ACTIVE.value,
+            )
         )
     ).all()
 
     if not used_invitations:
-        click.echo("No invitees found. Nothing to settle.")
+        click.echo("No invitees bound to active agents. Nothing to settle.")
         return
 
-    # Build invitee → inviter map
-    invitee_to_inviter: dict[str, str] = {}
-    for inv in used_invitations:
-        if inv.invitee_account_id:
-            invitee_to_inviter[inv.invitee_account_id] = inv.inviter_account_id
+    # Build invitee → invitation map. We keep the whole invitation row so
+    # we can read both ``inviter_account_id`` (denormalised account) and
+    # ``agent_id`` (the new locked-on-write reference) without a 2nd query.
+    invitee_to_invitation: dict[str, AccountInvitation] = {
+        inv.invitee_account_id: inv for inv in used_invitations
+    }
 
-    invitee_ids = list(invitee_to_inviter.keys())
+    invitee_ids = list(invitee_to_invitation.keys())
 
     # 4. Aggregate yesterday's consumption (deductions) per invitee
     consumption_query = (
@@ -117,9 +135,11 @@ def rebate_settlement_task():
     records_created = 0
 
     for invitee_account_id, consumption_abs in consumption_rows:
-        inviter_account_id = invitee_to_inviter.get(invitee_account_id)
-        if not inviter_account_id:
+        invitation = invitee_to_invitation.get(invitee_account_id)
+        if invitation is None:
             continue
+        inviter_account_id = invitation.inviter_account_id
+        agent_id = invitation.agent_id
 
         consumption = Decimal(str(consumption_abs))
         if consumption <= 0:
@@ -158,12 +178,15 @@ def rebate_settlement_task():
             continue
 
         # 5a. Create RebateRecord in PENDING status.
+        # ``agent_id`` is locked on write — subsequent rebinds NEVER
+        # mutate this column, preserving the design §5.4 invariant
+        # (pre-rebind earnings stay with the original agent).
         # No BillingRecord is written here: the ledger-visible cash event
-        # happens at unfreeze time. Writing it now would misrepresent a
-        # frozen amount as spendable income and double-count if the
-        # record is later cancelled.
+        # happens at unfreeze time, when AgentWalletService.credit_settled
+        # adds the amount to the agent's withdrawable balance.
         rebate_record = RebateRecord(
             inviter_account_id=inviter_account_id,
+            agent_id=agent_id,
             invitee_account_id=invitee_account_id,
             settlement_date=settlement_date_str,
             consumption_amount=consumption,
@@ -174,21 +197,6 @@ def rebate_settlement_task():
             status=RebateRecordStatus.PENDING.value,
         )
         db.session.add(rebate_record)
-
-        # 5b. Park the rebate in the inviter's frozen bucket. The
-        # spendable ``balance`` field is untouched — the unfreeze task
-        # will move funds across after freeze_days.
-        balance = db.session.scalar(
-            select(UserBalance).where(UserBalance.account_id == inviter_account_id)
-        )
-        if balance:
-            balance.rebate_pending = balance.rebate_pending + rebate_amount
-        else:
-            balance = UserBalance(
-                account_id=inviter_account_id,
-                rebate_pending=rebate_amount,
-            )
-            db.session.add(balance)
 
         total_rebate_distributed += rebate_amount
         records_created += 1

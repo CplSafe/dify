@@ -54,6 +54,7 @@ class EmailRegisterResetPayload(BaseModel):
     token: str = Field(...)
     new_password: str = Field(...)
     password_confirm: str = Field(...)
+
     @field_validator("new_password", "password_confirm")
     @classmethod
     def validate_password(cls, value: str) -> str:
@@ -173,7 +174,6 @@ class EmailRegisterResetApi(Resource):
                 token_pair = AccountService.login(account=account, ip_address=extract_remote_ip(request))
                 AccountService.reset_login_error_rate_limit(normalized_email)
 
-        # Best-effort invite-code binding.
         # Grant signup bonus to the new user's workspace when configured.
         # Driven by SIGNUP_BONUS_ENABLED + SIGNUP_BONUS_AMOUNT in .env so the
         # default behavior is no grant; ops can flip it on per environment.

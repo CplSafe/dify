@@ -26,6 +26,7 @@ _CREATOR_ALLOWED_PREFIXES = (
     "/console/api/trial-apps/",
     "/console/api/creator/",
     "/console/api/social-publish/",
+    "/console/api/agent/",
     "/console/api/installed-apps",
     "/console/api/workflow/",
     "/console/api/form/human_input/",
@@ -124,6 +125,17 @@ from . import (
     spec,
     version,
 )
+
+# Import agent system controllers (sysadmin + agent console + customer-facing bind)
+from .admin_agent import agents as admin_agents
+from .admin_agent import overviews as admin_agent_overviews
+from .admin_agent import rebind_review as admin_rebind_review
+from .admin_agent import withdrawal_review as admin_withdrawal_review
+from .agent_console import bind as agent_bind
+from .agent_console import dashboard as agent_dashboard
+from .agent_console import invitations as agent_invitations
+from .agent_console import invitees as agent_invitees
+from .agent_console import withdrawals as agent_withdrawals
 
 # Import app controllers
 from .app import (
@@ -246,9 +258,18 @@ __all__ = [
     "account",
     "activate",
     "admin",
+    "admin_agent_overviews",
+    "admin_agents",
+    "admin_rebind_review",
+    "admin_withdrawal_review",
     "advanced_prompt_template",
     "agent",
+    "agent_bind",
+    "agent_dashboard",
+    "agent_invitations",
+    "agent_invitees",
     "agent_providers",
+    "agent_withdrawals",
     "allocation",
     "annotation",
     "api",

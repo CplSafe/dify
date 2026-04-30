@@ -47,7 +47,7 @@ def test_parse_amount_accepts_decimal_string():
     from controllers.console.agent_console.withdrawals import _parse_amount
 
     assert _parse_amount("200.50") == Decimal("200.50")
-    assert _parse_amount(100) == Decimal("100")
+    assert _parse_amount(100) == Decimal(100)
 
 
 def test_parse_amount_rejects_missing():

@@ -168,7 +168,7 @@ class AdminAgentConsumptionApi(Resource):
                     "withdrawable": str(wallets.get(a.id, (None, 0, 0, 0))[3]) if a.id in wallets else "0",
                     "total_earned": str(wallets.get(a.id, (None, 0, 0, 0))[1]) if a.id in wallets else "0",
                     "total_withdrawn": str(wallets.get(a.id, (None, 0, 0, 0))[2]) if a.id in wallets else "0",
-                    "last_30d_consumption": str(last_30d.get(a.id, Decimal("0"))),
+                    "last_30d_consumption": str(last_30d.get(a.id, Decimal(0))),
                 }
                 for a in agents
             ],

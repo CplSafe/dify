@@ -23,7 +23,7 @@ def test_parse_decimal_accepts_string_form():
     from controllers.console.admin_agent.agents import _parse_decimal
 
     assert _parse_decimal("0.10", "rebate_rate") == Decimal("0.10")
-    assert _parse_decimal("100", "amount") == Decimal("100")
+    assert _parse_decimal("100", "amount") == Decimal(100)
 
 
 def test_parse_decimal_returns_none_for_empty():

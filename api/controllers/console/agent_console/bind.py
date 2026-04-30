@@ -43,7 +43,6 @@ from services.errors.agent import (
     SelfBindError,
 )
 
-
 _PUBLIC_AGENT_FIELDS = (
     "name", "level", "region_province", "region_city",
 )

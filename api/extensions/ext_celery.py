@@ -267,6 +267,15 @@ def init_app(app: DifyApp) -> Celery:
         "schedule": crontab(minute="0", hour=str(unfreeze_hour)),
     }
 
+    # Agent system — auto-suspend expired agents at 00:30 UTC daily.
+    # Runs early in the day so an agent's last day of authorisation is
+    # honoured in full and they wake up suspended on the day after expiry.
+    imports.append("schedule.agent_expiry_task")
+    beat_schedule["agent_expiry_task"] = {
+        "task": "schedule.agent_expiry_task.agent_expiry_task",
+        "schedule": crontab(minute="30", hour="0"),
+    }
+
     if dify_config.ENTERPRISE_ENABLED and dify_config.ENTERPRISE_TELEMETRY_ENABLED:
         imports.append("tasks.enterprise_telemetry_task")
     celery_app.conf.update(beat_schedule=beat_schedule, imports=imports)

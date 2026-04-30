@@ -545,3 +545,44 @@ def decrypt_code_field[**P, R](view: Callable[P, R]) -> Callable[P, R]:
         return view(*args, **kwargs)
 
     return decorated
+
+
+def _lookup_agent(account_id: str):
+    """Look up the Agent row for a given account, or None.
+
+    Extracted so tests can patch this seam without touching the SQLAlchemy
+    session directly.
+    """
+    from sqlalchemy import select
+
+    from extensions.ext_database import db
+    from models.agent import Agent
+
+    return db.session.scalar(select(Agent).where(Agent.account_id == account_id))
+
+
+def agent_required[**P, R](view: Callable[P, R]) -> Callable[P, R]:
+    """Block requests from users who are not active agents.
+
+    Looks up the Agent row tied to the current user's account_id and
+    rejects any request where status != 'active'. Pairs with
+    @login_required (must come AFTER it in decorator order). On success,
+    stashes the matched Agent on ``flask.g.current_agent`` so downstream
+    handlers don't re-query.
+    """
+    from werkzeug.exceptions import Forbidden
+
+    from models.agent import AgentStatus
+
+    @wraps(view)
+    def decorated(*args: P.args, **kwargs: P.kwargs) -> R:
+        from flask import g
+        from flask_login import current_user
+
+        agent = _lookup_agent(current_user.id)
+        if agent is None or agent.status != AgentStatus.ACTIVE.value:
+            raise Forbidden("Agent access required")
+        g.current_agent = agent
+        return view(*args, **kwargs)
+
+    return decorated

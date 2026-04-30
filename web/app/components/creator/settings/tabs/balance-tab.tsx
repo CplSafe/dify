@@ -1,6 +1,10 @@
 'use client'
 
-import { RiArrowDownLine, RiArrowUpLine, RiLoader4Line } from '@remixicon/react'
+import {
+  RiArrowDownLine,
+  RiArrowUpLine,
+  RiLoader4Line,
+} from '@remixicon/react'
 import { useCallback, useEffect, useState } from 'react'
 import Button from '@/app/components/base/button'
 import Input from '@/app/components/base/input'
@@ -71,11 +75,14 @@ export default function BalanceTab() {
       setRecords(recs.data || [])
 
       if (isSystemAdmin) {
-        const adminBal = await get<{ data: AdminBalance[] }>('/creator/admin/balances')
+        const adminBal = await get<{ data: AdminBalance[] }>(
+          '/creator/admin/balances',
+        )
         setAdminBalances(adminBal.data || [])
       }
     }
-    catch {}
+    catch {
+    }
     finally {
       setLoading(false)
     }
@@ -120,29 +127,34 @@ export default function BalanceTab() {
   }
 
   return (
-    <div className="flex flex-col gap-8 pb-3 pt-2">
+    <div className="flex flex-col gap-8 pt-2 pb-3">
       {/* My balance card — mirrors workspace header card in MembersPage */}
       {balance && (
-        <div className="flex items-center gap-3 rounded-xl border-l-[0.5px] border-t-[0.5px] border-divider-subtle bg-linear-to-r from-background-gradient-bg-fill-chat-bg-2 to-background-gradient-bg-fill-chat-bg-1 p-3 pr-5">
+        <div className="flex items-center gap-3 rounded-xl border-t-[0.5px] border-l-[0.5px] border-divider-subtle bg-linear-to-r from-background-gradient-bg-fill-chat-bg-2 to-background-gradient-bg-fill-chat-bg-1 p-3 pr-5">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-components-icon-bg-blue-solid">
             <span className="i-ri-wallet-3-fill h-6 w-6 text-white" />
           </div>
           <div className="grow">
-            <div className="text-text-secondary system-md-semibold">我的余额</div>
-            <div className="mt-0.5 text-text-tertiary system-xs-medium">
-              <span className={cn(
-                'text-2xl font-bold',
-                balance.is_sufficient ? 'text-text-primary' : 'text-state-destructive-text',
-              )}
+            <div className="system-md-semibold text-text-secondary">
+              我的积分余额
+            </div>
+            <div className="mt-0.5 system-xs-medium text-text-tertiary">
+              <span
+                className={cn(
+                  'text-2xl font-bold',
+                  balance.is_sufficient
+                    ? 'text-text-primary'
+                    : 'text-state-destructive-text',
+                )}
               >
                 {Number(balance.balance).toFixed(2)}
               </span>
-              <span className="ml-1 text-sm">{balance.currency}</span>
+              <span className="ml-1 text-sm">积分</span>
             </div>
           </div>
           {!balance.is_sufficient && (
-            <div className="shrink-0 rounded-lg bg-state-destructive-hover px-3 py-1.5 text-xs font-medium text-state-destructive-text">
-              余额不足，请联系管理员充值
+            <div className="text-state-destructive-text shrink-0 rounded-lg bg-state-destructive-hover px-3 py-1.5 text-xs font-medium">
+              积分不足，请联系管理员充值
             </div>
           )}
         </div>
@@ -152,10 +164,12 @@ export default function BalanceTab() {
       {isSystemAdmin && (
         <div>
           <div className={sectionTitleClass}>用户充值</div>
-          <div className={sectionDescClass}>为空间成员充值余额</div>
-          <div className="mt-4 rounded-xl border border-divider-subtle p-5 space-y-4">
+          <div className={sectionDescClass}>为空间成员充值积分</div>
+          <div className="mt-4 space-y-4 rounded-xl border border-divider-subtle p-5">
             <div>
-              <div className="mb-1.5 text-xs font-medium text-text-tertiary">选择用户</div>
+              <div className="mb-1.5 text-xs font-medium text-text-tertiary">
+                选择用户
+              </div>
               <select
                 value={topupAccountId}
                 onChange={e => setTopupAccountId(e.target.value)}
@@ -167,28 +181,33 @@ export default function BalanceTab() {
                     {b.account_name}
                     （
                     {b.account_email}
-                    ）— 余额
+                    ）— 积分余额
+                    {' '}
                     {Number(b.balance).toFixed(2)}
                     {' '}
-                    {b.currency}
+                    积分
                   </option>
                 ))}
               </select>
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <div className="mb-1.5 text-xs font-medium text-text-tertiary">充值金额</div>
+                <div className="mb-1.5 text-xs font-medium text-text-tertiary">
+                  充值积分
+                </div>
                 <Input
                   type="number"
                   value={topupAmount}
                   onChange={e => setTopupAmount(e.target.value)}
-                  placeholder="输入金额"
+                  placeholder="输入积分数量"
                   min="0.01"
                   step="0.01"
                 />
               </div>
               <div className="flex-1">
-                <div className="mb-1.5 text-xs font-medium text-text-tertiary">备注（可选）</div>
+                <div className="mb-1.5 text-xs font-medium text-text-tertiary">
+                  备注（可选）
+                </div>
                 <Input
                   value={topupNote}
                   onChange={e => setTopupNote(e.target.value)}
@@ -212,36 +231,50 @@ export default function BalanceTab() {
       {/* Admin: all balances table */}
       {isSystemAdmin && adminBalances.length > 0 && (
         <div>
-          <div className={sectionTitleClass}>所有用户余额</div>
+          <div className={sectionTitleClass}>所有用户积分</div>
           <div className="mt-3 overflow-hidden rounded-xl border border-divider-subtle">
             <div className="flex items-center border-b border-divider-regular py-[7px]">
-              <div className="grow px-4 text-text-tertiary system-xs-medium-uppercase">用户</div>
-              <div className="w-[140px] shrink-0 px-4 text-text-tertiary system-xs-medium-uppercase">余额</div>
-              <div className="w-[80px] shrink-0 px-4 text-text-tertiary system-xs-medium-uppercase">状态</div>
+              <div className="grow px-4 system-xs-medium-uppercase text-text-tertiary">
+                用户
+              </div>
+              <div className="w-[140px] shrink-0 px-4 system-xs-medium-uppercase text-text-tertiary">
+                积分
+              </div>
+              <div className="w-[80px] shrink-0 px-4 system-xs-medium-uppercase text-text-tertiary">
+                状态
+              </div>
             </div>
             {adminBalances.map(b => (
-              <div key={b.account_id} className="flex items-center border-b border-divider-subtle last:border-0">
+              <div
+                key={b.account_id}
+                className="flex items-center border-b border-divider-subtle last:border-0"
+              >
                 <div className="flex grow items-center gap-2.5 px-4 py-3">
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-semibold text-primary-700">
                     {b.account_name?.charAt(0)?.toUpperCase() || 'U'}
                   </div>
                   <div>
-                    <div className="text-text-secondary system-sm-medium">{b.account_name}</div>
-                    <div className="text-text-tertiary system-xs-regular">{b.account_email}</div>
+                    <div className="system-sm-medium text-text-secondary">
+                      {b.account_name}
+                    </div>
+                    <div className="system-xs-regular text-text-tertiary">
+                      {b.account_email}
+                    </div>
                   </div>
                 </div>
-                <div className="w-[140px] shrink-0 px-4 py-3 text-text-secondary system-sm-regular">
+                <div className="w-[140px] shrink-0 px-4 py-3 system-sm-regular text-text-secondary">
                   {Number(b.balance).toFixed(2)}
                   {' '}
-                  {b.currency}
+                  积分
                 </div>
                 <div className="w-[80px] shrink-0 px-4 py-3">
-                  <span className={cn(
-                    'rounded-full px-2 py-0.5 text-xs font-medium',
-                    b.is_sufficient
-                      ? 'bg-state-success-hover text-state-success-text'
-                      : 'bg-state-destructive-hover text-state-destructive-text',
-                  )}
+                  <span
+                    className={cn(
+                      'rounded-full px-2 py-0.5 text-xs font-medium',
+                      b.is_sufficient
+                        ? 'text-state-success-text bg-state-success-hover'
+                        : 'text-state-destructive-text bg-state-destructive-hover',
+                    )}
                   >
                     {b.is_sufficient ? '充足' : '不足'}
                   </span>
@@ -255,7 +288,7 @@ export default function BalanceTab() {
       {/* Billing records */}
       <div>
         <div className={sectionTitleClass}>账单记录</div>
-        <div className={sectionDescClass}>您的余额变动历史</div>
+        <div className={sectionDescClass}>您的积分变动历史</div>
         <div className="mt-3">
           {records.length === 0
             ? (
@@ -266,35 +299,53 @@ export default function BalanceTab() {
             : (
                 <div className="overflow-hidden rounded-xl border border-divider-subtle">
                   <div className="flex items-center border-b border-divider-regular py-[7px]">
-                    <div className="grow px-4 text-text-tertiary system-xs-medium-uppercase">描述</div>
-                    <div className="w-[160px] shrink-0 px-4 text-text-tertiary system-xs-medium-uppercase">时间</div>
-                    <div className="w-[100px] shrink-0 px-4 text-right text-text-tertiary system-xs-medium-uppercase">金额</div>
+                    <div className="grow px-4 system-xs-medium-uppercase text-text-tertiary">
+                      描述
+                    </div>
+                    <div className="w-[160px] shrink-0 px-4 system-xs-medium-uppercase text-text-tertiary">
+                      时间
+                    </div>
+                    <div className="w-[100px] shrink-0 px-4 text-right system-xs-medium-uppercase text-text-tertiary">
+                      积分
+                    </div>
                   </div>
                   {records.map(r => (
-                    <div key={r.id} className="flex items-center border-b border-divider-subtle last:border-0">
+                    <div
+                      key={r.id}
+                      className="flex items-center border-b border-divider-subtle last:border-0"
+                    >
                       <div className="flex grow items-center gap-2.5 px-4 py-3">
-                        <div className={cn(
-                          'flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
-                          r.record_type === 'topup'
-                            ? 'bg-state-success-hover text-state-success-text'
-                            : 'bg-state-destructive-hover text-state-destructive-text',
-                        )}
+                        <div
+                          className={cn(
+                            'flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
+                            r.record_type === 'topup'
+                              ? 'text-state-success-text bg-state-success-hover'
+                              : 'text-state-destructive-text bg-state-destructive-hover',
+                          )}
                         >
                           {r.record_type === 'topup'
-                            ? <RiArrowUpLine className="h-3.5 w-3.5" />
-                            : <RiArrowDownLine className="h-3.5 w-3.5" />}
+                            ? (
+                                <RiArrowUpLine className="h-3.5 w-3.5" />
+                              )
+                            : (
+                                <RiArrowDownLine className="h-3.5 w-3.5" />
+                              )}
                         </div>
-                        <span className="text-text-secondary system-sm-regular">
-                          {r.description || (r.record_type === 'topup' ? '充值' : '消费')}
+                        <span className="system-sm-regular text-text-secondary">
+                          {r.description
+                            || (r.record_type === 'topup' ? '充值' : '消费')}
                         </span>
                       </div>
-                      <div className="w-[160px] shrink-0 px-4 py-3 text-text-tertiary system-xs-regular">
+                      <div className="w-[160px] shrink-0 px-4 py-3 system-xs-regular text-text-tertiary">
                         {formatDate(r.created_at)}
                       </div>
-                      <div className={cn(
-                        'w-[100px] shrink-0 px-4 py-3 text-right system-sm-semibold',
-                        r.record_type === 'topup' ? 'text-state-success-text' : 'text-state-destructive-text',
-                      )}
+                      <div
+                        className={cn(
+                          'w-[100px] shrink-0 px-4 py-3 text-right system-sm-semibold',
+                          r.record_type === 'topup'
+                            ? 'text-state-success-text'
+                            : 'text-state-destructive-text',
+                        )}
                       >
                         {r.record_type === 'topup' ? '+' : '-'}
                         {Number(r.amount).toFixed(2)}

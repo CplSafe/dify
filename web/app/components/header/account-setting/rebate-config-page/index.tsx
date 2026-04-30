@@ -53,11 +53,11 @@ export default function RebateConfigPage() {
   const handleSave = async () => {
     const rate = Number.parseFloat(rebateRate)
     const cost = Number.parseFloat(costRate)
-    if (isNaN(rate) || rate < 0 || rate > 100) {
+    if (Number.isNaN(rate) || rate < 0 || rate > 100) {
       toast.error('返点比例必须在 0-100 之间')
       return
     }
-    if (isNaN(cost) || cost < 0 || cost > 100) {
+    if (Number.isNaN(cost) || cost < 0 || cost > 100) {
       toast.error('成本比例必须在 0-100 之间')
       return
     }
@@ -95,17 +95,18 @@ export default function RebateConfigPage() {
   const exampleConsumption = 1000
   const rateNum = Number.parseFloat(rebateRate) || 0
   const costNum = Number.parseFloat(costRate) || 0
-  const exampleProfit = costNum > 0
-    ? exampleConsumption * (1 - costNum / 100)
-    : exampleConsumption
-  const exampleRebate = exampleProfit * rateNum / 100
+  const exampleProfit
+    = costNum > 0 ? exampleConsumption * (1 - costNum / 100) : exampleConsumption
+  const exampleRebate = (exampleProfit * rateNum) / 100
 
   return (
     <div className="space-y-8">
       {/* Enable toggle */}
       <div className="flex items-center justify-between rounded-xl border border-divider-regular bg-components-panel-bg p-4">
         <div>
-          <div className="text-sm font-semibold text-text-primary">启用返点功能</div>
+          <div className="text-sm font-semibold text-text-primary">
+            启用返点功能
+          </div>
           <div className="mt-1 text-xs text-text-tertiary">
             开启后，空间所有者邀请的下级用户消耗产生的利润，将按设定比例返点给邀请人。
           </div>
@@ -123,7 +124,9 @@ export default function RebateConfigPage() {
 
       {/* Rate config */}
       <div className="rounded-xl border border-divider-regular p-6">
-        <div className="mb-6 text-sm font-semibold text-text-primary">返点规则配置</div>
+        <div className="mb-6 text-sm font-semibold text-text-primary">
+          返点规则配置
+        </div>
 
         <div className="grid grid-cols-2 gap-6">
           {/* Rebate rate */}
@@ -162,7 +165,8 @@ export default function RebateConfigPage() {
               placeholder="例如 0（不填成本则按消耗全额计算）"
             />
             <div className="mt-1 text-xs text-text-quaternary">
-              平台成本占消耗的百分比。填 0 表示不扣成本，直接按消耗金额 × 返点比例计算。
+              平台成本占消耗的百分比。填 0 表示不扣成本，直接按消耗金额 ×
+              返点比例计算。
             </div>
           </div>
 
@@ -173,11 +177,14 @@ export default function RebateConfigPage() {
             </label>
             <select
               value={settlementHour}
-              onChange={e => setSettlementHour(Number.parseInt(e.target.value))}
+              onChange={e =>
+                setSettlementHour(Number.parseInt(e.target.value))}
               className="w-full rounded-lg border border-divider-regular bg-components-input-bg-normal px-3 py-2 text-sm text-text-primary outline-none focus:border-components-input-border-active"
             >
               {Array.from({ length: 24 }, (_, i) => (
-                <option key={i} value={i}>{`每日 ${String(i).padStart(2, '0')}:00`}</option>
+                <option key={i} value={i}>
+                  {`每日 ${String(i).padStart(2, '0')}:00`}
+                </option>
               ))}
             </select>
             <div className="mt-1 text-xs text-text-quaternary">
@@ -188,13 +195,16 @@ export default function RebateConfigPage() {
 
         {/* Preview */}
         <div className="mt-6 rounded-lg bg-background-section p-4">
-          <div className="mb-2 text-xs font-medium text-text-tertiary">返点计算预览</div>
+          <div className="mb-2 text-xs font-medium text-text-tertiary">
+            返点计算预览
+          </div>
           <div className="text-sm text-text-secondary">
             假设下级用户前一天消耗
             {' '}
             <span className="font-mono font-semibold">
-              ¥
               {exampleConsumption.toFixed(2)}
+              {' '}
+              积分
             </span>
             {costNum > 0 && (
               <>
@@ -208,14 +218,16 @@ export default function RebateConfigPage() {
                 =
                 {' '}
                 <span className="font-mono font-semibold">
-                  ¥
-                  {(exampleConsumption * costNum / 100).toFixed(2)}
+                  {((exampleConsumption * costNum) / 100).toFixed(2)}
+                  {' '}
+                  积分
                 </span>
                 ，利润
                 {' '}
                 <span className="font-mono font-semibold">
-                  ¥
                   {exampleProfit.toFixed(2)}
+                  {' '}
+                  积分
                 </span>
               </>
             )}
@@ -227,9 +239,10 @@ export default function RebateConfigPage() {
             </span>
             {' '}
             =&nbsp;
-            <span className="font-mono font-bold text-state-success-text">
-              ¥
+            <span className="text-state-success-text font-mono font-bold">
               {exampleRebate.toFixed(2)}
+              {' '}
+              积分
             </span>
           </div>
         </div>
@@ -239,8 +252,12 @@ export default function RebateConfigPage() {
       <div className="flex justify-end">
         <Button variant="primary" disabled={saving} onClick={handleSave}>
           {saving
-            ? <RiLoader4Line className="mr-1.5 h-4 w-4 animate-spin" />
-            : <RiSave3Line className="mr-1.5 h-4 w-4" />}
+            ? (
+                <RiLoader4Line className="mr-1.5 h-4 w-4 animate-spin" />
+              )
+            : (
+                <RiSave3Line className="mr-1.5 h-4 w-4" />
+              )}
           保存配置
         </Button>
       </div>
@@ -249,7 +266,9 @@ export default function RebateConfigPage() {
       {config && (
         <div className="text-xs text-text-quaternary">
           最后更新：
-          {new Date(config.updated_at).toLocaleString('zh-CN', { hour12: false })}
+          {new Date(config.updated_at).toLocaleString('zh-CN', {
+            hour12: false,
+          })}
         </div>
       )}
     </div>

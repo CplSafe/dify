@@ -65,8 +65,13 @@ export const useChat = (
           : message instanceof Error
             ? message.message?.trim() || '请求失败，请稍后重试'
             : '请求失败，请稍后重试'
-      if (code === 'payment_required' || normalizedMessage.includes('余额不足'))
-        return '余额不足，请先前往[充值页](/creator/balance)处理后再继续生成。'
+      if (
+        code === 'payment_required'
+        || normalizedMessage.includes('余额不足')
+        || normalizedMessage.includes('积分不足')
+      ) {
+        return '积分不足，请先前往[充值页](/creator/balance)处理后再继续生成。'
+      }
       return normalizedMessage
     },
     [],

@@ -310,7 +310,7 @@ export default function TopupModal({ open, onOpenChange, onPaid }: Props) {
           <div className="space-y-5 px-6 py-5">
             <div>
               <div className="mb-2 text-xs font-medium text-text-tertiary">
-                选择金额
+                选择积分
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {PRESET_AMOUNTS_YUAN.map(amount => (
@@ -325,8 +325,9 @@ export default function TopupModal({ open, onOpenChange, onPaid }: Props) {
                         : 'border-divider-subtle bg-components-input-bg-normal text-text-secondary hover:border-divider-regular',
                     )}
                   >
-                    ¥
                     {amount}
+                    {' '}
+                    积分
                   </button>
                 ))}
               </div>
@@ -334,25 +335,28 @@ export default function TopupModal({ open, onOpenChange, onPaid }: Props) {
 
             <div>
               <div className="mb-2 text-xs font-medium text-text-tertiary">
-                自定义金额（元）
+                自定义积分数量
               </div>
               <Input
                 type="number"
                 inputMode="decimal"
                 value={amountYuan}
                 onChange={e => setAmountYuan(e.target.value)}
-                placeholder="请输入充值金额"
+                placeholder="请输入充值积分"
                 min={0}
                 step="0.01"
               />
               {amountYuan && amountInvalid && (
                 <div className="text-state-destructive-text mt-1 text-xs">
-                  请输入有效的金额
+                  请输入有效的积分数量
                 </div>
               )}
               <div className="mt-1 text-xs text-text-tertiary">
-                单笔充值上限 ¥
+                单笔充值上限
+                {' '}
                 {SINGLE_ORDER_LIMIT_YUAN.toLocaleString()}
+                {' '}
+                积分
               </div>
             </div>
 
@@ -419,10 +423,11 @@ export default function TopupModal({ open, onOpenChange, onPaid }: Props) {
         {step === 'pay' && order && (
           <div className="space-y-4 px-6 py-5">
             <div className="text-center">
-              <div className="text-xs text-text-tertiary">待支付金额</div>
+              <div className="text-xs text-text-tertiary">充值积分</div>
               <div className="mt-1 text-3xl font-bold text-text-primary">
-                ¥
                 {formatYuan(order.amount_yuan)}
+                {' '}
+                积分
               </div>
             </div>
 
@@ -483,10 +488,9 @@ export default function TopupModal({ open, onOpenChange, onPaid }: Props) {
             </div>
             {polledOrder && (
               <div className="text-sm text-text-tertiary">
-                ¥
                 {formatYuan(polledOrder.amount)}
                 {' '}
-                已到账
+                积分已到账
               </div>
             )}
             <Button

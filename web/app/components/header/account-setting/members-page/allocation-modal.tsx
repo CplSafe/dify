@@ -70,17 +70,17 @@ export default function AllocationModal({
     if (!amount)
       return null
     if (amountNumber <= 0)
-      return '金额必须大于 0'
+      return '积分必须大于 0'
     if (amountNumber > MAX_YUAN)
-      return `金额不能超过 ¥${MAX_YUAN.toLocaleString()}`
+      return `积分不能超过 ${MAX_YUAN.toLocaleString()}`
     if (direction === 'reclaim' && amountNumber > Number(memberBalance))
-      return '回收金额不能超过成员余额'
+      return '回收积分不能超过成员积分'
     if (
       direction === 'allocate'
       && tenantBalance !== undefined
       && amountNumber > Number(tenantBalance)
     ) {
-      return '分配金额不能超过空间余额'
+      return '分配积分不能超过空间积分'
     }
     return null
   }, [amount, amountNumber, direction, memberBalance, tenantBalance])
@@ -146,19 +146,21 @@ export default function AllocationModal({
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-xs text-text-tertiary">当前余额</div>
+                <div className="text-xs text-text-tertiary">当前积分</div>
                 <div className="mt-0.5 text-sm font-semibold text-text-primary tabular-nums">
-                  ¥
                   {formatYuan(memberBalance)}
+                  {' '}
+                  积分
                 </div>
               </div>
             </div>
             {tenantBalance !== undefined && (
               <div className="mt-2 flex items-center justify-between border-t border-divider-subtle pt-2 text-xs text-text-tertiary">
-                <span>空间可分配余额</span>
+                <span>空间可分配积分</span>
                 <span className="tabular-nums">
-                  ¥
                   {formatYuan(tenantBalance)}
+                  {' '}
+                  积分
                 </span>
               </div>
             )}
@@ -198,14 +200,14 @@ export default function AllocationModal({
 
           <div>
             <div className="mb-2 text-xs font-medium text-text-tertiary">
-              金额（元）
+              积分数量
             </div>
             <Input
               type="number"
               inputMode="decimal"
               value={amount}
               onChange={e => setAmount(e.target.value)}
-              placeholder="请输入金额"
+              placeholder="请输入积分数量"
               min={0}
               max={MAX_YUAN}
               step="0.01"

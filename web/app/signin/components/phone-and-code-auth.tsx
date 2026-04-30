@@ -102,7 +102,7 @@ export default function PhoneAndCodeAuth() {
         <div className="mb-4 rounded-lg border border-primary-100 bg-primary-50/60 px-4 py-3">
           <div className="flex items-start gap-2">
             <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-600 text-[11px] font-bold text-white">
-              ¥
+              P
             </span>
             <div>
               <div className="system-sm-semibold text-primary-700">

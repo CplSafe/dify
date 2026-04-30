@@ -48,15 +48,15 @@ const Signup = () => {
         <div className="mb-6 rounded-lg border border-primary-100 bg-primary-50/60 px-4 py-3">
           <div className="flex items-start gap-2">
             <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-600 text-[11px] font-bold text-white">
-              ¥
+              P
             </span>
             <div>
               <div className="system-sm-semibold text-primary-700">
-                新用户注册赠送体验额度
+                新用户注册赠送
                 {' '}
                 {bonusAmount}
                 {' '}
-                元
+                体验积分
               </div>
               <div className="mt-0.5 system-xs-regular text-text-tertiary">
                 注册成功后自动到账，可直接用于体验平台功能

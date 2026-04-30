@@ -58,7 +58,7 @@ const MENU_ITEMS: MenuItem[] = [
   },
   {
     key: 'balance',
-    label: '余额账单',
+    label: '积分账单',
     iconClass: 'i-ri-wallet-3-line',
     activeIconClass: 'i-ri-wallet-3-fill',
   },

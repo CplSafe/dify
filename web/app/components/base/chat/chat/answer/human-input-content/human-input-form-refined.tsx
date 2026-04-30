@@ -29,7 +29,8 @@ const HumanInputFormRefined = ({
     setIsSubmitting(true)
     try {
       await onSubmit?.(formToken, { inputs, action: actionID })
-    } finally {
+    }
+    finally {
       setIsSubmitting(false)
     }
   }
@@ -63,7 +64,7 @@ const HumanInputFormRefined = ({
               'inline-flex h-10 items-center rounded-xl px-5 text-[15px] font-medium transition-all active:scale-95 disabled:opacity-50',
               action.button_style === 'primary'
                 ? 'bg-[#7C3AED] text-white shadow-[0_10px_24px_rgba(124,58,237,0.18)] hover:bg-[#6D28D9]'
-                : 'border border-[#E7E4F5] bg-white text-[#4C4568] hover:bg-[#F7F4FF]'
+                : 'border border-[#E7E4F5] bg-white text-[#4C4568] hover:bg-[#F7F4FF]',
             )}
           >
             {action.title}

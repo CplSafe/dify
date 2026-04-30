@@ -182,7 +182,7 @@ export default function CreatorUserMenu({
             )}
             <DropdownMenuItem onClick={() => openSettings('balance')}>
               <RiWalletLine className="mr-2 h-4 w-4 text-text-tertiary" />
-              余额账单
+              积分账单
             </DropdownMenuItem>
           </DropdownMenuGroup>
 

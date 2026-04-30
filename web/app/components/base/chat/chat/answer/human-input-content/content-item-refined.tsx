@@ -5,17 +5,19 @@ import * as React from 'react'
 import { useMemo } from 'react'
 import { Markdown } from '@/app/components/base/markdown'
 
-const tagClassName = 'inline-flex min-h-8 items-center rounded-[10px] bg-[#F2ECFF] px-3 py-1 text-[14px] font-medium text-[#6D28D9] shadow-[inset_0_0_0_1px_rgba(167,139,250,0.15)]'
+const tagClassName
+  = 'inline-flex min-h-8 items-center rounded-[10px] bg-[#F2ECFF] px-3 py-1 text-[14px] font-medium text-[#6D28D9] shadow-[inset_0_0_0_1px_rgba(167,139,250,0.15)]'
 
-const renderMediaPreview = (value: any) => {
+const renderMediaPreview = (value: unknown) => {
   const files = Array.isArray(value) ? value : value ? [value] : []
   if (!files.length)
     return null
 
   return (
     <div className="mt-3 flex flex-wrap gap-3">
-      {files.map((file: any, index: number) => {
-        const src = file?.url || file?.preview_url || file?.download_url
+      {files.map((file: unknown, index: number) => {
+        const f = file as Record<string, string> | null
+        const src = f?.url || f?.preview_url || f?.download_url
         if (!src)
           return null
 
@@ -24,8 +26,11 @@ const renderMediaPreview = (value: any) => {
             key={`${src}-${index}`}
             className="flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-2xl border border-[#E7E4F5] bg-[#FAF8FF]"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={src} alt={file?.name || 'media'} className="h-full w-full object-cover" />
+            <img
+              src={src}
+              alt={f?.name || 'media'}
+              className="h-full w-full object-cover"
+            />
           </div>
         )
       })}
@@ -71,7 +76,11 @@ const ContentItemRefined = ({
     }
     return (
       <div className="text-[15px] leading-8 text-[#59556B]">
-        <Markdown content={content} mode="static" className="text-[15px] leading-8 text-[#59556B]" />
+        <Markdown
+          content={content}
+          mode="static"
+          className="text-[15px] leading-8 text-[#59556B]"
+        />
       </div>
     )
   }
@@ -89,7 +98,7 @@ const ContentItemRefined = ({
             <textarea
               className="min-h-[120px] w-full resize-none border-none bg-transparent p-4 text-[15px] leading-7 text-[#2D2942] outline-none focus:ring-0"
               value={value}
-              onChange={(e) => onInputChange(fieldName, e.target.value)}
+              onChange={e => onInputChange(fieldName, e.target.value)}
               placeholder="请输入内容..."
             />
           </div>
@@ -99,12 +108,14 @@ const ContentItemRefined = ({
         return (
           <span className="inline-flex px-1 align-middle">
             <select
-              className={`${tagClassName} min-w-[88px] appearance-none border-none pr-8 outline-none transition-colors hover:bg-[#E9D5FF] focus:ring-2 focus:ring-[#DDD6FE]`}
+              className={`${tagClassName} min-w-[88px] appearance-none border-none pr-8 transition-colors outline-none hover:bg-[#E9D5FF] focus:ring-2 focus:ring-[#DDD6FE]`}
               value={value}
-              onChange={(e) => onInputChange(fieldName, e.target.value)}
+              onChange={e => onInputChange(fieldName, e.target.value)}
             >
               {formInputField.options?.map(opt => (
-                <option key={opt} value={opt}>{opt}</option>
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
               ))}
             </select>
           </span>
@@ -117,10 +128,12 @@ const ContentItemRefined = ({
         return (
           <span className="inline-flex px-1 align-middle">
             <input
-              className={`${tagClassName} min-w-[96px] border-none outline-none transition-colors hover:bg-[#E9D5FF] focus:ring-2 focus:ring-[#DDD6FE]`}
+              className={`${tagClassName} min-w-[96px] border-none transition-colors outline-none hover:bg-[#E9D5FF] focus:ring-2 focus:ring-[#DDD6FE]`}
               value={value}
-              onChange={(e) => onInputChange(fieldName, e.target.value)}
-              style={{ width: `${Math.max(String(value).length * 12 + 32, 112)}px` }}
+              onChange={e => onInputChange(fieldName, e.target.value)}
+              style={{
+                width: `${Math.max(String(value).length * 12 + 32, 112)}px`,
+              }}
             />
           </span>
         )

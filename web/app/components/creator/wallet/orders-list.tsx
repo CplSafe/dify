@@ -89,7 +89,7 @@ export default function OrdersList({
           </>
         )}
         <div className="w-[100px] shrink-0 px-4">状态</div>
-        <div className="w-[100px] shrink-0 px-4 text-right">金额</div>
+        <div className="w-[100px] shrink-0 px-4 text-right">积分</div>
         <div className="w-[160px] shrink-0 px-4">创建时间</div>
         <div className="w-[160px] shrink-0 px-4">支付时间</div>
         {allowActions && <div className="grow px-4 text-right">操作</div>}
@@ -128,8 +128,9 @@ export default function OrdersList({
               </span>
             </div>
             <div className="w-[100px] shrink-0 px-4 py-3 text-right system-sm-semibold text-text-secondary tabular-nums">
-              ¥
               {formatYuan(o.amount_yuan)}
+              {' '}
+              积分
             </div>
             <div className="w-[160px] shrink-0 px-4 py-3 system-xs-regular text-text-tertiary">
               {formatDateTime(o.created_at)}

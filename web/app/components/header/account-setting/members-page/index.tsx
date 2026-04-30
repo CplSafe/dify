@@ -204,7 +204,7 @@ const MembersPage = () => {
             </div>
             {isCurrentWorkspaceOwner && (
               <div className="w-[120px] shrink-0 px-3 text-right system-xs-medium-uppercase text-text-tertiary">
-                余额
+                积分
               </div>
             )}
             <div className="w-[96px] shrink-0 px-3 system-xs-medium-uppercase text-text-tertiary">
@@ -255,7 +255,6 @@ const MembersPage = () => {
                 </div>
                 {isCurrentWorkspaceOwner && (
                   <div className="flex w-[120px] shrink-0 items-center justify-end px-3 py-2 text-right tabular-nums system-sm-regular text-text-secondary">
-                    ¥
                     {Number(balanceFor(account.id, account.role)).toFixed(2)}
                   </div>
                 )}

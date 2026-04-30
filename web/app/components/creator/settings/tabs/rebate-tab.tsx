@@ -39,7 +39,9 @@ export default function RebateTab() {
     setLoading(true)
     try {
       const [recordsResp, summaryResp] = await Promise.all([
-        get<{ data: RebateRecord[], total: number }>(`/creator/rebate/records?page=${page}&per_page=${perPage}`),
+        get<{ data: RebateRecord[], total: number }>(
+          `/creator/rebate/records?page=${page}&per_page=${perPage}`,
+        ),
         get<RebateSummary>('/creator/rebate/summary'),
       ])
       setRecords(recordsResp.data || [])
@@ -67,16 +69,18 @@ export default function RebateTab() {
         <div className="grid grid-cols-3 gap-4">
           <div className="rounded-xl border border-divider-regular bg-components-panel-bg p-4">
             <div className="text-xs text-text-quaternary">累计返点收入</div>
-            <div className="mt-1 text-xl font-bold text-state-success-text">
-              ¥
+            <div className="text-state-success-text mt-1 text-xl font-bold">
               {Number(summary.total_rebate).toFixed(2)}
+              {' '}
+              积分
             </div>
           </div>
           <div className="rounded-xl border border-divider-regular bg-components-panel-bg p-4">
             <div className="text-xs text-text-quaternary">下级累计消耗</div>
             <div className="mt-1 text-xl font-bold text-text-primary">
-              ¥
               {Number(summary.total_consumption).toFixed(2)}
+              {' '}
+              积分
             </div>
           </div>
           <div className="rounded-xl border border-divider-regular bg-components-panel-bg p-4">
@@ -90,7 +94,9 @@ export default function RebateTab() {
 
       {/* Records table */}
       <div>
-        <div className="mb-3 text-sm font-semibold text-text-primary">返点明细</div>
+        <div className="mb-3 text-sm font-semibold text-text-primary">
+          返点明细
+        </div>
         {loading
           ? (
               <div className="flex items-center justify-center py-12">
@@ -101,35 +107,45 @@ export default function RebateTab() {
             ? (
                 <div className="rounded-xl border border-dashed border-divider-regular p-8 text-center">
                   <div className="text-text-tertiary">暂无返点记录</div>
-                  <div className="mt-1 text-xs text-text-quaternary">邀请下级用户后，其消耗将在次日产生返点收入</div>
+                  <div className="mt-1 text-xs text-text-quaternary">
+                    邀请下级用户后，其消耗将在次日产生返点收入
+                  </div>
                 </div>
               )
             : (
                 <>
-                  <div className="rounded-xl border border-divider-regular overflow-hidden">
+                  <div className="overflow-hidden rounded-xl border border-divider-regular">
                     {/* Header */}
                     <div className="flex h-9 items-center border-b border-divider-regular bg-background-section text-xs font-semibold text-text-tertiary">
                       <div className="w-28 shrink-0 px-3">结算日期</div>
                       <div className="w-32 shrink-0 px-3">下级用户</div>
-                      <div className="w-28 shrink-0 px-3 text-right">消耗金额</div>
+                      <div className="w-28 shrink-0 px-3 text-right">消耗积分</div>
                       <div className="w-28 shrink-0 px-3 text-right">成本扣除</div>
-                      <div className="w-28 shrink-0 px-3 text-right">返点金额</div>
+                      <div className="w-28 shrink-0 px-3 text-right">返点积分</div>
                       <div className="w-20 shrink-0 px-3 text-right">返点比例</div>
                     </div>
                     {/* Rows */}
                     {records.map(r => (
-                      <div key={r.id} className="flex h-10 items-center border-b border-divider-subtle text-sm text-text-secondary last:border-b-0">
-                        <div className="w-28 shrink-0 px-3 text-text-tertiary">{r.settlement_date}</div>
-                        <div className="w-32 shrink-0 truncate px-3">{r.invitee_name || `${r.invitee_account_id.slice(0, 8)}...`}</div>
+                      <div
+                        key={r.id}
+                        className="flex h-10 items-center border-b border-divider-subtle text-sm text-text-secondary last:border-b-0"
+                      >
+                        <div className="w-28 shrink-0 px-3 text-text-tertiary">
+                          {r.settlement_date}
+                        </div>
+                        <div className="w-32 shrink-0 truncate px-3">
+                          {r.invitee_name || `${r.invitee_account_id.slice(0, 8)}...`}
+                        </div>
                         <div className="w-28 shrink-0 px-3 text-right font-mono">
-                          ¥
                           {Number(r.consumption_amount).toFixed(2)}
                         </div>
                         <div className="w-28 shrink-0 px-3 text-right font-mono text-text-quaternary">
-                          {Number(r.cost_amount) > 0 ? `¥${Number(r.cost_amount).toFixed(2)}` : '-'}
+                          {Number(r.cost_amount) > 0
+                            ? Number(r.cost_amount).toFixed(2)
+                            : '-'}
                         </div>
-                        <div className="w-28 shrink-0 px-3 text-right font-mono font-medium text-state-success-text">
-                          +¥
+                        <div className="text-state-success-text w-28 shrink-0 px-3 text-right font-mono font-medium">
+                          +
                           {Number(r.rebate_amount).toFixed(2)}
                         </div>
                         <div className="w-20 shrink-0 px-3 text-right text-text-quaternary">
@@ -162,7 +178,6 @@ export default function RebateTab() {
                           {page}
                           {' '}
                           /
-                          {' '}
                           {totalPages}
                         </span>
                         <button

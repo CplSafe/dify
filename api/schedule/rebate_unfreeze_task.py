@@ -1,20 +1,22 @@
 """Daily rebate unfreeze task.
 
-Companion to ``rebate_settlement_task``. The settlement task parks rebates
-in ``UserBalance.rebate_pending`` (frozen). This task releases them into
-the spendable ``UserBalance.balance`` after ``RebateConfig.freeze_days``
-have elapsed.
+Companion to ``rebate_settlement_task``. The settlement task creates
+PENDING ``RebateRecord`` rows tagged with the agent. This task releases
+them into the agent's ``AgentWallet.withdrawable`` (and bumps
+``total_earned``) once ``RebateConfig.freeze_days`` have elapsed.
 
 Split between two tasks (rather than one) so operators get a cancellation
 window: during ``freeze_days`` they can mark a ``RebateRecord`` as
 ``cancelled`` to claw back rebates tied to abusive invitees without
 having to reverse an already-credited cash movement.
 
-Ordering note: the settlement task and this task must NOT run at the same
-hour — running them at the same moment on the same inviter risks a
-rebate_pending balance that has already been released by a previous
-unfreeze sweep being re-released because the new settlement row slipped
-in before the pending decrement. Configured via RebateConfig hours.
+Ordering note: settlement and unfreeze must NOT run at the same hour —
+running them concurrently on the same agent risks double-counting
+(a fresh PENDING row could slip past the freeze cutoff before the
+sweep finishes). Configured via ``RebateConfig.settlement_hour``.
+
+Wallet wiring: all credits flow through ``AgentWalletService.credit_settled``
+so wallet writes go through a single audit point.
 """
 
 import logging
@@ -28,20 +30,18 @@ from sqlalchemy import and_, select
 from extensions.ext_database import db
 from libs.datetime_utils import naive_utc_now
 from models.creator import (
-    BillingRecord,
-    BillingRecordType,
     RebateConfig,
     RebateRecord,
     RebateRecordStatus,
-    UserBalance,
 )
+from services.agent.agent_wallet_service import AgentWalletService
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task(queue="dataset")
 def rebate_unfreeze_task():
-    """Release rebates whose freeze window has elapsed into spendable balance."""
+    """Release PENDING rebates whose freeze window has elapsed."""
     click.echo(click.style("rebate_unfreeze_task: starting", fg="green"))
 
     config = db.session.scalar(select(RebateConfig).limit(1))
@@ -79,28 +79,6 @@ def rebate_unfreeze_task():
     total_released = Decimal(0)
 
     for record in pending_records:
-        # Lock the balance row for the duration of the move so a concurrent
-        # deduction/topup that also touches this inviter can't observe a
-        # window where rebate_pending is decremented but balance isn't
-        # yet incremented.
-        balance = db.session.scalar(
-            select(UserBalance)
-            .where(UserBalance.account_id == record.inviter_account_id)
-            .with_for_update()
-        )
-        if not balance:
-            # Settlement only creates RebateRecord alongside UserBalance, so
-            # this is only reachable if the row was deleted out-of-band.
-            # Skip rather than explode — the record stays pending and will
-            # be picked up on the next sweep (when presumably the balance
-            # row has been restored or the record has been cancelled).
-            logger.warning(
-                "rebate_unfreeze_task: no UserBalance for inviter=%s record=%s — skipping",
-                record.inviter_account_id,
-                record.id,
-            )
-            continue
-
         rebate_amount = Decimal(str(record.rebate_amount))
         if rebate_amount <= 0:
             # Defensive: a zero/negative pending rebate shouldn't exist, but
@@ -110,37 +88,24 @@ def rebate_unfreeze_task():
             db.session.add(record)
             continue
 
-        # Guard against rebate_pending going negative. If the bucket has
-        # been drained out-of-band (e.g. manual DB correction) we'd rather
-        # log and skip than silently write a negative balance.
-        if balance.rebate_pending < rebate_amount:
+        # Wallet credit goes through AgentWalletService — the single
+        # auditable mutation point for AgentWallet rows.
+        try:
+            AgentWalletService.credit_settled(record.agent_id, rebate_amount)
+        except ValueError:
+            # The agent's wallet was deleted out-of-band. Leave the record
+            # PENDING so a future sweep can retry once ops restores the
+            # wallet (or cancels the record).
             logger.warning(
-                "rebate_unfreeze_task: rebate_pending (%s) < record.rebate_amount (%s) "
-                "for inviter=%s record=%s — skipping",
-                balance.rebate_pending,
-                rebate_amount,
-                record.inviter_account_id,
+                "rebate_unfreeze_task: no AgentWallet for agent=%s record=%s — skipping",
+                record.agent_id,
                 record.id,
             )
             continue
 
-        balance.rebate_pending = balance.rebate_pending - rebate_amount
-        balance.balance = balance.balance + rebate_amount
-
         record.status = RebateRecordStatus.SETTLED.value
         record.unfrozen_at = now
         db.session.add(record)
-
-        # Write the ledger entry NOW (not at settlement time). Writing
-        # here means a cancelled rebate leaves no ghost BillingRecord
-        # behind, so the ledger always matches the actual cash movement.
-        billing = BillingRecord(
-            account_id=record.inviter_account_id,
-            amount=rebate_amount,
-            record_type=BillingRecordType.REBATE,
-            description=f"邀请返点（被邀请人消费 {record.consumption_amount} CNY）",
-        )
-        db.session.add(billing)
 
         released += 1
         total_released += rebate_amount

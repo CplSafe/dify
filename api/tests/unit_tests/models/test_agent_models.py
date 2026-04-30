@@ -45,3 +45,19 @@ def test_withdrawal_request_has_required_columns():
         "review_note", "created_at", "reviewed_at",
     }:
         assert required in cols, f"WithdrawalRequest missing column {required}"
+
+
+def test_account_invitation_has_agent_id_column():
+    from models.creator import AccountInvitation
+    cols = {c.name for c in AccountInvitation.__table__.columns}
+    assert "agent_id" in cols, "AccountInvitation must reference agent"
+
+
+def test_account_invitation_invite_code_no_longer_unique():
+    """Code is reusable now — same code can have multiple invitee rows."""
+    from models.creator import AccountInvitation
+    for idx in AccountInvitation.__table__.indexes:
+        if idx.name == "account_invitation_code_idx":
+            assert not idx.unique, "code index must not be unique anymore"
+            return
+    raise AssertionError("account_invitation_code_idx not found")

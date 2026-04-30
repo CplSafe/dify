@@ -295,9 +295,10 @@ class AccountInvitation(TypeBase):
     __tablename__ = "account_invitations"
     __table_args__ = (
         sa.PrimaryKeyConstraint("id", name="account_invitation_pkey"),
-        sa.Index("account_invitation_code_idx", "invite_code", unique=True),
+        sa.Index("account_invitation_code_idx", "invite_code"),
         sa.Index("account_invitation_inviter_idx", "inviter_account_id"),
         sa.Index("account_invitation_invitee_idx", "invitee_account_id"),
+        sa.Index("account_invitation_agent_idx", "agent_id"),
     )
 
     id: Mapped[str] = mapped_column(
@@ -305,6 +306,7 @@ class AccountInvitation(TypeBase):
     )
     invite_code: Mapped[str] = mapped_column(String(64), nullable=False)
     inviter_account_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    agent_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     invitee_account_id: Mapped[str | None] = mapped_column(StringUUID, nullable=True, default=None)
     status: Mapped[str] = mapped_column(
         String(20), server_default="pending", default="pending"
@@ -319,6 +321,7 @@ class AccountInvitation(TypeBase):
             "id": self.id,
             "invite_code": self.invite_code,
             "inviter_account_id": self.inviter_account_id,
+            "agent_id": self.agent_id,
             "invitee_account_id": self.invitee_account_id,
             "status": self.status,
             "created_at": self.created_at.isoformat(),

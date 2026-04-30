@@ -58,6 +58,8 @@ class Account(_AccountAvatar):
     email: str
     is_password_set: bool
     is_system_admin: bool = False
+    is_agent: bool = False
+    agent_status: str | None = None
     interface_language: str | None = None
     interface_theme: str | None = None
     timezone: str | None = None

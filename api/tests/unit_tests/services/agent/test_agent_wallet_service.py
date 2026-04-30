@@ -14,8 +14,8 @@ def test_credit_settled_increments_withdrawable_and_total_earned(mock_db, agent_
     from services.agent.agent_wallet_service import AgentWalletService
 
     wallet = MagicMock(
-        withdrawable=Decimal("0"),
-        total_earned=Decimal("0"),
+        withdrawable=Decimal(0),
+        total_earned=Decimal(0),
     )
     mock_db.session.scalar.return_value = wallet
 
@@ -33,7 +33,7 @@ def test_credit_settled_raises_when_wallet_missing(mock_db, agent_id):
     mock_db.session.scalar.return_value = None
 
     with pytest.raises(ValueError, match="no wallet"):
-        AgentWalletService.credit_settled(agent_id, Decimal("10"))
+        AgentWalletService.credit_settled(agent_id, Decimal(10))
 
 
 @patch("services.agent.agent_wallet_service.db")

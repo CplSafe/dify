@@ -28,8 +28,7 @@ from services.errors.agent import (
     WithdrawalRequestNotFoundError,
 )
 
-
-MIN_WITHDRAWAL = Decimal("100")
+MIN_WITHDRAWAL = Decimal(100)
 _VALID_METHODS = frozenset(m.value for m in PayoutMethod)
 
 
@@ -69,7 +68,7 @@ class WithdrawalService:
             select(AgentWallet).where(AgentWallet.agent_id == agent_id)
         )
         if wallet is None or wallet.withdrawable < amount:
-            available = wallet.withdrawable if wallet is not None else Decimal("0")
+            available = wallet.withdrawable if wallet is not None else Decimal(0)
             raise InsufficientWithdrawableBalanceError(
                 f"available {available} < requested {amount}"
             )

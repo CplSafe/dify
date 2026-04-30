@@ -4,13 +4,12 @@ These properties query live each call (no caching) so we can patch the
 SQLAlchemy ``db`` session and assert that the right WHERE conditions
 build against the right columns.
 """
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 @patch("extensions.ext_database.db")
 def test_is_agent_true_when_active_agent_exists(mock_db):
     from models.account import Account
-    from models.agent import AgentStatus
 
     acct = Account(email="x@x.com", name="X")
     acct.id = "acct-1"

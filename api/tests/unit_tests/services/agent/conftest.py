@@ -38,16 +38,16 @@ def agent_id() -> str:
 @pytest.fixture
 def make_agent_kwargs(agent_account_id: str, admin_account_id: str) -> dict:
     """Default kwargs for AgentService.create_agent."""
-    return dict(
-        account_id=agent_account_id,
-        name="Test Agent",
-        rebate_rate=Decimal("0.10"),
-        level="province",
-        region_province="广东",
-        region_city=None,
-        contact_phone="13800000000",
-        notes=None,
-        signed_at=date(2026, 4, 30),
-        expires_at=date(2027, 4, 30),
-        created_by=admin_account_id,
-    )
+    return {
+        "account_id": agent_account_id,
+        "name": "Test Agent",
+        "rebate_rate": Decimal("0.10"),
+        "level": "province",
+        "region_province": "广东",
+        "region_city": None,
+        "contact_phone": "13800000000",
+        "notes": None,
+        "signed_at": date(2026, 4, 30),
+        "expires_at": date(2027, 4, 30),
+        "created_by": admin_account_id,
+    }

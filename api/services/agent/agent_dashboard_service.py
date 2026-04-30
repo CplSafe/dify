@@ -45,7 +45,7 @@ class AgentDashboardService:
                     RebateRecord.status == RebateRecordStatus.PENDING.value,
                 )
             )
-        ) or Decimal("0")
+        ) or Decimal(0)
 
         return {
             "withdrawable": wallet.withdrawable,
@@ -80,7 +80,7 @@ class AgentDashboardService:
             return [
                 {
                     "date": (start + timedelta(days=i)).isoformat(),
-                    "consumption": Decimal("0"),
+                    "consumption": Decimal(0),
                 }
                 for i in range(days)
             ]
@@ -108,7 +108,7 @@ class AgentDashboardService:
             {
                 "date": (start + timedelta(days=i)).isoformat(),
                 "consumption": by_date.get(
-                    (start + timedelta(days=i)).isoformat(), Decimal("0"),
+                    (start + timedelta(days=i)).isoformat(), Decimal(0),
                 ),
             }
             for i in range(days)
@@ -171,10 +171,10 @@ class AgentDashboardService:
                 "invitee_account_id": b.invitee_account_id,
                 "bound_at": b.used_at.isoformat() if b.used_at else None,
                 "month_consumption": month_consumption.get(
-                    b.invitee_account_id, Decimal("0"),
+                    b.invitee_account_id, Decimal(0),
                 ),
                 "total_rebate": lifetime_rebate.get(
-                    b.invitee_account_id, Decimal("0"),
+                    b.invitee_account_id, Decimal(0),
                 ),
             }
             for b in bindings

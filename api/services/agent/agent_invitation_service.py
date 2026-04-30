@@ -26,7 +26,6 @@ from services.errors.agent import (
     SelfBindError,
 )
 
-
 _CODE_LENGTH = 16  # urlsafe-base64 characters
 
 

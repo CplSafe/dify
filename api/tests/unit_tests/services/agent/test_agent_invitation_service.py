@@ -43,8 +43,8 @@ def test_bind_inserts_used_row_for_active_agent(
     mock_db, agent_id, invitee_account_id,
 ):
     """Happy bind: anchor lookup → agent active → no existing binding → INSERT."""
-    from services.agent.agent_invitation_service import AgentInvitationService
     from models.agent import AgentStatus
+    from services.agent.agent_invitation_service import AgentInvitationService
 
     fake_anchor = MagicMock(agent_id=agent_id)
     fake_agent = MagicMock(
@@ -93,9 +93,9 @@ def test_bind_rejects_unknown_code(mock_db, invitee_account_id):
 
 @patch("services.agent.agent_invitation_service.db")
 def test_bind_rejects_suspended_agent(mock_db, agent_id, invitee_account_id):
+    from models.agent import AgentStatus
     from services.agent.agent_invitation_service import AgentInvitationService
     from services.errors.agent import AgentSuspendedError
-    from models.agent import AgentStatus
 
     fake_anchor = MagicMock(agent_id=agent_id)
     suspended_agent = MagicMock(
@@ -109,9 +109,9 @@ def test_bind_rejects_suspended_agent(mock_db, agent_id, invitee_account_id):
 
 @patch("services.agent.agent_invitation_service.db")
 def test_bind_rejects_self_invite(mock_db, agent_id, invitee_account_id):
+    from models.agent import AgentStatus
     from services.agent.agent_invitation_service import AgentInvitationService
     from services.errors.agent import SelfBindError
-    from models.agent import AgentStatus
 
     fake_anchor = MagicMock(agent_id=agent_id)
     fake_agent = MagicMock(
@@ -127,9 +127,9 @@ def test_bind_rejects_self_invite(mock_db, agent_id, invitee_account_id):
 
 @patch("services.agent.agent_invitation_service.db")
 def test_bind_rejects_already_bound_invitee(mock_db, agent_id, invitee_account_id):
+    from models.agent import AgentStatus
     from services.agent.agent_invitation_service import AgentInvitationService
     from services.errors.agent import AlreadyBoundError
-    from models.agent import AgentStatus
 
     fake_anchor = MagicMock(agent_id=agent_id)
     fake_agent = MagicMock(

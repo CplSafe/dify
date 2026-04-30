@@ -50,8 +50,8 @@ def test_create_agent_rejects_duplicate_account(mock_db, make_agent_kwargs):
 
 @patch("services.agent.agent_service.db")
 def test_suspend_agent_sets_status_to_suspended(mock_db, agent_id):
-    from services.agent.agent_service import AgentService
     from models.agent import AgentStatus
+    from services.agent.agent_service import AgentService
 
     fake_agent = MagicMock(id=agent_id, status=AgentStatus.ACTIVE.value)
     mock_db.session.scalar.return_value = fake_agent
@@ -77,6 +77,7 @@ def test_suspend_agent_raises_when_missing(mock_db, agent_id):
 @patch("services.agent.agent_service.db")
 def test_update_agent_allows_whitelisted_fields(mock_db, agent_id):
     from decimal import Decimal
+
     from services.agent.agent_service import AgentService
 
     fake_agent = MagicMock(id=agent_id)

@@ -25,7 +25,6 @@ from services.errors.agent import (
     RebindRequestNotFoundError,
 )
 
-
 COOLDOWN_DAYS = 90
 
 

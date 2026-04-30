@@ -19,7 +19,6 @@ from services.errors.agent import (
     AgentNotFoundError,
 )
 
-
 _UPDATABLE_FIELDS = frozenset({
     "name",
     "rebate_rate",

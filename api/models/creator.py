@@ -409,6 +409,7 @@ class RebateRecord(TypeBase):
         sa.PrimaryKeyConstraint("id", name="rebate_record_pkey"),
         sa.Index("rebate_record_inviter_idx", "inviter_account_id"),
         sa.Index("rebate_record_invitee_idx", "invitee_account_id"),
+        sa.Index("rebate_record_agent_idx", "agent_id"),
         sa.Index("rebate_record_date_idx", "settlement_date"),
         sa.Index("rebate_record_inviter_date_idx", "inviter_account_id", "settlement_date"),
         # Supports the unfreeze task's "pending rows due for release" scan.
@@ -421,6 +422,7 @@ class RebateRecord(TypeBase):
         StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
     )
     inviter_account_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    agent_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     invitee_account_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     settlement_date: Mapped[str] = mapped_column(
         String(10), nullable=False
@@ -459,6 +461,7 @@ class RebateRecord(TypeBase):
         return {
             "id": self.id,
             "inviter_account_id": self.inviter_account_id,
+            "agent_id": self.agent_id,
             "invitee_account_id": self.invitee_account_id,
             "settlement_date": self.settlement_date,
             "consumption_amount": str(self.consumption_amount),

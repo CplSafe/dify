@@ -61,3 +61,9 @@ def test_account_invitation_invite_code_no_longer_unique():
             assert not idx.unique, "code index must not be unique anymore"
             return
     raise AssertionError("account_invitation_code_idx not found")
+
+
+def test_rebate_record_has_agent_id_column():
+    from models.creator import RebateRecord
+    cols = {c.name for c in RebateRecord.__table__.columns}
+    assert "agent_id" in cols, "RebateRecord must reference agent"

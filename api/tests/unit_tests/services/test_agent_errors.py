@@ -1,5 +1,11 @@
 def test_agent_errors_are_importable_and_distinct():
-    from services.errors.agent import (
+    """Verify the full domain-exception surface exists and inherits correctly.
+
+    Imports are intentionally "unused" — their presence IS the test:
+    a missing class would surface as ImportError here before any service
+    code that depends on it even loads.
+    """
+    from services.errors.agent import (  # noqa: F401
         AgentAccountAlreadyExistsError,
         AgentError,
         AgentNotFoundError,

@@ -29,7 +29,6 @@ from models import Account
 from services.account_service import AccountService
 from services.billing_service import BillingService
 from services.errors.account import AccountNotFoundError, AccountRegisterError
-from services.invitation_service import InvitationService
 from services.wallet.tenant_balance_service import TenantBalanceService
 
 from ..error import AccountInFreezeError, EmailSendIpLimitError
@@ -55,13 +54,6 @@ class EmailRegisterResetPayload(BaseModel):
     token: str = Field(...)
     new_password: str = Field(...)
     password_confirm: str = Field(...)
-    # Optional invite code captured from the signup URL. Bound inside the
-    # registration transaction so the referral link survives — a separate
-    # POST /creator/invitations/bind call cannot work here: the freshly
-    # created account has no auth cookie yet (the frontend only gets the
-    # token_pair back in JSON), so @login_required would reject it.
-    invite_code: str | None = Field(default=None)
-
     @field_validator("new_password", "password_confirm")
     @classmethod
     def validate_password(cls, value: str) -> str:
@@ -182,38 +174,6 @@ class EmailRegisterResetApi(Resource):
                 AccountService.reset_login_error_rate_limit(normalized_email)
 
         # Best-effort invite-code binding.
-        # Ordering: must run AFTER account creation (needs account.id) and
-        # AFTER the account/tenant transaction closes, because
-        # create_account_and_tenant commits on db.session. Binding failures
-        # (bad code, already used, self-invite) must NOT roll back the
-        # successful registration — the user is already logged in and we
-        # fall through to returning the token_pair. The operator-visible
-        # reason lands in logs so a support engineer can re-attempt the
-        # bind via POST /creator/invitations/bind if needed.
-        if args.invite_code:
-            try:
-                result = InvitationService.bind_invite_code(
-                    invite_code=args.invite_code,
-                    invitee_account_id=account.id,
-                )
-                if result.ok:
-                    db.session.commit()
-                    logger.info(
-                        "Invite bound during registration account=%s inviter=%s",
-                        account.id,
-                        result.inviter_account_id,
-                    )
-                else:
-                    db.session.rollback()
-                    logger.warning(
-                        "Invite bind skipped during registration account=%s outcome=%s",
-                        account.id,
-                        result.outcome.value,
-                    )
-            except Exception:
-                db.session.rollback()
-                logger.exception("Invite bind errored during registration account=%s", account.id)
-
         # Grant signup bonus to the new user's workspace when configured.
         # Driven by SIGNUP_BONUS_ENABLED + SIGNUP_BONUS_AMOUNT in .env so the
         # default behavior is no grant; ops can flip it on per environment.

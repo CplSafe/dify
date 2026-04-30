@@ -86,17 +86,6 @@ class UserBalance(TypeBase):
     )
     account_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     balance: Mapped[Decimal] = mapped_column(sa.Numeric(precision=20, scale=6), server_default="0", default=Decimal(0))
-    # Frozen rebate income — credited by the daily settlement task, becomes
-    # spendable (moves into ``balance``) after ``RebateConfig.freeze_days``.
-    # Kept in a separate column instead of tagging ``balance`` because:
-    #   1. Rebate is not spendable during the freeze window — a flat ``balance``
-    #      field would let the inviter withdraw money the platform may still
-    #      need to claw back on chargeback/abuse.
-    #   2. UI shows "可用 / 冻结中" separately; merging them would require a
-    #      per-row join against ``rebate_records`` on every wallet read.
-    rebate_pending: Mapped[Decimal] = mapped_column(
-        sa.Numeric(precision=20, scale=6), server_default="0", default=Decimal(0)
-    )
     currency: Mapped[str] = mapped_column(String(10), server_default="CNY", default="CNY")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp(), nullable=False, init=False
@@ -106,12 +95,7 @@ class UserBalance(TypeBase):
     )
 
     def is_sufficient(self) -> bool:
-        """Return True if spendable balance > 0.
-
-        Only ``balance`` counts — ``rebate_pending`` is frozen and must not
-        gate workflow runs. A user with 100 pending / 0 spendable should be
-        blocked, not allowed to spend money that might be clawed back.
-        """
+        """Return True if spendable balance > 0."""
         return self.balance > Decimal(0)
 
 

@@ -67,3 +67,9 @@ def test_rebate_record_has_agent_id_column():
     from models.creator import RebateRecord
     cols = {c.name for c in RebateRecord.__table__.columns}
     assert "agent_id" in cols, "RebateRecord must reference agent"
+
+
+def test_user_balance_no_longer_has_rebate_pending():
+    from models.creator import UserBalance
+    cols = {c.name for c in UserBalance.__table__.columns}
+    assert "rebate_pending" not in cols, "rebate_pending should be removed"

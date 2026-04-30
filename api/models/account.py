@@ -230,6 +230,40 @@ class Account(UserMixin, TypeBase):
     def is_dataset_operator(self):
         return self.role == TenantAccountRole.DATASET_OPERATOR
 
+    @property
+    def is_agent(self) -> bool:
+        """True if this account has an active Agent record.
+
+        Looked up live each call rather than cached because agent status
+        can change (suspend / expire) without the Account row mutating.
+        """
+        from sqlalchemy import select
+
+        from extensions.ext_database import db
+        from models.agent import Agent, AgentStatus
+
+        return (
+            db.session.scalar(
+                select(Agent.id).where(
+                    Agent.account_id == self.id,
+                    Agent.status == AgentStatus.ACTIVE.value,
+                )
+            )
+            is not None
+        )
+
+    @property
+    def agent_status(self) -> str | None:
+        """``'active'`` / ``'suspended'`` / ``None`` (not an agent at all)."""
+        from sqlalchemy import select
+
+        from extensions.ext_database import db
+        from models.agent import Agent
+
+        return db.session.scalar(
+            select(Agent.status).where(Agent.account_id == self.id)
+        )
+
 
 class TenantStatus(enum.StrEnum):
     NORMAL = "normal"

@@ -5,7 +5,7 @@ See docs/plans/2026-04-30-agent-system-design.md §2 for the data model.
 from __future__ import annotations
 
 import enum
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -14,8 +14,23 @@ from sqlalchemy import DateTime, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from models.base import TypeBase
-from models.types import StringUUID
+from .base import TypeBase
+from .types import StringUUID
+
+
+def _isoformat_utc(value: datetime | None) -> str | None:
+    """Serialize database timestamps with an explicit UTC offset.
+
+    PostgreSQL ``timestamp without time zone`` columns are populated with UTC
+    values. SQLAlchemy returns them as naive ``datetime`` objects, so the API
+    must attach ``+00:00``; otherwise browsers parse the string as local time
+    and show an 8-hour shift for China Standard Time viewers.
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.isoformat()
 
 
 class AgentStatus(enum.StrEnum):
@@ -102,9 +117,12 @@ class Agent(TypeBase):
             "signed_at": self.signed_at.isoformat() if self.signed_at else None,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "created_by": self.created_by,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "created_at": _isoformat_utc(self.created_at),
+            "updated_at": _isoformat_utc(self.updated_at),
         }
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}(id={self.id})>"
 
 
 class AgentWallet(TypeBase):
@@ -135,6 +153,9 @@ class AgentWallet(TypeBase):
         DateTime, server_default=func.current_timestamp(), nullable=False, init=False,
         onupdate=func.current_timestamp(),
     )
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}(id={self.id})>"
 
 
 class RebindRequest(TypeBase):
@@ -169,6 +190,9 @@ class RebindRequest(TypeBase):
         DateTime, server_default=func.current_timestamp(), nullable=False, init=False,
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}(id={self.id})>"
 
 
 class WithdrawalRequest(TypeBase):
@@ -206,3 +230,6 @@ class WithdrawalRequest(TypeBase):
         DateTime, server_default=func.current_timestamp(), nullable=False, init=False,
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}(id={self.id})>"

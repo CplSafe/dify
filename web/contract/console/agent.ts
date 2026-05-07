@@ -1,6 +1,10 @@
 import { type } from '@orpc/contract'
 import { base } from '../base'
 
+// ---------------------------------------------------------------------------
+// Shared response types
+// ---------------------------------------------------------------------------
+
 export type WalletSummary = {
   withdrawable: string
   total_earned: string
@@ -9,7 +13,7 @@ export type WalletSummary = {
 }
 
 export type TrendPoint = {
-  date: string // YYYY-MM-DD
+  date: string
   consumption: string
 }
 
@@ -37,59 +41,60 @@ export type WechatPayload = { wechat_id: string, name: string }
 export type BankPayload = { bank: string, account: string, name: string }
 export type PayoutPayload = AlipayPayload | WechatPayload | BankPayload
 
-type PayoutPayloadInput = PayoutPayload | Record<string, string>
-
 export type WithdrawalRequest = {
   id: string
   amount: string
   payout_method: PayoutMethod
-  payout_payload: PayoutPayloadInput
+  payout_payload: PayoutPayload | Record<string, string>
   status: 'pending' | 'paid' | 'rejected'
   review_note: string | null
   created_at: string | null
   reviewed_at: string | null
 }
 
-const define = <I, O>(method: 'GET' | 'POST', path: string) =>
-  base.route({ method, path }).input(type<I>()).output(type<O>())
+type Paged<T> = {
+  data: T[]
+  page: number
+  limit: number
+  has_more: boolean
+}
 
-export const agentDashboardContract = define<
-  { query?: { days?: number } },
-  DashboardResponse
->('GET', '/agent/dashboard')
+// ---------------------------------------------------------------------------
+// Contracts
+// ---------------------------------------------------------------------------
 
-export const agentInviteesContract = define<
-  unknown,
-  { data: Invitee[] }
->('GET', '/agent/invitees')
+export const agentDashboardContract = base
+  .route({ method: 'GET', path: '/agent/dashboard' })
+  .input(type<{ query?: { days?: number } }>())
+  .output(type<DashboardResponse>())
 
-export const agentInvitationsListContract = define<
-  unknown,
-  { data: InvitationCode[] }
->('GET', '/agent/invitations')
+export const agentInviteesContract = base
+  .route({ method: 'GET', path: '/agent/invitees' })
+  .input(type<unknown>())
+  .output(type<{ data: Invitee[] }>())
 
-export const agentInvitationsCreateContract = define<
-  unknown,
-  { invite_code: string }
->('POST', '/agent/invitations')
+export const agentInvitationsListContract = base
+  .route({ method: 'GET', path: '/agent/invitations' })
+  .input(type<unknown>())
+  .output(type<{ data: InvitationCode[] }>())
 
-export const agentWithdrawalsListContract = define<
-  { query?: { page?: number, limit?: number } },
-  {
-    data: WithdrawalRequest[]
-    page: number
-    limit: number
-    has_more: boolean
-  }
->('GET', '/agent/withdrawals')
+export const agentInvitationsCreateContract = base
+  .route({ method: 'POST', path: '/agent/invitations' })
+  .input(type<unknown>())
+  .output(type<{ invite_code: string }>())
 
-export const agentWithdrawalsCreateContract = define<
-  {
+export const agentWithdrawalsListContract = base
+  .route({ method: 'GET', path: '/agent/withdrawals' })
+  .input(type<{ query?: { page?: number, limit?: number } }>())
+  .output(type<Paged<WithdrawalRequest>>())
+
+export const agentWithdrawalsCreateContract = base
+  .route({ method: 'POST', path: '/agent/withdrawals' })
+  .input(type<{
     body: {
       amount: string
       payout_method: PayoutMethod
-      payout_payload: PayoutPayloadInput
+      payout_payload: PayoutPayload | Record<string, string>
     }
-  },
-  WithdrawalRequest
->('POST', '/agent/withdrawals')
+  }>())
+  .output(type<WithdrawalRequest>())

@@ -1,165 +1,204 @@
-import { type } from "@orpc/contract";
-import { base } from "../base";
+import { type } from '@orpc/contract'
+import { base } from '../base'
 
-export type AgentLevel = "national" | "province" | "city";
-export type AgentStatus = "active" | "suspended";
-export type RebindStatus = "pending" | "approved" | "rejected";
-export type WithdrawalStatus = "pending" | "paid" | "rejected";
-export type PayoutMethod = "alipay" | "wechat" | "bank";
+// ---------------------------------------------------------------------------
+// Shared types
+// ---------------------------------------------------------------------------
 
 export type Agent = {
-  id: string;
-  account_id: string;
-  name: string;
-  status: AgentStatus;
-  rebate_rate: string | null;
-  level: AgentLevel | null;
-  region_province: string | null;
-  region_city: string | null;
-  contact_phone: string | null;
-  notes: string | null;
-  signed_at: string | null;
-  expires_at: string | null;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-};
+  id: string
+  account_id: string
+  name: string
+  status: 'active' | 'suspended'
+  rebate_rate: string | null
+  level: 'national' | 'province' | 'city' | null
+  region_province: string | null
+  region_city: string | null
+  contact_phone: string | null
+  notes: string | null
+  signed_at: string | null
+  expires_at: string | null
+  created_by: string
+  created_at: string
+  updated_at: string
+}
 
 export type AgentCreateBody = {
-  account_id: string;
-  name: string;
-  rebate_rate?: string | null;
-  level?: AgentLevel | null;
-  region_province?: string | null;
-  region_city?: string | null;
-  contact_phone?: string | null;
-  notes?: string | null;
-  signed_at?: string | null;
-  expires_at?: string | null;
-};
+  account_id: string
+  name: string
+  rebate_rate?: string | null
+  level?: 'national' | 'province' | 'city' | null
+  region_province?: string | null
+  region_city?: string | null
+  contact_phone?: string | null
+  notes?: string | null
+  signed_at?: string | null
+  expires_at?: string | null
+}
 
-export type AgentPatchBody = Partial<Omit<AgentCreateBody, "account_id">>;
+export type AgentPatchBody = Partial<Omit<AgentCreateBody, 'account_id'>>
 
 export type RebindRequest = {
-  id: string;
-  account_id: string;
-  from_agent_id: string;
-  to_agent_id: string;
-  status: RebindStatus;
-  reviewer_id: string | null;
-  review_note: string | null;
-  created_at: string | null;
-  reviewed_at: string | null;
-};
+  id: string
+  account_id: string
+  from_agent_id: string
+  to_agent_id: string
+  status: 'pending' | 'approved' | 'rejected'
+  reviewer_id: string | null
+  review_note: string | null
+  created_at: string | null
+  reviewed_at: string | null
+}
 
 export type WithdrawalRequest = {
-  id: string;
-  agent_id: string;
-  amount: string;
-  payout_method: PayoutMethod;
-  payout_payload: Record<string, string>;
-  status: WithdrawalStatus;
-  reviewer_id: string | null;
-  review_note: string | null;
-  created_at: string | null;
-  reviewed_at: string | null;
-};
+  id: string
+  agent_id: string
+  amount: string
+  payout_method: 'alipay' | 'wechat' | 'bank'
+  payout_payload: Record<string, string>
+  status: 'pending' | 'paid' | 'rejected'
+  reviewer_id: string | null
+  review_note: string | null
+  created_at: string | null
+  reviewed_at: string | null
+}
 
 export type RebateRecord = {
-  id: string;
-  inviter_account_id: string;
-  agent_id: string;
-  invitee_account_id: string;
-  settlement_date: string;
-  consumption_amount: string;
-  rebate_amount: string;
-  status: string;
-  created_at: string | null;
-};
+  id: string
+  inviter_account_id: string
+  agent_id: string
+  invitee_account_id: string
+  settlement_date: string
+  consumption_amount: string
+  rebate_amount: string
+  status: string
+  created_at: string | null
+}
 
 export type ConsumptionRow = {
-  agent_id: string;
-  name: string;
-  status: string;
-  level: string | null;
-  region_province: string | null;
-  region_city: string | null;
-  invitee_count: number;
-  withdrawable: string;
-  total_earned: string;
-  total_withdrawn: string;
-  last_30d_consumption: string;
-};
+  agent_id: string
+  name: string
+  status: string
+  level: string | null
+  region_province: string | null
+  region_city: string | null
+  invitee_count: number
+  withdrawable: string
+  total_earned: string
+  total_withdrawn: string
+  last_30d_consumption: string
+}
 
-type Page<T> = { data: T[]; page: number; limit: number; has_more: boolean };
-type PageQuery<F = {}> = { query?: { page?: number; limit?: number } & F };
-type AgentP = { params: { agent_id: string } };
-type ReqP = { params: { request_id: string } };
+type Page<T> = {
+  data: T[]
+  page: number
+  limit: number
+  has_more: boolean
+}
 
-const define = <I, O>(method: "GET" | "POST" | "PATCH", path: string) =>
-  base.route({ method, path }).input(type<I>()).output(type<O>());
+// ---------------------------------------------------------------------------
+// Agent CRUD
+// ---------------------------------------------------------------------------
 
-export const adminAgentCreateContract = define<
-  { body: AgentCreateBody },
-  Agent
->("POST", "/admin/agents");
+export const adminAgentCreateContract = base
+  .route({ method: 'POST', path: '/admin/agents' })
+  .input(type<{ body: AgentCreateBody }>())
+  .output(type<Agent>())
 
-export const adminAgentListContract = define<
-  PageQuery<{ status?: AgentStatus }>,
-  Page<Agent>
->("GET", "/admin/agents");
+export const adminAgentListContract = base
+  .route({ method: 'GET', path: '/admin/agents' })
+  .input(type<{
+    query?: {
+      page?: number
+      limit?: number
+      status?: 'active' | 'suspended'
+    }
+  }>())
+  .output(type<Page<Agent>>())
 
-export const adminAgentDetailContract = define<AgentP, Agent>(
-  "GET",
-  "/admin/agents/{agent_id}",
-);
+export const adminAgentDetailContract = base
+  .route({ method: 'GET', path: '/admin/agents/{agent_id}' })
+  .input(type<{ params: { agent_id: string } }>())
+  .output(type<Agent>())
 
-export const adminAgentPatchContract = define<
-  AgentP & { body: AgentPatchBody },
-  Agent
->("PATCH", "/admin/agents/{agent_id}");
+export const adminAgentPatchContract = base
+  .route({ method: 'PATCH', path: '/admin/agents/{agent_id}' })
+  .input(type<{ params: { agent_id: string }, body: AgentPatchBody }>())
+  .output(type<Agent>())
 
-export const adminAgentSuspendContract = define<AgentP, Agent>(
-  "POST",
-  "/admin/agents/{agent_id}/suspend",
-);
+export const adminAgentSuspendContract = base
+  .route({ method: 'POST', path: '/admin/agents/{agent_id}/suspend' })
+  .input(type<{ params: { agent_id: string } }>())
+  .output(type<Agent>())
 
-export const adminRebindListContract = define<
-  PageQuery<{ status?: RebindStatus }>,
-  Page<RebindRequest>
->("GET", "/admin/rebind-requests");
+// ---------------------------------------------------------------------------
+// Rebind review
+// ---------------------------------------------------------------------------
 
-export const adminRebindApproveContract = define<
-  ReqP & { body: { note?: string } },
-  RebindRequest
->("POST", "/admin/rebind-requests/{request_id}/approve");
+export const adminRebindListContract = base
+  .route({ method: 'GET', path: '/admin/rebind-requests' })
+  .input(type<{
+    query?: {
+      page?: number
+      limit?: number
+      status?: 'pending' | 'approved' | 'rejected'
+    }
+  }>())
+  .output(type<Page<RebindRequest>>())
 
-export const adminRebindRejectContract = define<
-  ReqP & { body: { note: string } },
-  RebindRequest
->("POST", "/admin/rebind-requests/{request_id}/reject");
+export const adminRebindApproveContract = base
+  .route({ method: 'POST', path: '/admin/rebind-requests/{request_id}/approve' })
+  .input(type<{ params: { request_id: string }, body: { note?: string } }>())
+  .output(type<RebindRequest>())
 
-export const adminWithdrawalListContract = define<
-  PageQuery<{ status?: WithdrawalStatus }>,
-  Page<WithdrawalRequest>
->("GET", "/admin/withdrawals");
+export const adminRebindRejectContract = base
+  .route({ method: 'POST', path: '/admin/rebind-requests/{request_id}/reject' })
+  .input(type<{ params: { request_id: string }, body: { note?: string } }>())
+  .output(type<RebindRequest>())
 
-export const adminWithdrawalPayContract = define<
-  ReqP & { body: { transaction_id: string } },
-  WithdrawalRequest
->("POST", "/admin/withdrawals/{request_id}/pay");
+// ---------------------------------------------------------------------------
+// Withdrawal review
+// ---------------------------------------------------------------------------
 
-export const adminWithdrawalRejectContract = define<
-  ReqP & { body: { note: string } },
-  WithdrawalRequest
->("POST", "/admin/withdrawals/{request_id}/reject");
+export const adminWithdrawalListContract = base
+  .route({ method: 'GET', path: '/admin/withdrawals' })
+  .input(type<{
+    query?: {
+      page?: number
+      limit?: number
+      status?: 'pending' | 'paid' | 'rejected'
+    }
+  }>())
+  .output(type<Page<WithdrawalRequest>>())
 
-export const adminRebateRecordsContract = define<
-  PageQuery<{ agent_id?: string; from?: string; to?: string }>,
-  Page<RebateRecord>
->("GET", "/admin/rebate-records");
+export const adminWithdrawalPayContract = base
+  .route({ method: 'POST', path: '/admin/withdrawals/{request_id}/pay' })
+  .input(type<{ params: { request_id: string }, body: { transaction_id: string } }>())
+  .output(type<WithdrawalRequest>())
 
-export const adminAgentConsumptionContract = define<
-  void,
-  { data: ConsumptionRow[] }
->("GET", "/admin/agent-consumption");
+export const adminWithdrawalRejectContract = base
+  .route({ method: 'POST', path: '/admin/withdrawals/{request_id}/reject' })
+  .input(type<{ params: { request_id: string }, body: { note: string } }>())
+  .output(type<WithdrawalRequest>())
+
+// ---------------------------------------------------------------------------
+// Overviews
+// ---------------------------------------------------------------------------
+
+export const adminRebateRecordsContract = base
+  .route({ method: 'GET', path: '/admin/rebate-records' })
+  .input(type<{
+    query?: {
+      page?: number
+      limit?: number
+      agent_id?: string
+      from?: string
+      to?: string
+    }
+  }>())
+  .output(type<Page<RebateRecord>>())
+
+export const adminAgentConsumptionContract = base
+  .route({ method: 'GET', path: '/admin/agent-consumption' })
+  .input(type<unknown>())
+  .output(type<{ data: ConsumptionRow[] }>())

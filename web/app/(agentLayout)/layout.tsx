@@ -3,16 +3,16 @@
 import type { ReactNode } from 'react'
 import * as React from 'react'
 import { useEffect } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
-import Toast from '@/app/components/base/toast'
+import { toast } from '@/app/components/base/ui/toast'
+import { usePathname, useRouter } from '@/next/navigation'
 import { useUserProfile } from '@/service/use-common'
 
 type AgentLayoutProps = {
   children: ReactNode
 }
 
-const NAV_ITEMS: ReadonlyArray<{ href: string; key: string }> = [
+const NAV_ITEMS: ReadonlyArray<{ href: string, key: string }> = [
   { href: '/agent/dashboard', key: 'nav.dashboard' },
   { href: '/agent/invitees', key: 'nav.invitees' },
   { href: '/agent/invitation', key: 'nav.invitation' },
@@ -30,11 +30,12 @@ const AgentLayout = ({ children }: AgentLayoutProps) => {
   const status = profile?.agent_status ?? null
 
   useEffect(() => {
-    if (isLoading || !profile) return
+    if (isLoading || !profile)
+      return
     if (!isAgent && status !== 'active') {
       // Not an agent at all OR suspended — kick to /apps with a Toast.
       if (status === 'suspended')
-        Toast.notify({ type: 'warning', message: t('agent:guard.suspended') })
+        toast.warning(t('agent:guard.suspended'))
       router.replace('/apps')
     }
   }, [isLoading, profile, isAgent, status, router, t])

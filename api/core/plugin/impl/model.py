@@ -27,7 +27,9 @@ class PluginModelClient(BasePluginClient):
     def _dispatch_payload(*, user_id: str | None, data: dict[str, Any]) -> dict[str, Any]:
         payload: dict[str, Any] = {"data": data}
         if user_id is not None:
-            payload["user_id"] = user_id
+            # user_id may arrive as an EndUser/Account ORM object; serialize to its
+            # id string so jsonable_encoder does not recurse into the SQLAlchemy Table.
+            payload["user_id"] = getattr(user_id, "id", None) or str(user_id)
         return payload
 
     def fetch_model_providers(self, tenant_id: str) -> Sequence[PluginModelProviderEntity]:

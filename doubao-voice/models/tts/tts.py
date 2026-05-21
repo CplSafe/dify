@@ -1,9 +1,10 @@
 import base64
 import json
+import urllib.error
+import urllib.request
 from collections.abc import Generator
 from typing import Optional
 
-import httpx
 from dify_plugin import TTSModel
 from dify_plugin.errors.model import (
     CredentialsValidateFailedError,
@@ -21,7 +22,13 @@ REQUEST_TIMEOUT = 60
 
 
 class DoubaoVoiceText2SpeechModel(TTSModel):
-    """Text-to-speech model backed by the Doubao (Volcengine) V3 unidirectional API."""
+    """Text-to-speech model backed by the Doubao (Volcengine) V3 unidirectional API.
+
+    Uses ``urllib.request`` (stdlib) rather than requests/httpx: under the plugin
+    daemon's gevent monkey-patch, those libraries pull in urllib3/anyio TLS that
+    recurse infinitely on ``ssl.SSLContext.minimum_version``. Stdlib urllib uses the
+    socket/ssl that gevent patches cleanly.
+    """
 
     def _invoke(
         self,
@@ -72,15 +79,19 @@ class DoubaoVoiceText2SpeechModel(TTSModel):
                 "audio_params": {"format": "mp3", "sample_rate": DEFAULT_SAMPLE_RATE},
             },
         }
-
-        with httpx.stream(
-            "POST", TTS_ENDPOINT, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
-        ) as response:
-            if response.status_code in (401, 403):
-                code, message = self._read_error(response.read().decode("utf-8", "replace"))
+        data = json.dumps(payload).encode("utf-8")
+        request = urllib.request.Request(TTS_ENDPOINT, data=data, headers=headers, method="POST")
+        try:
+            response = urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT)
+        except urllib.error.HTTPError as error:
+            code, message = self._read_error(error.read().decode("utf-8", "replace"))
+            if error.code in (401, 403):
                 raise InvokeAuthorizationError(f"[{code}] {message}")
-            response.raise_for_status()
-            for line in response.iter_lines():
+            raise self._to_invoke_error(code, message)
+
+        with response:
+            for raw in response:
+                line = raw.strip()
                 if not line:
                     continue
                 chunk = json.loads(line)
@@ -89,9 +100,9 @@ class DoubaoVoiceText2SpeechModel(TTSModel):
                 if code not in (0, 20000000):
                     message = chunk.get("message") or chunk.get("header", {}).get("message", "unknown error")
                     raise self._to_invoke_error(code, message)
-                data = chunk.get("data")
-                if data:
-                    yield base64.b64decode(data)
+                data_field = chunk.get("data")
+                if data_field:
+                    yield base64.b64decode(data_field)
 
     @staticmethod
     def _read_error(text: str) -> tuple[object, str]:
@@ -113,6 +124,6 @@ class DoubaoVoiceText2SpeechModel(TTSModel):
     @property
     def _invoke_error_mapping(self) -> dict[type[InvokeError], list[type[Exception]]]:
         return {
-            InvokeConnectionError: [httpx.ConnectError, httpx.TimeoutException],
-            InvokeBadRequestError: [httpx.HTTPStatusError, json.JSONDecodeError],
+            InvokeConnectionError: [urllib.error.URLError, TimeoutError],
+            InvokeBadRequestError: [urllib.error.HTTPError, json.JSONDecodeError],
         }

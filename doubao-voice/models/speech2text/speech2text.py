@@ -1,9 +1,11 @@
 import base64
+import json
 import time
+import urllib.error
+import urllib.request
 import uuid
 from typing import IO, Optional
 
-import httpx
 from dify_plugin import Speech2TextModel
 from dify_plugin.errors.model import (
     CredentialsValidateFailedError,
@@ -23,7 +25,13 @@ REQUEST_TIMEOUT = 30
 
 
 class DoubaoVoiceSpeech2TextModel(Speech2TextModel):
-    """Speech-to-text model backed by the Doubao (Volcengine) recording-file ASR API."""
+    """Speech-to-text model backed by the Doubao (Volcengine) recording-file ASR API.
+
+    Uses ``urllib.request`` (stdlib) rather than requests/httpx: under the plugin
+    daemon's gevent monkey-patch, those libraries pull in urllib3/anyio TLS that
+    recurse infinitely on ``ssl.SSLContext.minimum_version``. Stdlib urllib uses the
+    socket/ssl that gevent patches cleanly.
+    """
 
     def _invoke(self, model: str, credentials: dict, file: IO[bytes], user: Optional[str] = None) -> str:
         api_key = credentials.get("api_key")
@@ -57,8 +65,8 @@ class DoubaoVoiceSpeech2TextModel(Speech2TextModel):
             "audio": {"data": audio_b64, "format": audio_format},
             "request": {"model_name": "bigmodel", "enable_itn": True, "enable_punc": True},
         }
-        response = httpx.post(SUBMIT_ENDPOINT, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
-        self._raise_for_api_status(response)
+        status, _ = self._post_json(SUBMIT_ENDPOINT, headers, payload)
+        self._raise_for_api_status(status, "")
 
     def _poll(self, api_key: str, request_id: str) -> str:
         headers = {
@@ -68,15 +76,27 @@ class DoubaoVoiceSpeech2TextModel(Speech2TextModel):
             "Content-Type": "application/json",
         }
         for _ in range(QUERY_MAX_ATTEMPTS):
-            response = httpx.post(QUERY_ENDPOINT, headers=headers, json={}, timeout=REQUEST_TIMEOUT)
-            status = response.headers.get("X-Api-Status-Code", "")
+            status, body = self._post_json(QUERY_ENDPOINT, headers, {})
             if status == STATUS_OK:
-                return self._extract_text(response.json())
+                return self._extract_text(json.loads(body) if body else {})
             if status in ("20000001", "20000002"):  # queued / processing
                 time.sleep(QUERY_INTERVAL)
                 continue
-            self._raise_for_api_status(response)
+            self._raise_for_api_status(status, body)
         raise InvokeBadRequestError("Doubao ASR timed out waiting for the recognition result.")
+
+    @staticmethod
+    def _post_json(url: str, headers: dict, payload: dict) -> tuple[str, str]:
+        """POST JSON via stdlib urllib. Returns (X-Api-Status-Code, body_text)."""
+        data = json.dumps(payload).encode("utf-8")
+        request = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
+                status = response.headers.get("X-Api-Status-Code", "")
+                return status, response.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as error:
+            status = error.headers.get("X-Api-Status-Code", "") if error.headers else ""
+            return status, error.read().decode("utf-8", "replace")
 
     @staticmethod
     def _extract_text(body: dict) -> str:
@@ -92,11 +112,10 @@ class DoubaoVoiceSpeech2TextModel(Speech2TextModel):
         return "wav"
 
     @staticmethod
-    def _raise_for_api_status(response: httpx.Response) -> None:
-        status = response.headers.get("X-Api-Status-Code", "")
+    def _raise_for_api_status(status: str, body: str) -> None:
         if status == STATUS_OK:
             return
-        message = response.headers.get("X-Api-Message", response.text)
+        message = body[:200] if body else status
         if status.startswith("4500") or status.startswith("4510"):
             raise InvokeAuthorizationError(f"[{status}] {message}")
         raise InvokeBadRequestError(f"[{status}] {message}")
@@ -104,6 +123,6 @@ class DoubaoVoiceSpeech2TextModel(Speech2TextModel):
     @property
     def _invoke_error_mapping(self) -> dict[type[InvokeError], list[type[Exception]]]:
         return {
-            InvokeConnectionError: [httpx.ConnectError, httpx.TimeoutException],
-            InvokeBadRequestError: [httpx.HTTPStatusError],
+            InvokeConnectionError: [urllib.error.URLError, TimeoutError],
+            InvokeBadRequestError: [urllib.error.HTTPError, json.JSONDecodeError],
         }

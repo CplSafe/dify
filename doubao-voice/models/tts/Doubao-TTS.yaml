@@ -1,0 +1,73 @@
+model: Doubao-TTS
+model_type: tts
+model_properties:
+  default_voice: zh_female_cancan_mars_bigtts
+  audio_type: mp3
+  word_limit: 1000
+  max_workers: 5
+  voices:
+    - mode: zh_female_cancan_mars_bigtts
+      name: 灿灿 (女)
+      language:
+        - zh-Hans
+        - en-US
+    - mode: zh_female_shuangkuaisisi_moon_bigtts
+      name: 爽快思思 (女)
+      language:
+        - zh-Hans
+    - mode: zh_female_qingxinnvsheng_mars_bigtts
+      name: 清新女声 (女)
+      language:
+        - zh-Hans
+    - mode: zh_female_kailangjiejie_moon_bigtts
+      name: 开朗姐姐 (女)
+      language:
+        - zh-Hans
+    - mode: zh_female_meilinvyou_moon_bigtts
+      name: 魅力女友 (女)
+      language:
+        - zh-Hans
+    - mode: zh_female_sajiaonvyou_moon_bigtts
+      name: 撒娇女友 (女)
+      language:
+        - zh-Hans
+    - mode: zh_female_tianmeixiaoyuan_moon_bigtts
+      name: 甜美小源 (女)
+      language:
+        - zh-Hans
+    - mode: zh_female_zhixingnvsheng_mars_bigtts
+      name: 知性女声 (女)
+      language:
+        - zh-Hans
+    - mode: zh_female_wanwanxiaohe_moon_bigtts
+      name: 湾湾小何 (女·台湾腔)
+      language:
+        - zh-Hans
+    - mode: zh_male_wennuanahu_moon_bigtts
+      name: 温暖阿虎 (男)
+      language:
+        - zh-Hans
+    - mode: zh_male_yangguangqingnian_moon_bigtts
+      name: 阳光青年 (男)
+      language:
+        - zh-Hans
+    - mode: zh_male_shaonianzixin_moon_bigtts
+      name: 少年梓辛 (男)
+      language:
+        - zh-Hans
+    - mode: zh_male_qingshuangnanda_mars_bigtts
+      name: 清爽男大 (男)
+      language:
+        - zh-Hans
+    - mode: zh_male_jingqiangkanye_moon_bigtts
+      name: 京腔侃爷 (男·北京话)
+      language:
+        - zh-Hans
+    - mode: zh_male_beijingxiaoye_moon_bigtts
+      name: 北京小爷 (男·北京话)
+      language:
+        - zh-Hans
+    - mode: zh_male_M392_conversation_wvae_bigtts
+      name: 对话男声 (男)
+      language:
+        - zh-Hans

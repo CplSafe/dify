@@ -242,3 +242,10 @@ scripts/stress-test/reports/
 
 # Code Agent Folder
 .qoder/*
+
+# Dify plugin build artifacts
+*.difypkg
+doubao-voice.zip
+doubao-voice/.venv/
+doubao-voice/.env
+__MACOSX/

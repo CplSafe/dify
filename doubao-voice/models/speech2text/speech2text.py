@@ -3,7 +3,7 @@ import time
 import uuid
 from typing import IO, Optional
 
-import requests
+import httpx
 from dify_plugin import Speech2TextModel
 from dify_plugin.errors.model import (
     CredentialsValidateFailedError,
@@ -57,9 +57,7 @@ class DoubaoVoiceSpeech2TextModel(Speech2TextModel):
             "audio": {"data": audio_b64, "format": audio_format},
             "request": {"model_name": "bigmodel", "enable_itn": True, "enable_punc": True},
         }
-        response = requests.post(
-            SUBMIT_ENDPOINT, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
-        )
+        response = httpx.post(SUBMIT_ENDPOINT, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
         self._raise_for_api_status(response)
 
     def _poll(self, api_key: str, request_id: str) -> str:
@@ -70,7 +68,7 @@ class DoubaoVoiceSpeech2TextModel(Speech2TextModel):
             "Content-Type": "application/json",
         }
         for _ in range(QUERY_MAX_ATTEMPTS):
-            response = requests.post(QUERY_ENDPOINT, headers=headers, json={}, timeout=REQUEST_TIMEOUT)
+            response = httpx.post(QUERY_ENDPOINT, headers=headers, json={}, timeout=REQUEST_TIMEOUT)
             status = response.headers.get("X-Api-Status-Code", "")
             if status == STATUS_OK:
                 return self._extract_text(response.json())
@@ -94,7 +92,7 @@ class DoubaoVoiceSpeech2TextModel(Speech2TextModel):
         return "wav"
 
     @staticmethod
-    def _raise_for_api_status(response: requests.Response) -> None:
+    def _raise_for_api_status(response: httpx.Response) -> None:
         status = response.headers.get("X-Api-Status-Code", "")
         if status == STATUS_OK:
             return
@@ -106,6 +104,6 @@ class DoubaoVoiceSpeech2TextModel(Speech2TextModel):
     @property
     def _invoke_error_mapping(self) -> dict[type[InvokeError], list[type[Exception]]]:
         return {
-            InvokeConnectionError: [requests.exceptions.ConnectionError, requests.exceptions.Timeout],
-            InvokeBadRequestError: [requests.exceptions.HTTPError],
+            InvokeConnectionError: [httpx.ConnectError, httpx.TimeoutException],
+            InvokeBadRequestError: [httpx.HTTPStatusError],
         }

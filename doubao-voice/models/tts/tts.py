@@ -3,7 +3,7 @@ import json
 from collections.abc import Generator
 from typing import Optional
 
-import requests
+import httpx
 from dify_plugin import TTSModel
 from dify_plugin.errors.model import (
     CredentialsValidateFailedError,
@@ -73,11 +73,11 @@ class DoubaoVoiceText2SpeechModel(TTSModel):
             },
         }
 
-        with requests.post(
-            TTS_ENDPOINT, headers=headers, json=payload, stream=True, timeout=REQUEST_TIMEOUT
+        with httpx.stream(
+            "POST", TTS_ENDPOINT, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
         ) as response:
             if response.status_code in (401, 403):
-                code, message = self._read_error(response.text)
+                code, message = self._read_error(response.read().decode("utf-8", "replace"))
                 raise InvokeAuthorizationError(f"[{code}] {message}")
             response.raise_for_status()
             for line in response.iter_lines():
@@ -113,6 +113,6 @@ class DoubaoVoiceText2SpeechModel(TTSModel):
     @property
     def _invoke_error_mapping(self) -> dict[type[InvokeError], list[type[Exception]]]:
         return {
-            InvokeConnectionError: [requests.exceptions.ConnectionError, requests.exceptions.Timeout],
-            InvokeBadRequestError: [requests.exceptions.HTTPError, json.JSONDecodeError],
+            InvokeConnectionError: [httpx.ConnectError, httpx.TimeoutException],
+            InvokeBadRequestError: [httpx.HTTPStatusError, json.JSONDecodeError],
         }

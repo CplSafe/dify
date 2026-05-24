@@ -676,5 +676,11 @@
   "voiceInput.converting": "正在转换为文本...",
   "voiceInput.notAllow": "麦克风未授权",
   "voiceInput.speaking": "现在讲...",
+  "voiceInput.holdToSpeak": "按住 说话",
+  "voiceInput.releaseToConvert": "松开 转文字",
+  "voiceInput.releaseToCancel": "松开 取消",
+  "voiceInput.slideUpToCancel": "上滑取消",
+  "voiceInput.switchToVoice": "切换到语音输入",
+  "voiceInput.switchToText": "切换到键盘输入",
   "you": "你"
 }

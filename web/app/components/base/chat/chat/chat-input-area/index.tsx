@@ -16,8 +16,11 @@ import { toast } from '@/app/components/base/ui/toast'
 import VoiceInput from '@/app/components/base/voice-input'
 import { TransferMethod } from '@/types/app'
 import { cn } from '@/utils/classnames'
+import { RiKeyboardLine, RiMicLine } from '@remixicon/react'
+import ActionButton from '@/app/components/base/action-button'
 import { useCheckInputsForms } from '../check-input-forms-hooks'
 import { useTextAreaHeight } from './hooks'
+import HoldToSpeakButton from './hold-to-speak-button'
 import Operation from './operation'
 
 type ChatInputAreaProps = {
@@ -48,6 +51,8 @@ const ChatInputArea = ({ readonly, botName, showFeatureBar, showFileUpload, feat
   const { wrapperRef, textareaRef, textValueRef, holdSpaceRef, handleTextareaResize, isMultipleLine } = useTextAreaHeight()
   const [query, setQuery] = useState('')
   const [showVoiceInput, setShowVoiceInput] = useState(false)
+  const [inputMode, setInputMode] = useState<'text' | 'voice'>('text')
+  const voiceEnabled = !!speechToTextConfig?.enabled && !readonly
   const filesStore = useFileStore()
   const { handleDragFileEnter, handleDragFileLeave, handleDragFileOver, handleDropFile, handleClipboardPasteFile, isDragActive } = useFile(visionConfig!, false)
   const { checkInputsForm } = useCheckInputsForms()
@@ -135,24 +140,55 @@ const ChatInputArea = ({ readonly, botName, showFeatureBar, showFileUpload, feat
       toast.error(t('voiceInput.notAllow', { ns: 'common' }))
     })
   }, [t])
-  const operation = (<Operation ref={holdSpaceRef} readonly={readonly} fileConfig={visionConfig} speechToTextConfig={speechToTextConfig} onShowVoiceInput={handleShowVoiceInput} onSend={handleSend} theme={theme} />)
+  // Voice input is handled by the WeChat-style hold-to-speak toggle on the left,
+  // so the legacy click-to-record mic button in Operation is disabled here.
+  const operation = (<Operation ref={holdSpaceRef} readonly={readonly} fileConfig={visionConfig} speechToTextConfig={{ enabled: false }} onShowVoiceInput={handleShowVoiceInput} onSend={handleSend} theme={theme} />)
   return (
     <>
       <div className={cn('relative z-10 overflow-hidden rounded-xl border border-components-chat-input-border bg-components-panel-bg-blur pb-[9px] shadow-md', isDragActive && 'border border-dashed border-components-option-card-option-selected-border', disabled && 'pointer-events-none border-components-panel-border opacity-50 shadow-none')}>
         <div className="relative max-h-[158px] overflow-y-auto overflow-x-hidden px-[9px] pt-[9px]">
           <FileListInChatInput fileConfig={visionConfig!} />
           <div ref={wrapperRef} className="flex items-center justify-between">
-            <div className="relative flex w-full grow items-center">
-              <div ref={textValueRef} className="pointer-events-none invisible absolute h-auto w-auto whitespace-pre p-1 leading-6 body-lg-regular">
-                {query}
-              </div>
-              <Textarea ref={ref => textareaRef.current = ref as any} className={cn('w-full resize-none bg-transparent p-1 leading-6 text-text-primary outline-none body-lg-regular')} placeholder={decode(t(readonly ? 'chat.inputDisabledPlaceholder' : 'chat.inputPlaceholder', { ns: 'common', botName }) || '')} autoFocus minRows={1} value={query} onChange={e => handleQueryChange(e.target.value)} onKeyDown={handleKeyDown} onCompositionStart={handleCompositionStart} onCompositionEnd={handleCompositionEnd} onPaste={handleClipboardPasteFile} onDragEnter={handleDragFileEnter} onDragLeave={handleDragFileLeave} onDragOver={handleDragFileOver} onDrop={handleDropFile} readOnly={readonly} />
-            </div>
-            {!isMultipleLine && operation}
+            {voiceEnabled && (
+              <ActionButton
+                size="l"
+                className="mr-1 shrink-0"
+                onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')}
+                title={t(inputMode === 'text' ? 'voiceInput.switchToVoice' : 'voiceInput.switchToText', { ns: 'common' })}
+                data-testid="input-mode-toggle"
+              >
+                {inputMode === 'text'
+                  ? <RiMicLine className="h-5 w-5" />
+                  : <RiKeyboardLine className="h-5 w-5" />}
+              </ActionButton>
+            )}
+            {inputMode === 'voice'
+              ? (
+                  <div className="flex w-full grow items-center">
+                    <HoldToSpeakButton
+                      disabled={readonly || isResponding}
+                      onConverted={(text) => {
+                        if (text) {
+                          handleQueryChange(query ? `${query}${text}` : text)
+                          setInputMode('text')
+                        }
+                      }}
+                    />
+                  </div>
+                )
+              : (
+                  <div className="relative flex w-full grow items-center">
+                    <div ref={textValueRef} className="pointer-events-none invisible absolute h-auto w-auto whitespace-pre p-1 leading-6 body-lg-regular">
+                      {query}
+                    </div>
+                    <Textarea ref={ref => textareaRef.current = ref as any} className={cn('w-full resize-none bg-transparent p-1 leading-6 text-text-primary outline-none body-lg-regular')} placeholder={decode(t(readonly ? 'chat.inputDisabledPlaceholder' : 'chat.inputPlaceholder', { ns: 'common', botName }) || '')} autoFocus minRows={1} value={query} onChange={e => handleQueryChange(e.target.value)} onKeyDown={handleKeyDown} onCompositionStart={handleCompositionStart} onCompositionEnd={handleCompositionEnd} onPaste={handleClipboardPasteFile} onDragEnter={handleDragFileEnter} onDragLeave={handleDragFileLeave} onDragOver={handleDragFileOver} onDrop={handleDropFile} readOnly={readonly} />
+                  </div>
+                )}
+            {!isMultipleLine && inputMode === 'text' && operation}
           </div>
           {showVoiceInput && (<VoiceInput onCancel={() => setShowVoiceInput(false)} onConverted={text => handleQueryChange(text)} />)}
         </div>
-        {isMultipleLine && (<div className="px-[9px]">{operation}</div>)}
+        {isMultipleLine && inputMode === 'text' && (<div className="px-[9px]">{operation}</div>)}
       </div>
       {showFeatureBar && (<FeatureBar showFileUpload={showFileUpload} disabled={featureBarDisabled} onFeatureBarClick={readonly ? noop : onFeatureBarClick} hideEditEntrance={readonly} />)}
     </>

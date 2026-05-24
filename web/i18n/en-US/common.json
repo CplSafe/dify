@@ -676,5 +676,11 @@
   "voiceInput.converting": "Converting to text...",
   "voiceInput.notAllow": "microphone not authorized",
   "voiceInput.speaking": "Speak now...",
+  "voiceInput.holdToSpeak": "Hold to Talk",
+  "voiceInput.releaseToConvert": "Release to Convert",
+  "voiceInput.releaseToCancel": "Release to Cancel",
+  "voiceInput.slideUpToCancel": "Slide up to cancel",
+  "voiceInput.switchToVoice": "Switch to voice input",
+  "voiceInput.switchToText": "Switch to keyboard input",
   "you": "You"
 }

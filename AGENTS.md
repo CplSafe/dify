@@ -48,18 +48,15 @@ The codebase is split into:
 <claude-mem-context>
 # Memory Context
 
-# [dify] recent context, 2026-06-09 10:50am GMT+8
+# [dify] recent context, 2026-06-09 10:55am GMT+8
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (18,405t read) | 1,120,338t work | 98% savings
+Stats: 50 obs (18,030t read) | 1,068,180t work | 98% savings
 
 ### Apr 29, 2026
-821 11:31a 🔵 Asset Library Frontend Task 3-20 Kickoff: Session Context and Constraints
-823 11:33a ✅ Asset Library i18n JSON Files: Flat Key Format Adopted
-826 11:36a 🔵 Asset Library Frontend Session Kickoff: Task 3-20 Context and Constraints
 828 11:37a 🔵 Asset Library Frontend Task 3-20 Session Kickoff: Context and Constraints
 830 11:39a 🔵 Asset Library Frontend Task Kickoff: Session Context and Task 3-20 Plan
 832 11:40a 🔵 Asset Library Frontend Session Kickoff: Task 3-20 Context and Constraints
@@ -109,6 +106,9 @@ Stats: 50 obs (18,405t read) | 1,120,338t work | 98% savings
 2090 9:48a 🔵 miniprogram-hsbst 真机白屏根因诊断 — setData + wx:for 全量 diff
 ### Jun 9, 2026
 4562 10:49a 🔵 快手自运营项目本地与远程仓库一致性检查请求
+4564 10:50a 🔵 dify-zd 分支本地领先远程 2 个提交，工作区有 17 个未提交修改文件
+4568 10:51a ✅ dify-zd 分支提交"chore: refresh agent config and brand copy"包含 17 个修改文件 + 4 个新文件
+4571 10:55a 🔵 feat/agent-system 分支包含完整代理商系统实现，共 100 个文件 10027 行新增
 
-Access 1120k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 1068k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

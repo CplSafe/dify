@@ -7,6 +7,7 @@ import {
   RiDashboardLine,
   RiFileList3Line,
   RiLogoutBoxRLine,
+  RiShieldUserLine,
   RiTeamLine,
   RiUserLine,
   RiWalletLine,
@@ -196,6 +197,10 @@ export default function CreatorUserMenu({
                 >
                   <RiFileList3Line className="mr-2 h-4 w-4 text-text-tertiary" />
                   支付订单（超管）
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/admin/agents')}>
+                  <RiShieldUserLine className="mr-2 h-4 w-4 text-text-tertiary" />
+                  代理商管理
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/apps')}>
                   <RiDashboardLine className="mr-2 h-4 w-4 text-text-tertiary" />

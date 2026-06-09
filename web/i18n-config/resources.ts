@@ -1,3 +1,4 @@
+import type agent from '../i18n/en-US/agent.json'
 import type appAnnotation from '../i18n/en-US/app-annotation.json'
 import type appApi from '../i18n/en-US/app-api.json'
 import type appDebug from '../i18n/en-US/app-debug.json'
@@ -33,6 +34,7 @@ import type workflow from '../i18n/en-US/workflow.json'
 import { kebabCase } from 'string-ts'
 
 export type Resources = {
+  agent: typeof agent
   app: typeof app
   appAnnotation: typeof appAnnotation
   appApi: typeof appApi
@@ -68,6 +70,7 @@ export type Resources = {
 }
 
 export const namespaces = [
+  'agent',
   'app',
   'appAnnotation',
   'appApi',

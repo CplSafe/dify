@@ -1,75 +1,41 @@
-import type { InferContractRouterInputs } from '@orpc/contract'
-import { appDeleteContract } from './console/apps'
-import {
-  assetLibraryCreatePromptContract,
-  assetLibraryDeleteContract,
-  assetLibraryDetailContract,
-  assetLibraryListContract,
-  assetLibraryPatchContract,
-} from './console/asset-library'
-import { bindPartnerStackContract, invoicesContract } from './console/billing'
-import {
-  exploreAppDetailContract,
-  exploreAppsContract,
-  exploreBannersContract,
-  exploreInstalledAppAccessModeContract,
-  exploreInstalledAppMetaContract,
-  exploreInstalledAppParametersContract,
-  exploreInstalledAppPinContract,
-  exploreInstalledAppsContract,
-  exploreInstalledAppUninstallContract,
-} from './console/explore'
+import type { InferContractRouterInputs } from "@orpc/contract";
+import * as adminAgent from "./console/admin-agent";
+import * as agent from "./console/agent";
+import * as agentBind from "./console/agent-bind";
+import { appDeleteContract } from "./console/apps";
+import * as assetLibrary from "./console/asset-library";
+import { bindPartnerStackContract, invoicesContract } from "./console/billing";
+import * as explore from "./console/explore";
 import {
   changePreferredProviderTypeContract,
   modelProvidersModelsContract,
-} from './console/model-providers'
+} from "./console/model-providers";
 import {
   notificationContract,
   notificationDismissContract,
-} from './console/notification'
+} from "./console/notification";
 import {
   pluginCheckInstalledContract,
   pluginLatestVersionsContract,
-} from './console/plugins'
-import { systemFeaturesContract } from './console/system'
-import {
-  triggerOAuthConfigContract,
-  triggerOAuthConfigureContract,
-  triggerOAuthDeleteContract,
-  triggerOAuthInitiateContract,
-  triggerProviderInfoContract,
-  triggersContract,
-  triggerSubscriptionBuildContract,
-  triggerSubscriptionBuilderCreateContract,
-  triggerSubscriptionBuilderLogsContract,
-  triggerSubscriptionBuilderUpdateContract,
-  triggerSubscriptionBuilderVerifyUpdateContract,
-  triggerSubscriptionDeleteContract,
-  triggerSubscriptionsContract,
-  triggerSubscriptionUpdateContract,
-  triggerSubscriptionVerifyContract,
-} from './console/trigger'
-import {
-  trialAppDatasetsContract,
-  trialAppInfoContract,
-  trialAppParametersContract,
-  trialAppWorkflowsContract,
-} from './console/try-app'
+} from "./console/plugins";
+import { systemFeaturesContract } from "./console/system";
+import * as trigger from "./console/trigger";
+import * as trialApp from "./console/try-app";
 import {
   collectionPluginsContract,
   collectionsContract,
   searchAdvancedContract,
-} from './marketplace'
+} from "./marketplace";
 
 export const marketplaceRouterContract = {
   collections: collectionsContract,
   collectionPlugins: collectionPluginsContract,
   searchAdvanced: searchAdvancedContract,
-}
+};
 
 export type MarketPlaceInputs = InferContractRouterInputs<
   typeof marketplaceRouterContract
->
+>;
 
 export const consoleRouterContract = {
   systemFeatures: systemFeaturesContract,
@@ -77,28 +43,28 @@ export const consoleRouterContract = {
     deleteApp: appDeleteContract,
   },
   assetLibrary: {
-    list: assetLibraryListContract,
-    detail: assetLibraryDetailContract,
-    patch: assetLibraryPatchContract,
-    delete: assetLibraryDeleteContract,
-    createPrompt: assetLibraryCreatePromptContract,
+    list: assetLibrary.assetLibraryListContract,
+    detail: assetLibrary.assetLibraryDetailContract,
+    patch: assetLibrary.assetLibraryPatchContract,
+    delete: assetLibrary.assetLibraryDeleteContract,
+    createPrompt: assetLibrary.assetLibraryCreatePromptContract,
   },
   explore: {
-    apps: exploreAppsContract,
-    appDetail: exploreAppDetailContract,
-    installedApps: exploreInstalledAppsContract,
-    uninstallInstalledApp: exploreInstalledAppUninstallContract,
-    updateInstalledApp: exploreInstalledAppPinContract,
-    appAccessMode: exploreInstalledAppAccessModeContract,
-    installedAppParameters: exploreInstalledAppParametersContract,
-    installedAppMeta: exploreInstalledAppMetaContract,
-    banners: exploreBannersContract,
+    apps: explore.exploreAppsContract,
+    appDetail: explore.exploreAppDetailContract,
+    installedApps: explore.exploreInstalledAppsContract,
+    uninstallInstalledApp: explore.exploreInstalledAppUninstallContract,
+    updateInstalledApp: explore.exploreInstalledAppPinContract,
+    appAccessMode: explore.exploreInstalledAppAccessModeContract,
+    installedAppParameters: explore.exploreInstalledAppParametersContract,
+    installedAppMeta: explore.exploreInstalledAppMetaContract,
+    banners: explore.exploreBannersContract,
   },
   trialApps: {
-    info: trialAppInfoContract,
-    datasets: trialAppDatasetsContract,
-    parameters: trialAppParametersContract,
-    workflows: trialAppWorkflowsContract,
+    info: trialApp.trialAppInfoContract,
+    datasets: trialApp.trialAppDatasetsContract,
+    parameters: trialApp.trialAppParametersContract,
+    workflows: trialApp.trialAppWorkflowsContract,
   },
   modelProviders: {
     models: modelProvidersModelsContract,
@@ -115,21 +81,47 @@ export const consoleRouterContract = {
   notification: notificationContract,
   notificationDismiss: notificationDismissContract,
   triggers: {
-    list: triggersContract,
-    providerInfo: triggerProviderInfoContract,
-    subscriptions: triggerSubscriptionsContract,
-    subscriptionBuilderCreate: triggerSubscriptionBuilderCreateContract,
-    subscriptionBuilderUpdate: triggerSubscriptionBuilderUpdateContract,
+    list: trigger.triggersContract,
+    providerInfo: trigger.triggerProviderInfoContract,
+    subscriptions: trigger.triggerSubscriptionsContract,
+    subscriptionBuilderCreate: trigger.triggerSubscriptionBuilderCreateContract,
+    subscriptionBuilderUpdate: trigger.triggerSubscriptionBuilderUpdateContract,
     subscriptionBuilderVerifyUpdate:
-      triggerSubscriptionBuilderVerifyUpdateContract,
-    subscriptionVerify: triggerSubscriptionVerifyContract,
-    subscriptionBuild: triggerSubscriptionBuildContract,
-    subscriptionDelete: triggerSubscriptionDeleteContract,
-    subscriptionUpdate: triggerSubscriptionUpdateContract,
-    subscriptionBuilderLogs: triggerSubscriptionBuilderLogsContract,
-    oauthConfig: triggerOAuthConfigContract,
-    oauthConfigure: triggerOAuthConfigureContract,
-    oauthDelete: triggerOAuthDeleteContract,
-    oauthInitiate: triggerOAuthInitiateContract,
+      trigger.triggerSubscriptionBuilderVerifyUpdateContract,
+    subscriptionVerify: trigger.triggerSubscriptionVerifyContract,
+    subscriptionBuild: trigger.triggerSubscriptionBuildContract,
+    subscriptionDelete: trigger.triggerSubscriptionDeleteContract,
+    subscriptionUpdate: trigger.triggerSubscriptionUpdateContract,
+    subscriptionBuilderLogs: trigger.triggerSubscriptionBuilderLogsContract,
+    oauthConfig: trigger.triggerOAuthConfigContract,
+    oauthConfigure: trigger.triggerOAuthConfigureContract,
+    oauthDelete: trigger.triggerOAuthDeleteContract,
+    oauthInitiate: trigger.triggerOAuthInitiateContract,
   },
-}
+  agent: {
+    dashboard: agent.agentDashboardContract,
+    invitationsList: agent.agentInvitationsListContract,
+    invitationsCreate: agent.agentInvitationsCreateContract,
+    invitees: agent.agentInviteesContract,
+    withdrawalsList: agent.agentWithdrawalsListContract,
+    withdrawalsCreate: agent.agentWithdrawalsCreateContract,
+    bindPreview: agentBind.agentBindPreviewContract,
+    bindConfirm: agentBind.agentBindConfirmContract,
+    rebindRequest: agentBind.agentRebindRequestContract,
+  },
+  adminAgent: {
+    list: adminAgent.adminAgentListContract,
+    detail: adminAgent.adminAgentDetailContract,
+    create: adminAgent.adminAgentCreateContract,
+    patch: adminAgent.adminAgentPatchContract,
+    suspend: adminAgent.adminAgentSuspendContract,
+    consumption: adminAgent.adminAgentConsumptionContract,
+    rebateRecords: adminAgent.adminRebateRecordsContract,
+    rebindList: adminAgent.adminRebindListContract,
+    rebindApprove: adminAgent.adminRebindApproveContract,
+    rebindReject: adminAgent.adminRebindRejectContract,
+    withdrawalList: adminAgent.adminWithdrawalListContract,
+    withdrawalPay: adminAgent.adminWithdrawalPayContract,
+    withdrawalReject: adminAgent.adminWithdrawalRejectContract,
+  },
+};

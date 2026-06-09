@@ -86,17 +86,6 @@ class UserBalance(TypeBase):
     )
     account_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     balance: Mapped[Decimal] = mapped_column(sa.Numeric(precision=20, scale=6), server_default="0", default=Decimal(0))
-    # Frozen rebate income — credited by the daily settlement task, becomes
-    # spendable (moves into ``balance``) after ``RebateConfig.freeze_days``.
-    # Kept in a separate column instead of tagging ``balance`` because:
-    #   1. Rebate is not spendable during the freeze window — a flat ``balance``
-    #      field would let the inviter withdraw money the platform may still
-    #      need to claw back on chargeback/abuse.
-    #   2. UI shows "可用 / 冻结中" separately; merging them would require a
-    #      per-row join against ``rebate_records`` on every wallet read.
-    rebate_pending: Mapped[Decimal] = mapped_column(
-        sa.Numeric(precision=20, scale=6), server_default="0", default=Decimal(0)
-    )
     currency: Mapped[str] = mapped_column(String(10), server_default="CNY", default="CNY")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp(), nullable=False, init=False
@@ -106,12 +95,7 @@ class UserBalance(TypeBase):
     )
 
     def is_sufficient(self) -> bool:
-        """Return True if spendable balance > 0.
-
-        Only ``balance`` counts — ``rebate_pending`` is frozen and must not
-        gate workflow runs. A user with 100 pending / 0 spendable should be
-        blocked, not allowed to spend money that might be clawed back.
-        """
+        """Return True if spendable balance > 0."""
         return self.balance > Decimal(0)
 
 
@@ -295,9 +279,10 @@ class AccountInvitation(TypeBase):
     __tablename__ = "account_invitations"
     __table_args__ = (
         sa.PrimaryKeyConstraint("id", name="account_invitation_pkey"),
-        sa.Index("account_invitation_code_idx", "invite_code", unique=True),
+        sa.Index("account_invitation_code_idx", "invite_code"),
         sa.Index("account_invitation_inviter_idx", "inviter_account_id"),
         sa.Index("account_invitation_invitee_idx", "invitee_account_id"),
+        sa.Index("account_invitation_agent_idx", "agent_id"),
     )
 
     id: Mapped[str] = mapped_column(
@@ -305,6 +290,7 @@ class AccountInvitation(TypeBase):
     )
     invite_code: Mapped[str] = mapped_column(String(64), nullable=False)
     inviter_account_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    agent_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     invitee_account_id: Mapped[str | None] = mapped_column(StringUUID, nullable=True, default=None)
     status: Mapped[str] = mapped_column(
         String(20), server_default="pending", default="pending"
@@ -319,6 +305,7 @@ class AccountInvitation(TypeBase):
             "id": self.id,
             "invite_code": self.invite_code,
             "inviter_account_id": self.inviter_account_id,
+            "agent_id": self.agent_id,
             "invitee_account_id": self.invitee_account_id,
             "status": self.status,
             "created_at": self.created_at.isoformat(),
@@ -406,6 +393,7 @@ class RebateRecord(TypeBase):
         sa.PrimaryKeyConstraint("id", name="rebate_record_pkey"),
         sa.Index("rebate_record_inviter_idx", "inviter_account_id"),
         sa.Index("rebate_record_invitee_idx", "invitee_account_id"),
+        sa.Index("rebate_record_agent_idx", "agent_id"),
         sa.Index("rebate_record_date_idx", "settlement_date"),
         sa.Index("rebate_record_inviter_date_idx", "inviter_account_id", "settlement_date"),
         # Supports the unfreeze task's "pending rows due for release" scan.
@@ -418,6 +406,7 @@ class RebateRecord(TypeBase):
         StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
     )
     inviter_account_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
+    agent_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     invitee_account_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     settlement_date: Mapped[str] = mapped_column(
         String(10), nullable=False
@@ -456,6 +445,7 @@ class RebateRecord(TypeBase):
         return {
             "id": self.id,
             "inviter_account_id": self.inviter_account_id,
+            "agent_id": self.agent_id,
             "invitee_account_id": self.invitee_account_id,
             "settlement_date": self.settlement_date,
             "consumption_amount": str(self.consumption_amount),

@@ -9,6 +9,8 @@ type Balance = {
   account_id: string
   account_name: string
   account_email: string
+  role?: string | null
+  tenant_id?: string | null
   balance: string
   currency: string
   is_sufficient: boolean
@@ -70,11 +72,13 @@ export default function AdminBillingPage() {
     setTopupLoading(true)
     setTopupMessage('')
     try {
+      const selectedBalance = balances.find(b => b.account_id === topupForm.account_id)
       const resp = await fetch('/console/api/creator/admin/topup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           account_id: topupForm.account_id,
+          tenant_id: selectedBalance?.tenant_id || undefined,
           amount: Number.parseFloat(topupForm.amount),
           description: topupForm.description,
         }),

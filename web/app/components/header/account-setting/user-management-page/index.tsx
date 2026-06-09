@@ -17,6 +17,8 @@ type UserBalance = {
   account_id: string
   account_name: string
   account_email: string
+  role?: string | null
+  tenant_id?: string | null
   balance: string
   currency: string
   is_sufficient: boolean
@@ -177,9 +179,11 @@ export default function UserManagementPage() {
     }
     setTopupLoading(true)
     try {
+      const selectedUser = users.find(user => user.account_id === topupAccountId)
       await post('/creator/admin/topup', {
         body: {
           account_id: topupAccountId,
+          tenant_id: selectedUser?.tenant_id || undefined,
           amount,
           description: topupDesc || '管理员充值',
         },

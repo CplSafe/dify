@@ -32,6 +32,8 @@ type AdminBalance = {
   account_id: string
   account_name: string
   account_email: string
+  role?: string | null
+  tenant_id?: string | null
   balance: string
   currency: string
   is_sufficient: boolean
@@ -102,8 +104,14 @@ export default function BalanceTab() {
     }
     setSaving(true)
     try {
+      const selectedBalance = adminBalances.find(b => b.account_id === topupAccountId)
       await post('/creator/admin/topup', {
-        body: { account_id: topupAccountId, amount, description: topupNote },
+        body: {
+          account_id: topupAccountId,
+          tenant_id: selectedBalance?.tenant_id || undefined,
+          amount,
+          description: topupNote,
+        },
       })
       toast.success('充值成功')
       setTopupAmount('')

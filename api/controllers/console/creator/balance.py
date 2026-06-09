@@ -161,6 +161,7 @@ class AdminTopupApi(Resource):
 
         payload = request.get_json() or {}
         account_id = payload.get("account_id")
+        tenant_id = payload.get("tenant_id")
         raw_amount = payload.get("amount")
         description = payload.get("description", "")
 
@@ -174,11 +175,16 @@ class AdminTopupApi(Resource):
             from werkzeug.exceptions import BadRequest
             raise BadRequest("Invalid amount")
 
-        record = UserBillingService.topup(
-            account_id=account_id,
-            amount=amount,
-            description=description,
-        )
+        try:
+            record = UserBillingService.admin_topup(
+                account_id=account_id,
+                tenant_id=tenant_id,
+                amount=amount,
+                description=description,
+            )
+        except ValueError as exc:
+            from werkzeug.exceptions import BadRequest
+            raise BadRequest(str(exc))
         return record.to_dict(), 201
 
 

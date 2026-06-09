@@ -52,6 +52,7 @@ admin_topup_req = console_ns.model(
     "CreatorAdminTopupReq",
     {
         "account_id": fields.String(required=True, description="目标用户账号 ID"),
+        "tenant_id": fields.String(required=False, description="目标工作空间 ID；给 owner 充值时写入该工作空间余额"),
         "amount": fields.Float(required=True, description="充值金额（支持小数）"),
         "description": fields.String(required=False, description="充值备注，默认为空"),
     },

@@ -459,6 +459,59 @@ class UserBillingService:
         return record
 
     @classmethod
+    def admin_topup(
+        cls,
+        *,
+        account_id: str,
+        amount: Decimal,
+        description: str = "",
+        tenant_id: str | None = None,
+    ) -> BillingRecord:
+        """Credit the authoritative wallet shown in the super-admin balance list.
+
+        Owners spend from ``TenantBalance.balance`` while non-owner members
+        spend from ``UserBalance.balance``. The admin top-up endpoint must
+        mirror that routing; otherwise adding money to an owner silently lands
+        in a personal wallet the runtime never reads.
+        """
+        if amount <= Decimal(0):
+            raise ValueError("Top-up amount must be positive")
+
+        billing_tenant_id = tenant_id or cls._get_current_tenant_id(account_id)
+        if tenant_id and not cls._has_tenant_membership(account_id, tenant_id):
+            raise ValueError("Account is not a member of the target tenant")
+
+        if billing_tenant_id and cls.is_tenant_owner(account_id, billing_tenant_id):
+            TenantBalanceService.topup(tenant_id=billing_tenant_id, amount=amount)
+            record = BillingRecord(
+                account_id=account_id,
+                tenant_id=billing_tenant_id,
+                amount=amount,
+                record_type=BillingRecordType.TOPUP.value,
+                scope="tenant",
+                description=description or f"Top-up of {amount}",
+            )
+            db.session.add(record)
+            db.session.commit()
+            return record
+
+        balance = cls.get_or_create_balance(account_id, for_update=True)
+        balance.balance += amount
+        db.session.add(balance)
+
+        record = BillingRecord(
+            account_id=account_id,
+            tenant_id=billing_tenant_id,
+            amount=amount,
+            record_type=BillingRecordType.TOPUP.value,
+            scope="user",
+            description=description or f"Top-up of {amount}",
+        )
+        db.session.add(record)
+        db.session.commit()
+        return record
+
+    @classmethod
     def get_billing_records(
         cls,
         account_id: str,

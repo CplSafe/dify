@@ -48,57 +48,67 @@ The codebase is split into:
 <claude-mem-context>
 # Memory Context
 
-# [dify] recent context, 2026-04-25 7:47pm GMT+8
+# [dify] recent context, 2026-06-09 10:50am GMT+8
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 41 obs (15,631t read) | 649,726t work | 98% savings
+Stats: 50 obs (18,405t read) | 1,120,338t work | 98% savings
 
-### Apr 18, 2026
-28 4:57p 🔵 Code Review: Social Publish Frontend Integration (Dify)
-31 4:58p 🔵 Dify Frontend Code Review Skill Structure
-33 " 🔵 Social Publish P1 Frontend Plan: Architecture and API Contracts
-35 4:59p 🔵 Backend P1 Commit ee32eb349: Social Publish Account Management API
-88 7:45p 🔵 Social Publish Backend P2: Security & Correctness Review Findings
-90 " 🔵 backend-code-review skill structure in dify project
-92 7:46p 🔵 Dify P2 Social Publish Backend: Full 12-Question Security & Correctness Review Initiated
-94 " 🔵 P2 Design Doc: Accepted Tech Debt and Security Model Documented
-96 7:47p 🔵 Controller _to_http_error: RuntimeError from missing SAU_INTERNAL_TOKEN escapes mapping
-100 8:45p 🔵 Social Publish Backend P3 Security and Correctness Review Findings
-102 " 🔵 Social Publish P3 Staged Files Inventory Confirmed
-### Apr 25, 2026
-351 6:18p 🔵 Dify Web: Code Review Against Base Commit a2424e141
-352 " 🔵 Dify Full Change Inventory: 26 Files, 2629 Insertions Since a2424e141
-354 6:19p 🔵 Dify Project: Backend Code Review Skill and AGENTS.md Standards Loaded
-356 " 🔵 Code Review Request: Git Diff Against Base Commit a2424e141
-358 6:20p 🔵 Canvas Runtime Feature: canvas_id Usage Across API and Web
-360 6:21p 🔵 WorkflowRerunService: Validation Guards for Run and Workflow Loading
-362 " 🔵 UserCanvasService: Canvas Creation Validation Logic
-363 " 🔵 Dify Web Canvas Runtime Feature Branch: Code Review Against Base Commit a2424e141
-368 6:41p 🔵 Dify Canvas Runtime Feature Branch: Code Review Against Base Commit c3d437272
-370 " 🔵 Canvas Runtime Feature Branch: Full Diff Stat Against Base c3d437272
-373 6:42p 🔵 Dify Canvas Runtime Feature Branch: Code Review Request Against Base Commit c3d437272
-375 6:43p 🔵 Dify Canvas Runtime: RuntimePauseActions Component Full Implementation
-377 " 🔵 Dify Canvas Runtime Backend: WorkflowPauseEntity and enqueue_resume Architecture
-379 6:44p 🔵 Dify Canvas Runtime Feature Branch: Code Review Request Against Base Commit c3d437272
-381 7:03p 🔵 Dify Canvas Runtime Feature Branch: Code Review Request Against Base Commit 25915f425
-383 " 🔵 Dify Project: Backend Code Review Skill Structure and Checklist Rules
-385 " 🔵 Dify Project: Frontend Code Review Skill Structure
-387 7:04p 🔵 Dify Canvas Runtime Feature Branch: Code Review Request Against Base Commit 25915f425
-390 7:05p 🔵 Dify Canvas Runtime Feature Branch: Code Review Request Against Base Commit 25915f425
-392 7:06p 🔵 WorkflowPause Resume Flow: create_workflow_pause and resumed_at Field Locations Confirmed
-397 7:07p 🔵 Dify Canvas Runtime Feature Branch: Code Review Request Against Base Commit 25915f425
-399 7:08p 🔵 Dify Canvas Runtime Feature Branch: Code Review Request Against Base Commit 25915f425
-401 7:38p 🔵 Dify Canvas Runtime Feature Branch: Code Review Request Against Base Commit 379e81c23
-403 " 🔵 Dify Project: Backend and Frontend Code Review SKILL.md Structures Confirmed
-405 7:39p 🔵 Dify Canvas Runtime Feature Branch: Full Diff Against Base Commit 379e81c23
-407 " 🔵 Dify Canvas Runtime Feature Branch: Code Review Request Against Base Commit 379e81c23
-409 7:40p 🔵 HumanInputService: submit_form_by_token and enqueue_resume Full Implementation
-411 7:41p 🔵 Dify Canvas Runtime Feature Branch: Code Review Request Against Base Commit 379e81c23
-412 " 🔵 Dify Canvas Runtime: resume_app_execution Celery Task and Full Pause/Resume Code Path Map
-415 7:45p 🔵 Dify Canvas Runtime Feature Branch: Code Review Request Against Base Commit 95c98c4d3
+### Apr 29, 2026
+821 11:31a 🔵 Asset Library Frontend Task 3-20 Kickoff: Session Context and Constraints
+823 11:33a ✅ Asset Library i18n JSON Files: Flat Key Format Adopted
+826 11:36a 🔵 Asset Library Frontend Session Kickoff: Task 3-20 Context and Constraints
+828 11:37a 🔵 Asset Library Frontend Task 3-20 Session Kickoff: Context and Constraints
+830 11:39a 🔵 Asset Library Frontend Task Kickoff: Session Context and Task 3-20 Plan
+832 11:40a 🔵 Asset Library Frontend Session Kickoff: Task 3-20 Context and Constraints
+835 11:45a 🔵 Asset Library Frontend Session Kickoff: Task 3-20 Context and Constraints
+838 " 🔵 Asset Library Frontend Task 3-20 Kickoff: Session Context and Constraints
+845 11:49a 🔵 Asset Library Frontend Task 3-20 Kickoff: Session Context and Constraints
+847 " 🔵 Asset Library Frontend Task 3-20 Session Kickoff: Full Context and Constraints
+849 11:51a 🔵 Asset Tabs Test Fails: Implementation File Missing (TDD Red Phase)
+851 " 🔵 Asset Library Frontend Task 3-20 Session Kickoff Context
+853 11:52a 🟣 AssetFilterBar TDD Test Suite Written
+856 11:53a 🔵 Asset Library Frontend Task 3-20 Session Kickoff Context
+858 " 🔴 Asset Filter Bar: react/set-state-in-effect Lint Error
+860 " 🔴 Asset Filter Bar: Fixed react/set-state-in-effect via Ref Guard Pattern
+863 11:58a 🔵 Asset Library Frontend Task 3-20 Session Kickoff Context
+866 " 🟣 Asset Library AssetFilterBar Component Committed
+868 11:59a 🔵 Asset Library Frontend Task Kickoff: Task 3-20 Session Context
+872 12:00p 🟣 Asset Library Pagination Component: Tests Passing
+875 " 🔵 Asset Library Frontend Task 3-20 Session Kickoff Context
+877 12:01p 🟣 Asset Library: AssetCard and AssetGrid Components Created
+883 12:03p 🔵 Asset Library Frontend Session Kickoff: Task 3-20 Handoff Context
+887 " 🔵 Asset Library Frontend Session Kickoff: Task 3-20 Implementation Starting
+892 12:06p 🔵 Asset Library Frontend Session Kickoff: Task 3-20 Implementation Starting
+894 12:07p 🟣 UploadDropzone Test Suite Written: 7 Comprehensive Test Cases
+897 2:31p 🔵 Asset Library Frontend Session Kickoff: Task 3-20 Context and Constraints
+899 " 🔵 Celery SSL Unit Test: One Failure Detected
+901 2:32p 🔵 Celery SSL Test Failure: PAYMENT_ORDER_EXPIRY_TASK_INTERVAL Not Mocked
+905 " ⚖️ Asset Library Frontend: Session Restart with Same Task 3-20 Scope
+906 2:33p 🟣 Added Celery Beat Test for Creator Task Timeout Schedule Registration
+911 2:34p ⚖️ Asset Library Frontend: Third Session Restart, Tasks 3-20 Still Pending
+912 2:35p 🔴 Celery SSL Tests Now All Pass After Adding Missing Mock Config Fields
+915 2:36p 🔵 Asset Library Frontend: Fourth Session Start, Tasks 3-20 Still Not Begun
+914 " 🟣 Creator Task Auto-Timeout + Configurable Concurrency Limit
+920 2:39p 🔵 Dify API Backend Coding Standards Documented in api/AGENTS.md
+923 2:41p 🔄 Workflow Persistence Layer Tests Refactored: Single Combined Billing Deduction
+930 2:47p 🔵 Asset Library Frontend Plan Tasks 3-8: Full Code Specifications Confirmed
+933 2:53p 🔵 Git Remote Push Status Check: dify-zd Repository
+935 2:54p 🔵 Git Status: Large Number of Uncommitted Changes in dify-zd Repository
+937 2:55p 🟣 LLM Node Billing Extraction: Per-Node Price Support Added to WorkflowPersistenceLayer
+938 " 🟣 Creator Task: Configurable Concurrent Limit + Auto-Timeout via Celery Beat
+939 " 🔴 BillingRecord.to_dict() Naive UTC Timestamp Bug: CST 8-Hour Shift Fixed
+944 " 🔵 Git Diff Stat: 8 Files Changed, 421 Insertions, 138 Deletions — Pre-Commit Summary
+946 2:56p 🟣 Git Selective Staging: Narrow Commit for Creator Task + Billing Fixes
+### May 25, 2026
+2084 9:43a 🔵 微信小程序真机白屏卡顿根因诊断请求
+2086 9:44a 🔵 miniprogram-hsbst 真机白屏根因诊断 — setData + wx:for 全量 diff
+2088 9:45a 🔵 miniprogram-hsbst 真机白屏根因诊断 — setData + wx:for 全量 diff
+2090 9:48a 🔵 miniprogram-hsbst 真机白屏根因诊断 — setData + wx:for 全量 diff
+### Jun 9, 2026
+4562 10:49a 🔵 快手自运营项目本地与远程仓库一致性检查请求
 
-Access 650k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 1120k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

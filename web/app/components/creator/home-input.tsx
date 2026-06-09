@@ -309,7 +309,7 @@ function CreatorHomeInputContent({ onSubmit, appParams }: HomeInputProps) {
         <h1 className="flex items-center justify-center gap-2 text-[44px] font-bold tracking-tight text-text-primary">
           <span>Hi, 欢迎使用</span>
           <span className="bg-gradient-to-r from-[#4D80FF] to-[#B98DFF] bg-clip-text text-transparent">
-            构界Agent
+            帧智汇Agent
           </span>
         </h1>
         <p className="mt-4 text-[16px] font-medium tracking-[0.3em] text-text-tertiary">

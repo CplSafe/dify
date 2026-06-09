@@ -521,7 +521,7 @@ const ChatWrapper = ({
         return null
 
       const homepageDescription = appData?.site.description || ''
-      const homepageTitle = appData?.site.title || '构界Agent'
+      const homepageTitle = appData?.site.title || '帧智汇Agent'
       const quickActions = [
         '热门生成',
         '商品链接智能成片',

@@ -18,7 +18,7 @@ const Install = () => {
             {' '}
             {new Date().getFullYear()}
             {' '}
-            构界, Inc. All rights reserved.
+            帧智汇, Inc. All rights reserved.
           </div>
         )}
       </div>

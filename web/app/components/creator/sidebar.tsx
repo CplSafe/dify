@@ -127,7 +127,7 @@ export default function CreatorSidebar() {
                       >
                         <img
                           src="/logo/logo.svg"
-                          alt="构界Agent"
+                          alt="帧智汇Agent"
                           className="h-5 w-auto transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0"
                         />
                         <SidebarToggleIcon className="pointer-events-none absolute h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
@@ -141,12 +141,12 @@ export default function CreatorSidebar() {
                 <>
                   <Link
                     href="/creator"
-                    aria-label="构界Agent 首页"
+                    aria-label="帧智汇Agent 首页"
                     className="flex cursor-default items-center"
                   >
                     <img
                       src="/logo/logo.svg"
-                      alt="构界Agent"
+                      alt="帧智汇Agent"
                       className="h-7 w-auto"
                     />
                   </Link>

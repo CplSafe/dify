@@ -1,0 +1,233 @@
+.gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+}
+
+.grid {
+  align-items: flex-start;
+}
+
+.markdownCarousel {
+  width: calc(100% + 16px);
+  margin-left: -8px;
+  padding-top: 2px;
+  padding-bottom: 8px;
+}
+
+.markdownCarouselContent {
+  margin-left: 0;
+  gap: 14px;
+  padding-inline: 8px;
+}
+
+.markdownCarouselItem {
+  flex: 0 0 min(74vw, 280px);
+  min-width: min(74vw, 280px);
+  max-width: min(74vw, 280px);
+  padding-left: 0;
+}
+
+.single {
+  display: block;
+}
+
+.itemButton {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92));
+  box-shadow:
+    0 18px 34px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  text-align: left;
+}
+
+.itemButton::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  pointer-events: none;
+}
+
+.itemButton:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 22px 38px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.singleButton {
+  display: block;
+  width: min(100%, 420px);
+  padding: 12px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top, rgba(59, 130, 246, 0.08), transparent 48%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
+}
+
+.markdownButton {
+  width: 100%;
+  padding: 12px;
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
+  box-shadow:
+    0 16px 32px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.item {
+  display: block;
+  width: 100%;
+  min-height: 120px;
+  max-height: 240px;
+  object-fit: cover;
+  object-position: top center;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(241, 245, 249, 0.96), rgba(226, 232, 240, 0.88));
+}
+
+.singleItem {
+  max-height: 360px;
+  min-height: 220px;
+  object-fit: contain;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.96));
+}
+
+.markdownItem {
+  height: 186px;
+  max-height: 186px;
+  min-height: 186px;
+  border-radius: 18px;
+  object-fit: cover;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.96));
+}
+
+.singleHint {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1;
+  color: #475569;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.markdownCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+
+.markdownCardTitle {
+  display: inline-block;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: #111827 !important;
+  text-decoration: none !important;
+}
+
+.markdownCardMeta {
+  display: inline-flex;
+  border-radius: 9999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
+  color: #64748b !important;
+  text-decoration: none !important;
+  background: rgba(241, 245, 249, 0.95);
+}
+
+.markdownCardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  gap: 10px;
+}
+
+.markdownCardCaption {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
+  color: #64748b !important;
+  text-decoration: none !important;
+}
+
+.markdownCardIndex {
+  display: inline-flex;
+  border-radius: 9999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
+  color: #1e293b !important;
+  text-decoration: none !important;
+  background: rgba(241, 245, 249, 0.95);
+}
+
+@media (max-width: 767px) {
+  .gallery {
+    gap: 10px;
+  }
+
+  .markdownCarousel {
+    width: 100%;
+    margin-left: 0;
+    padding-top: 0;
+    padding-bottom: 6px;
+  }
+
+  .markdownCarouselContent {
+    gap: 10px;
+    padding-inline: 0;
+  }
+
+  .markdownCarouselItem {
+    flex: 0 0 min(72vw, 246px);
+    min-width: min(72vw, 246px);
+    max-width: min(72vw, 246px);
+  }
+
+  .markdownButton {
+    padding: 10px;
+    border-radius: 20px;
+  }
+
+  .markdownCardHeader {
+    margin-bottom: 8px;
+  }
+
+  .markdownCardTitle {
+    font-size: 14px;
+  }
+
+  .markdownItem {
+    height: 152px;
+    max-height: 152px;
+    min-height: 152px;
+    border-radius: 16px;
+  }
+
+  .markdownCardFooter {
+    margin-top: 8px;
+  }
+}

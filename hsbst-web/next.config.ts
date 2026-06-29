@@ -1,0 +1,74 @@
+import type { NextConfig } from '@/next'
+import createMDX from '@next/mdx'
+import { env } from './env'
+
+const isDev = process.env.NODE_ENV === 'development'
+const withMDX = createMDX()
+
+const nextConfig: NextConfig = {
+  basePath: env.NEXT_PUBLIC_BASE_PATH,
+  transpilePackages: [
+    '@t3-oss/env-core',
+    '@t3-oss/env-nextjs',
+    '@tanstack/query-core',
+    '@tanstack/react-query',
+    'echarts',
+    'marked',
+    'mermaid',
+    'zrender',
+  ],
+  webpack: (config) => {
+    config.module.rules.push({
+      test: /\.m?js$/,
+      include: (modulePath: string) => {
+        return (
+          modulePath.includes('node_modules/mermaid')
+          || modulePath.includes('node_modules\\mermaid')
+          || modulePath.includes('node_modules/marked')
+          || modulePath.includes('node_modules\\marked')
+        )
+      },
+      use: {
+        loader: 'babel-loader',
+        options: {
+          presets: [[
+            '@babel/preset-env',
+            {
+              targets: { browsers: ['ios >= 10', 'safari >= 10'] },
+              modules: false,
+            },
+          ]],
+          plugins: ['@babel/plugin-transform-class-static-block'],
+        },
+      },
+    })
+
+    return config
+  },
+  turbopack: {},
+  productionBrowserSourceMaps: false, // enable browser source map generation during the production build
+  // Configure pageExtensions to include md and mdx
+  pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
+  typescript: {
+    // https://nextjs.org/docs/api-reference/next.config.js/ignoring-typescript-errors
+    ignoreBuildErrors: true,
+  },
+  async redirects() {
+    return [
+      {
+        source: '/',
+        destination: '/apps',
+        permanent: false,
+      },
+    ]
+  },
+  output: 'standalone',
+  compiler: {
+    removeConsole: isDev ? false : { exclude: ['warn', 'error'] },
+  },
+  experimental: {
+    turbopackFileSystemCacheForDev: false,
+  },
+}
+
+export default withMDX(nextConfig)

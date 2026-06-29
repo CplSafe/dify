@@ -13,6 +13,7 @@ allowBuilds:
   sharp: false
 packages:
   - web
+  - hsbst-web
   - e2e
   - sdks/nodejs-client
   - packages/*

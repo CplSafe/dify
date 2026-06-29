@@ -26,6 +26,7 @@ const pathExists = async (path) => {
 }
 
 const STANDALONE_ROOT_CANDIDATES = [
+  path.join('.next', 'standalone', 'hsbst-web'),
   path.join('.next', 'standalone', 'web'),
   path.join('.next', 'standalone'),
 ]

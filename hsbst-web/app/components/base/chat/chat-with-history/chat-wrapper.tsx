@@ -299,7 +299,7 @@ const ChatWrapper = () => {
   }, [appData?.site.default_user_avatar_url, initUserVariables?.avatar_url, initUserVariables?.name])
 
   const chatNode = useMemo(() => {
-    if (allInputsHidden || !inputsForms.length)
+    if (showHomepage || allInputsHidden || !inputsForms.length)
       return null
     if (isMobile) {
       if (!currentConversationId)
@@ -315,6 +315,7 @@ const ChatWrapper = () => {
     currentConversationId,
     collapsed,
     allInputsHidden,
+    showHomepage,
   ])
 
   const welcome = useMemo(() => {

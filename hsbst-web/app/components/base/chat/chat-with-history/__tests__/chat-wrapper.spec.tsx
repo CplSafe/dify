@@ -212,6 +212,7 @@ describe('ChatWrapper', () => {
     render(<ChatWrapper />)
 
     expect(await screen.findByAltText('赫事通首页形象')).toHaveAttribute('src', '/logo/webapphome-transparent.png')
+    expect(screen.queryByText('地址')).not.toBeInTheDocument()
   })
 
   it('should show responding state', async () => {

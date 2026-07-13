@@ -5,6 +5,7 @@ import type {
   IOnMessageReplace,
   IOtherOptions,
 } from './base'
+import type { FormData as HumanInputFormData } from '@/app/(humanInputLayout)/form/[token]/form'
 import type { FeedbackType } from '@/app/components/base/chat/chat/type'
 import type { ChatConfig } from '@/app/components/base/chat/types'
 import type { AccessMode } from '@/models/access-control'
@@ -14,7 +15,6 @@ import type {
   AppMeta,
   ConversationItem,
 } from '@/models/share'
-import type { HumanInputFormData } from '@/types/workflow'
 import { WEB_APP_SHARE_CODE_HEADER_NAME } from '@/config'
 import {
   del as consoleDel,

@@ -189,6 +189,31 @@ describe('ChatWrapper', () => {
     expect(await screen.findByText('Welcome message')).toBeInTheDocument()
   })
 
+  it('should render the homepage when visible inputs are optional', async () => {
+    vi.mocked(useChatWithHistoryContext).mockReturnValue({
+      ...defaultContextValue,
+      appData: {
+        ...mockAppData,
+        site: {
+          ...mockAppData.site,
+          enable_homepage: true,
+        },
+      },
+      currentConversationId: '',
+      inputsForms: [{
+        variable: 'address',
+        label: '地址',
+        type: 'text-input',
+        required: false,
+        hide: false,
+      }],
+    })
+
+    render(<ChatWrapper />)
+
+    expect(await screen.findByAltText('赫事通首页形象')).toHaveAttribute('src', '/logo/webapphome-transparent.png')
+  })
+
   it('should show responding state', async () => {
     vi.mocked(useChat).mockReturnValue({
       ...defaultChatHookReturn,

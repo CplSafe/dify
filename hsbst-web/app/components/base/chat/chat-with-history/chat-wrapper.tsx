@@ -261,10 +261,10 @@ const ChatWrapper = () => {
       return false
     if (currentConversationId || respondingState)
       return false
-    if (!allInputsHidden && inputsForms.length > 0)
+    if (inputsForms.some(item => item.required && !item.hide))
       return false
     return messageList.length === 0
-  }, [allInputsHidden, appData?.site.enable_homepage, currentConversationId, inputsForms.length, messageList.length, respondingState])
+  }, [appData?.site.enable_homepage, currentConversationId, inputsForms, messageList.length, respondingState])
 
   const handleSubmitHumanInputForm = useCallback(async (formToken: string, formData: any) => {
     if (isInstalledApp)

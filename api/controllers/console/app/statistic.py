@@ -603,3 +603,72 @@ WHERE
                 "unspecified_user_count": unspecified_user_count,
             }
         )
+
+
+@console_ns.route("/apps/<uuid:app_id>/statistics/town-trend")
+class TownTrendStatistic(Resource):
+    @console_ns.doc("get_town_trend_statistics")
+    @console_ns.doc(description="Get daily conversation counts per town for an application")
+    @console_ns.doc(params={"app_id": "Application ID"})
+    @console_ns.expect(console_ns.models[StatisticTimeRangeQuery.__name__])
+    @console_ns.response(
+        200,
+        "Town trend statistics retrieved successfully",
+        fields.List(fields.Raw(description="Per-day per-town conversation counts")),
+    )
+    @get_app_model
+    @setup_required
+    @login_required
+    @account_initialization_required
+    def get(self, app_model):
+        account, _ = current_account_with_tenant()
+
+        args = StatisticTimeRangeQuery.model_validate(request.args.to_dict(flat=True))  # type: ignore
+
+        # 按【日期 × 乡镇】二维分组，供前端画趋势折线。
+        # 过滤条件与 town-distribution 保持一致；未填写户籍地的会话 town 为 NULL，此处直接排除，
+        # 趋势图只看各乡镇自身的变化。
+        converted_created_at = convert_datetime_to_date("created_at")
+        sql_query = f"""SELECT
+    {converted_created_at} AS date,
+    NULLIF(split_part(COALESCE(inputs ->> 'address', ''), '·', 1), '') AS town,
+    COUNT(*) AS conversation_count
+FROM
+    conversations
+WHERE
+    app_id = :app_id
+    AND is_deleted IS false
+    AND (invoke_from IS NULL OR invoke_from != :invoke_from)
+    AND NULLIF(split_part(COALESCE(inputs ->> 'address', ''), '·', 1), '') IS NOT NULL"""
+        arg_dict = {"tz": account.timezone, "app_id": app_model.id, "invoke_from": InvokeFrom.DEBUGGER}
+        assert account.timezone is not None
+
+        try:
+            start_datetime_utc, end_datetime_utc = parse_time_range(args.start, args.end, account.timezone)
+        except ValueError as e:
+            abort(400, description=str(e))
+
+        if start_datetime_utc:
+            sql_query += " AND created_at >= :start"
+            arg_dict["start"] = start_datetime_utc
+
+        if end_datetime_utc:
+            sql_query += " AND created_at < :end"
+            arg_dict["end"] = end_datetime_utc
+
+        sql_query += " GROUP BY date, town ORDER BY date, town"
+
+        response_data = []
+
+        with db.engine.begin() as conn:
+            rs = conn.execute(sa.text(sql_query), arg_dict)
+            for i in rs:
+                response_data.append(
+                    {
+                        "date": str(i.date),
+                        "town": i.town,
+                        "conversation_count": i.conversation_count,
+                    }
+                )
+
+        return jsonify({"data": response_data})

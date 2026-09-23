@@ -8,6 +8,7 @@ import type {
   AppStatisticsResponse,
   AppTokenCostsResponse,
   AppTownDistributionResponse,
+  AppTownTrendResponse,
   AppVoicesListResponse,
   WorkflowDailyConversationsResponse,
 } from '@/models/app'
@@ -199,6 +200,10 @@ export const useAppTokenCosts = (appId: string, params?: DateRangeParams) => {
 
 export const useAppTownDistribution = (appId: string, params?: DateRangeParams) => {
   return useAppStatisticsQuery<AppTownDistributionResponse>('town-distribution', appId, params)
+}
+
+export const useAppTownTrend = (appId: string, params?: DateRangeParams) => {
+  return useAppStatisticsQuery<AppTownTrendResponse>('town-trend', appId, params)
 }
 
 export const useWorkflowDailyConversations = (appId: string, params?: DateRangeParams) => {

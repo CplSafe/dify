@@ -7,6 +7,8 @@ import {
   RiDashboard2Line,
   RiFileList3Fill,
   RiFileList3Line,
+  RiMapPin2Fill,
+  RiMapPin2Line,
   RiTerminalBoxFill,
   RiTerminalBoxLine,
 } from '@remixicon/react'
@@ -85,6 +87,12 @@ const AppDetailLayout: FC<IAppDetailLayoutProps> = (props) => {
         href: `/app/${appId}/overview`,
         icon: RiDashboard2Line,
         selectedIcon: RiDashboard2Fill,
+      },
+      {
+        name: '乡镇统计',
+        href: `/app/${appId}/town-stats`,
+        icon: RiMapPin2Line,
+        selectedIcon: RiMapPin2Fill,
       },
     ]
     return navConfig

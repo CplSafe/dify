@@ -67,6 +67,10 @@ export type AppTownDistributionResponse = {
   unspecified_user_count: number
 }
 
+export type AppTownTrendResponse = {
+  data: Array<{ date: string, town: string, conversation_count: number }>
+}
+
 export type AppStatisticsResponse = {
   data: Array<{ date: string }>
 }

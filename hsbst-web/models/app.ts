@@ -61,6 +61,12 @@ export type WorkflowDailyConversationsResponse = {
   data: Array<{ date: string, runs: number }>
 }
 
+export type AppTownDistributionResponse = {
+  data: Array<{ town: string, conversation_count: number, user_count: number }>
+  unspecified_count: number
+  unspecified_user_count: number
+}
+
 export type AppStatisticsResponse = {
   data: Array<{ date: string }>
 }

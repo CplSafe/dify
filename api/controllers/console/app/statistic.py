@@ -522,3 +522,84 @@ WHERE
                 response_data.append({"date": str(i.date), "tps": round(i.tokens_per_second, 4)})
 
         return jsonify({"data": response_data})
+
+
+@console_ns.route("/apps/<uuid:app_id>/statistics/town-distribution")
+class TownDistributionStatistic(Resource):
+    @console_ns.doc("get_town_distribution_statistics")
+    @console_ns.doc(description="Get conversation distribution by town for an application")
+    @console_ns.doc(params={"app_id": "Application ID"})
+    @console_ns.expect(console_ns.models[StatisticTimeRangeQuery.__name__])
+    @console_ns.response(
+        200,
+        "Town distribution statistics retrieved successfully",
+        fields.List(fields.Raw(description="Per-town conversation and user counts")),
+    )
+    @get_app_model
+    @setup_required
+    @login_required
+    @account_initialization_required
+    def get(self, app_model):
+        account, _ = current_account_with_tenant()
+
+        args = StatisticTimeRangeQuery.model_validate(request.args.to_dict(flat=True))  # type: ignore
+
+        # 小程序把户籍地作为 inputs.address 传入，格式为「乡镇·村」，取 · 前半段即乡镇/街道。
+        # inputs 为 json（非 jsonb）列，故用 ->> 取文本值。
+        # 未选户籍地的会话 town 归为 NULL，单独作为 unspecified 返回，与各乡镇共用同一套
+        # 过滤条件，保证「各乡镇之和 + unspecified = 该时间段总会话数」。
+        # 老数据 invoke_from 可能为 NULL，需显式保留（SQL 三值逻辑下 != 会连同 NULL 行一起丢弃）。
+        sql_query = """SELECT
+    NULLIF(split_part(COALESCE(inputs ->> 'address', ''), '·', 1), '') AS town,
+    COUNT(*) AS conversation_count,
+    COUNT(DISTINCT from_end_user_id) AS user_count
+FROM
+    conversations
+WHERE
+    app_id = :app_id
+    AND is_deleted IS false
+    AND (invoke_from IS NULL OR invoke_from != :invoke_from)"""
+        arg_dict = {"app_id": app_model.id, "invoke_from": InvokeFrom.DEBUGGER}
+        assert account.timezone is not None
+
+        try:
+            start_datetime_utc, end_datetime_utc = parse_time_range(args.start, args.end, account.timezone)
+        except ValueError as e:
+            abort(400, description=str(e))
+
+        if start_datetime_utc:
+            sql_query += " AND created_at >= :start"
+            arg_dict["start"] = start_datetime_utc
+
+        if end_datetime_utc:
+            sql_query += " AND created_at < :end"
+            arg_dict["end"] = end_datetime_utc
+
+        sql_query += " GROUP BY town ORDER BY conversation_count DESC, town"
+
+        response_data = []
+        unspecified_count = 0
+        unspecified_user_count = 0
+
+        with db.engine.begin() as conn:
+            rs = conn.execute(sa.text(sql_query), arg_dict)
+            for i in rs:
+                if i.town is None:
+                    unspecified_count = i.conversation_count
+                    unspecified_user_count = i.user_count
+                    continue
+                response_data.append(
+                    {
+                        "town": i.town,
+                        "conversation_count": i.conversation_count,
+                        "user_count": i.user_count,
+                    }
+                )
+
+        return jsonify(
+            {
+                "data": response_data,
+                "unspecified_count": unspecified_count,
+                "unspecified_user_count": unspecified_user_count,
+            }
+        )

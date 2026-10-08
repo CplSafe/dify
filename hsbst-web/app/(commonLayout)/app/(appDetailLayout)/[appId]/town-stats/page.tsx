@@ -1,12 +1,14 @@
 'use client'
 
 import type { EChartsOption } from 'echarts'
+import type { AppTownDistributionResponse, AppTownTrendResponse } from '@/models/app'
+import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import * as React from 'react'
 import { useMemo, useState } from 'react'
 import { useParams } from '@/next/navigation'
-import { useAppTownDistribution, useAppTownTrend } from '@/service/use-apps'
+import { get, getPublic } from '@/service/base'
 
 const QUERY_DATE_FORMAT = 'YYYY-MM-DD HH:mm'
 const DISPLAY_DATE_FORMAT = 'YYYY/M/D'
@@ -25,6 +27,17 @@ const PERIODS = [
 ]
 
 type Range = { start: string, end: string }
+type TownStatsSource = 'console' | 'public'
+
+const useTownStatistic = <T,>(source: TownStatsSource, appId: string | undefined, metric: string, params: Range) => {
+  return useQuery<T>({
+    queryKey: ['town-statistics', source, metric, appId, params],
+    queryFn: () => source === 'public'
+      ? getPublic<T>(`/town-statistics/${metric}`, { params })
+      : get<T>(`/apps/${appId}/statistics/town-${metric}`, { params }),
+    enabled: source === 'public' || !!appId,
+  })
+}
 
 const rangeOf = (days: number, offsetDays: number): Range => {
   const end = dayjs().subtract(offsetDays, 'day').endOf('day')
@@ -106,18 +119,24 @@ const Panel = ({ title, subtitle, children }: { title: string, subtitle?: string
   </div>
 )
 
-const TownStatsPage = () => {
-  const { appId } = useParams<{ appId: string }>()
+type TownStatsProps = {
+  appId?: string
+  source?: TownStatsSource
+}
+
+export const TownStats = ({ appId: appIdProp, source = 'console' }: TownStatsProps) => {
+  const { appId: routeAppId } = useParams<{ appId?: string }>()
+  const appId = appIdProp || routeAppId
   const [days, setDays] = useState(30)
 
   const current = useMemo(() => rangeOf(days, 0), [days])
   const previous = useMemo(() => rangeOf(days, days), [days])
   const lastYear = useMemo(() => rangeLastYear(days), [days])
 
-  const { data: cur, isLoading, error } = useAppTownDistribution(appId, current)
-  const { data: prev } = useAppTownDistribution(appId, previous)
-  const { data: yoy } = useAppTownDistribution(appId, lastYear)
-  const { data: trend } = useAppTownTrend(appId, current)
+  const { data: cur, isLoading, error } = useTownStatistic<AppTownDistributionResponse>(source, appId, 'distribution', current)
+  const { data: prev } = useTownStatistic<AppTownDistributionResponse>(source, appId, 'distribution', previous)
+  const { data: yoy } = useTownStatistic<AppTownDistributionResponse>(source, appId, 'distribution', lastYear)
+  const { data: trend } = useTownStatistic<AppTownTrendResponse>(source, appId, 'trend', current)
 
   const rows = useMemo(() => cur?.data ?? [], [cur])
   const prevMap = useMemo(() => new Map((prev?.data ?? []).map(r => [r.town, r.conversation_count])), [prev])
@@ -363,4 +382,4 @@ const TownStatsPage = () => {
   )
 }
 
-export default TownStatsPage
+export default TownStats

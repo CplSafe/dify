@@ -30,6 +30,7 @@ from . import (
     remote_files,
     saved_message,
     site,
+    town_statistic,
     workflow,
     workflow_events,
 )
@@ -53,6 +54,7 @@ __all__ = [
     "remote_files",
     "saved_message",
     "site",
+    "town_statistic",
     "web_ns",
     "workflow",
     "workflow_events",

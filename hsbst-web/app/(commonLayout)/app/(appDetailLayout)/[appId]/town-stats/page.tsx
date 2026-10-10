@@ -9,6 +9,7 @@ import * as React from 'react'
 import { useMemo, useState } from 'react'
 import { useParams } from '@/next/navigation'
 import { get, getPublic } from '@/service/base'
+import { TownStatsDetailPanel } from './detail-panel'
 
 const QUERY_DATE_FORMAT = 'YYYY-MM-DD HH:mm'
 const DISPLAY_DATE_FORMAT = 'YYYY/M/D'
@@ -322,87 +323,16 @@ export const TownStats = ({ appId: appIdProp, source = 'console' }: TownStatsPro
                       <ReactECharts option={lineOption} style={{ height: 300 }} opts={{ renderer: 'svg' }} />
                     </Panel>
 
-                    <Panel title="分乡镇明细">
-                      <table className="w-full table-fixed">
-                        <thead>
-                          <tr className="border-b border-divider-regular system-xs-medium-uppercase text-text-tertiary">
-                            <th className="w-12 py-2.5 text-left font-normal">排名</th>
-                            <th className="py-2.5 text-left font-normal">乡镇/街道</th>
-                            <th className="w-24 py-2.5 text-right font-normal">会话数</th>
-                            <th className="w-24 py-2.5 text-right font-normal">用户数</th>
-                            <th className="w-20 py-2.5 text-right font-normal">占比</th>
-                            <th className="w-24 py-2.5 text-right font-normal">环比</th>
-                            <th className="w-24 py-2.5 text-right font-normal">同比</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((row, index) => {
-                            const mom = deltaOf(row.conversation_count, prevMap.get(row.town) ?? 0)
-                            const yy = deltaOf(row.conversation_count, yoyMap.get(row.town) ?? 0)
-                            return (
-                              <tr key={row.town} className="border-b border-divider-subtle hover:bg-state-base-hover">
-                                <td className="py-2.5 body-sm-regular text-text-quaternary tabular-nums">{index + 1}</td>
-                                <td className="py-2.5 body-sm-medium text-text-primary">{row.town}</td>
-                                <td className="py-2.5 text-right body-sm-regular text-text-secondary tabular-nums">{row.conversation_count}</td>
-                                <td className="py-2.5 text-right body-sm-regular text-text-secondary tabular-nums">{row.user_count}</td>
-                                <td className="py-2.5 text-right body-sm-regular text-text-tertiary tabular-nums">
-                                  {total > 0 ? `${((row.conversation_count / total) * 100).toFixed(1)}%` : '—'}
-                                </td>
-                                <td className={`py-2.5 text-right body-sm-regular tabular-nums ${mom.cls}`}>{mom.text}</td>
-                                <td className={`py-2.5 text-right body-sm-regular tabular-nums ${yy.cls}`}>{yy.text}</td>
-                              </tr>
-                            )
-                          })}
-                          {unspecified > 0 && (
-                            <tr className="bg-background-section-burn">
-                              <td className="py-2.5 body-sm-regular text-text-quaternary">—</td>
-                              <td className="py-2.5 body-sm-medium text-text-tertiary">未填写户籍地</td>
-                              <td className="py-2.5 text-right body-sm-regular text-text-tertiary tabular-nums">{unspecified}</td>
-                              <td className="py-2.5 text-right body-sm-regular text-text-tertiary tabular-nums">{cur?.unspecified_user_count ?? 0}</td>
-                              <td className="py-2.5 text-right body-sm-regular text-text-tertiary tabular-nums">
-                                {total > 0 ? `${((unspecified / total) * 100).toFixed(1)}%` : '—'}
-                              </td>
-                              <td className="py-2.5 text-right body-sm-regular text-text-quaternary">—</td>
-                              <td className="py-2.5 text-right body-sm-regular text-text-quaternary">—</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </Panel>
-
-                    <Panel title="分村/社区明细" subtitle="按会话数从高到低排列">
-                      {villageRows.length === 0
-                        ? <div className="body-sm-regular text-text-tertiary">该统计周期内没有填写村/社区的会话记录。</div>
-                        : (
-                            <div className="overflow-x-auto">
-                              <table className="w-full min-w-[640px] table-fixed">
-                                <thead>
-                                  <tr className="border-b border-divider-regular system-xs-medium-uppercase text-text-tertiary">
-                                    <th className="w-12 py-2.5 text-left font-normal">排名</th>
-                                    <th className="py-2.5 text-left font-normal">乡镇/街道</th>
-                                    <th className="py-2.5 text-left font-normal">村/社区</th>
-                                    <th className="w-24 py-2.5 text-right font-normal">会话数</th>
-                                    <th className="w-24 py-2.5 text-right font-normal">用户数</th>
-                                    <th className="w-20 py-2.5 text-right font-normal">占比</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {villageRows.map((row, index) => (
-                                    <tr key={`${row.town}-${row.village}`} className="border-b border-divider-subtle hover:bg-state-base-hover">
-                                      <td className="py-2.5 body-sm-regular text-text-quaternary tabular-nums">{index + 1}</td>
-                                      <td className="py-2.5 body-sm-regular text-text-secondary">{row.town}</td>
-                                      <td className="py-2.5 body-sm-medium text-text-primary">{row.village}</td>
-                                      <td className="py-2.5 text-right body-sm-regular text-text-secondary tabular-nums">{row.conversation_count}</td>
-                                      <td className="py-2.5 text-right body-sm-regular text-text-secondary tabular-nums">{row.user_count}</td>
-                                      <td className="py-2.5 text-right body-sm-regular text-text-tertiary tabular-nums">
-                                        {total > 0 ? `${((row.conversation_count / total) * 100).toFixed(1)}%` : '—'}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
+                    <Panel title="区域明细" subtitle="切换统计层级，并按乡镇或村/社区筛选">
+                      <TownStatsDetailPanel
+                        towns={rows}
+                        villages={villageRows}
+                        total={total}
+                        unspecifiedCount={unspecified}
+                        unspecifiedUserCount={cur?.unspecified_user_count ?? 0}
+                        previousTownCounts={prevMap}
+                        lastYearTownCounts={yoyMap}
+                      />
                     </Panel>
 
                     <div className="pb-2 system-xs-regular text-text-quaternary">

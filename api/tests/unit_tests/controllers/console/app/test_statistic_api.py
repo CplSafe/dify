@@ -114,6 +114,31 @@ def test_town_distribution_returns_town_and_village_rows(app, monkeypatch: pytes
     }
 
 
+def test_town_trend_returns_town_and_village_rows(app, monkeypatch: pytest.MonkeyPatch) -> None:
+    api = statistic_module.TownTrendStatistic()
+    method = _unwrap(api.get)
+    town_rows = [SimpleNamespace(date="2026-10-01", town="赫山街道", conversation_count=3)]
+    village_rows = [SimpleNamespace(date="2026-10-01", town="赫山街道", village="洪家村社区", conversation_count=2)]
+    engine = SimpleNamespace(begin=lambda: _SequentialConnContext((town_rows, village_rows)))
+    monkeypatch.setattr(statistic_module, "db", SimpleNamespace(engine=engine))
+    _install_common(monkeypatch)
+
+    with app.test_request_context("/console/api/apps/app-1/statistics/town-trend", method="GET"):
+        response = method(app_model=SimpleNamespace(id="app-1"))
+
+    assert response.get_json() == {
+        "data": [{"date": "2026-10-01", "town": "赫山街道", "conversation_count": 3}],
+        "villages": [
+            {
+                "date": "2026-10-01",
+                "town": "赫山街道",
+                "village": "洪家村社区",
+                "conversation_count": 2,
+            }
+        ],
+    }
+
+
 def test_daily_token_cost_statistic_returns_rows(app, monkeypatch: pytest.MonkeyPatch) -> None:
     api = statistic_module.DailyTokenCostStatistic()
     method = _unwrap(api.get)

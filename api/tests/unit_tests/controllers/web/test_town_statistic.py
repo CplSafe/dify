@@ -74,6 +74,31 @@ def test_distribution_rejects_unknown_share_code(app, monkeypatch: pytest.Monkey
             town_statistic.PublicTownDistributionStatistic().get()
 
 
+def test_trend_returns_town_and_village_rows(app, monkeypatch: pytest.MonkeyPatch):
+    site = SimpleNamespace(app_id="app-1")
+    app_model = SimpleNamespace(id="app-1", enable_site=True)
+    town_rows = [SimpleNamespace(date="2026-10-01", town="赫山街道", conversation_count=3)]
+    village_rows = [SimpleNamespace(date="2026-10-01", town="赫山街道", village="洪家村社区", conversation_count=2)]
+    _install_db(monkeypatch, site=site, app_model=app_model, result_sets=(town_rows, village_rows))
+    monkeypatch.setattr(town_statistic, "parse_time_range", lambda *_args: (None, None))
+    monkeypatch.setattr(town_statistic, "convert_datetime_to_date", lambda field: field)
+
+    with app.test_request_context("/api/town-statistics/trend", headers={"X-App-Code": "public-code"}):
+        response = town_statistic.PublicTownTrendStatistic().get()
+
+    assert response.get_json() == {
+        "data": [{"date": "2026-10-01", "town": "赫山街道", "conversation_count": 3}],
+        "villages": [
+            {
+                "date": "2026-10-01",
+                "town": "赫山街道",
+                "village": "洪家村社区",
+                "conversation_count": 2,
+            }
+        ],
+    }
+
+
 def test_distribution_rejects_disabled_site(app, monkeypatch: pytest.MonkeyPatch):
     site = SimpleNamespace(app_id="app-1")
     app_model = SimpleNamespace(id="app-1", enable_site=False)

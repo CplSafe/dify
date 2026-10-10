@@ -668,6 +668,19 @@ WHERE
     AND is_deleted IS false
     AND (invoke_from IS NULL OR invoke_from != :invoke_from)
     AND NULLIF(split_part(COALESCE(inputs ->> 'address', ''), '·', 1), '') IS NOT NULL"""
+        village_sql_query = f"""SELECT
+    {converted_created_at} AS date,
+    NULLIF(split_part(COALESCE(inputs ->> 'address', ''), '·', 1), '') AS town,
+    NULLIF(split_part(COALESCE(inputs ->> 'address', ''), '·', 2), '') AS village,
+    COUNT(*) AS conversation_count
+FROM
+    conversations
+WHERE
+    app_id = :app_id
+    AND is_deleted IS false
+    AND (invoke_from IS NULL OR invoke_from != :invoke_from)
+    AND NULLIF(split_part(COALESCE(inputs ->> 'address', ''), '·', 1), '') IS NOT NULL
+    AND NULLIF(split_part(COALESCE(inputs ->> 'address', ''), '·', 2), '') IS NOT NULL"""
         arg_dict = {"tz": account.timezone, "app_id": app_model.id, "invoke_from": InvokeFrom.DEBUGGER}
         assert account.timezone is not None
 
@@ -678,15 +691,19 @@ WHERE
 
         if start_datetime_utc:
             sql_query += " AND created_at >= :start"
+            village_sql_query += " AND created_at >= :start"
             arg_dict["start"] = start_datetime_utc
 
         if end_datetime_utc:
             sql_query += " AND created_at < :end"
+            village_sql_query += " AND created_at < :end"
             arg_dict["end"] = end_datetime_utc
 
         sql_query += " GROUP BY date, town ORDER BY date, town"
+        village_sql_query += " GROUP BY date, town, village ORDER BY date, town, village"
 
         response_data = []
+        village_data = []
 
         with db.engine.begin() as conn:
             rs = conn.execute(sa.text(sql_query), arg_dict)
@@ -698,5 +715,15 @@ WHERE
                         "conversation_count": i.conversation_count,
                     }
                 )
+            village_rows = conn.execute(sa.text(village_sql_query), arg_dict)
+            for row in village_rows:
+                village_data.append(
+                    {
+                        "date": str(row.date),
+                        "town": row.town,
+                        "village": row.village,
+                        "conversation_count": row.conversation_count,
+                    }
+                )
 
-        return jsonify({"data": response_data})
+        return jsonify({"data": response_data, "villages": village_data})

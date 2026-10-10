@@ -14,6 +14,7 @@ import { TownStatsDetailPanel } from './detail-panel'
 const QUERY_DATE_FORMAT = 'YYYY-MM-DD HH:mm'
 const DISPLAY_DATE_FORMAT = 'YYYY/M/D'
 const TREND_TOWN_LIMIT = 6
+const VILLAGE_RANKING_LIMIT = 20
 
 const AXIS_LABEL = '#9CA3AF'
 const SPLIT_LINE = '#F3F4F6'
@@ -29,6 +30,7 @@ const PERIODS = [
 
 type Range = { start: string, end: string }
 type TownStatsSource = 'console' | 'public'
+type RankingLevel = 'town' | 'village'
 
 const useTownStatistic = <T,>(source: TownStatsSource, appId: string | undefined, metric: string, params: Range) => {
   return useQuery<T>({
@@ -129,6 +131,10 @@ export const TownStats = ({ appId: appIdProp, source = 'console' }: TownStatsPro
   const { appId: routeAppId } = useParams<{ appId?: string }>()
   const appId = appIdProp || routeAppId
   const [days, setDays] = useState(30)
+  const [rankingLevel, setRankingLevel] = useState<RankingLevel>('town')
+  const [rankingTown, setRankingTown] = useState('')
+  const [trendLevel, setTrendLevel] = useState<RankingLevel>('town')
+  const [trendTown, setTrendTown] = useState('')
 
   const current = useMemo(() => rangeOf(days, 0), [days])
   const previous = useMemo(() => rangeOf(days, days), [days])
@@ -143,6 +149,32 @@ export const TownStats = ({ appId: appIdProp, source = 'console' }: TownStatsPro
   const villageRows = useMemo(() => cur?.villages ?? [], [cur])
   const prevMap = useMemo(() => new Map((prev?.data ?? []).map(r => [r.town, r.conversation_count])), [prev])
   const yoyMap = useMemo(() => new Map((yoy?.data ?? []).map(r => [r.town, r.conversation_count])), [yoy])
+  const previousVillageMap = useMemo(() => new Map(
+    (prev?.villages ?? []).map(row => [`${row.town}|:${row.village}`, row.conversation_count]),
+  ), [prev])
+
+  const rankingRows = useMemo(() => {
+    if (rankingLevel === 'town') {
+      return rows.map(row => ({
+        key: row.town,
+        label: row.town,
+        current: row.conversation_count,
+        previous: prevMap.get(row.town) ?? 0,
+      }))
+    }
+    return villageRows
+      .filter(row => !rankingTown || row.town === rankingTown)
+      .slice(0, VILLAGE_RANKING_LIMIT)
+      .map((row) => {
+        const key = `${row.town}|:${row.village}`
+        return {
+          key,
+          label: row.village,
+          current: row.conversation_count,
+          previous: previousVillageMap.get(key) ?? 0,
+        }
+      })
+  }, [prevMap, previousVillageMap, rankingLevel, rankingTown, rows, villageRows])
 
   const unspecified = cur?.unspecified_count ?? 0
   const townTotal = rows.reduce((s, r) => s + r.conversation_count, 0)
@@ -171,7 +203,7 @@ export const TownStats = ({ appId: appIdProp, source = 'console' }: TownStatsPro
     yAxis: {
       type: 'category',
       inverse: true,
-      data: rows.map(r => r.town),
+      data: rankingRows.map(row => row.label),
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: { color: '#1F2A37', fontSize: 12 },
@@ -180,7 +212,7 @@ export const TownStats = ({ appId: appIdProp, source = 'console' }: TownStatsPro
       {
         name: '本期',
         type: 'bar',
-        data: rows.map(r => r.conversation_count),
+        data: rankingRows.map(row => row.current),
         itemStyle: { color: BAR_CURRENT, borderRadius: [0, 3, 3, 0] },
         barMaxWidth: 12,
         label: { show: true, position: 'right', color: AXIS_LABEL, fontSize: 12 },
@@ -188,19 +220,26 @@ export const TownStats = ({ appId: appIdProp, source = 'console' }: TownStatsPro
       {
         name: '上一期',
         type: 'bar',
-        data: rows.map(r => prevMap.get(r.town) ?? 0),
+        data: rankingRows.map(row => row.previous),
         itemStyle: { color: BAR_PREVIOUS, borderRadius: [0, 3, 3, 0] },
         barMaxWidth: 12,
       },
     ],
-  }), [rows, prevMap])
+  }), [rankingRows])
 
   const lineOption = useMemo<EChartsOption>(() => {
-    const points = trend?.data ?? []
+    const points = trendLevel === 'town' ? (trend?.data ?? []) : (trend?.villages ?? [])
     const dates = [...new Set(points.map(p => p.date))].sort()
-    const top = rows.slice(0, TREND_TOWN_LIMIT).map(r => r.town)
-    const key = (d: string, t: string) => `${d}|${t}`
-    const lookup = new Map(points.map(p => [key(p.date, p.town), p.conversation_count]))
+    const top = trendLevel === 'town'
+      ? rows.slice(0, TREND_TOWN_LIMIT).map(row => ({ key: row.town, label: row.town }))
+      : villageRows
+          .filter(row => !trendTown || row.town === trendTown)
+          .slice(0, TREND_TOWN_LIMIT)
+          .map(row => ({ key: `${row.town}|:${row.village}`, label: row.village }))
+    const pointKey = (point: (typeof points)[number]) => trendLevel === 'town'
+      ? point.town
+      : `${point.town}|:${'village' in point ? point.village : ''}`
+    const lookup = new Map(points.map(point => [`${point.date}|${pointKey(point)}`, point.conversation_count]))
     return {
       color: LINE_COLORS,
       grid: { left: 8, right: 16, top: 32, bottom: 8, containLabel: true },
@@ -226,16 +265,20 @@ export const TownStats = ({ appId: appIdProp, source = 'console' }: TownStatsPro
         axisLabel: { color: AXIS_LABEL, fontSize: 12 },
         splitLine: { lineStyle: { color: SPLIT_LINE } },
       },
-      series: top.map(town => ({
-        name: town,
+      series: top.map(item => ({
+        name: item.label,
         type: 'line' as const,
         smooth: true,
         showSymbol: false,
         lineStyle: { width: 2 },
-        data: dates.map(d => lookup.get(key(d, town)) ?? 0),
+        data: dates.map(date => lookup.get(`${date}|${item.key}`) ?? 0),
       })),
     }
-  }, [trend, rows])
+  }, [trend, trendLevel, trendTown, rows, villageRows])
+
+  const trendSeriesCount = trendLevel === 'town'
+    ? Math.min(TREND_TOWN_LIMIT, rows.length)
+    : Math.min(TREND_TOWN_LIMIT, villageRows.filter(row => !trendTown || row.town === trendTown).length)
 
   return (
     <div className="h-full overflow-y-auto bg-chatbot-bg px-4 py-6 sm:px-12">
@@ -308,18 +351,105 @@ export const TownStats = ({ appId: appIdProp, source = 'console' }: TownStatsPro
                 )
               : (
                   <div className="flex flex-col gap-4">
-                    <Panel title="乡镇排名" subtitle="深色为本期，浅色为上一周期">
-                      <ReactECharts
-                        option={barOption}
-                        style={{ height: Math.max(260, rows.length * 30) }}
-                        opts={{ renderer: 'svg' }}
-                      />
+                    <Panel title="区域排名" subtitle="深色为本期，浅色为上一周期">
+                      <div className="mb-4 flex flex-col gap-3 border-b border-divider-subtle pb-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex w-fit items-center gap-1 rounded-lg bg-background-section p-1" aria-label="排名统计层级">
+                          <button
+                            type="button"
+                            onClick={() => setRankingLevel('town')}
+                            className={`h-8 rounded-md px-3 system-sm-medium transition-colors ${
+                              rankingLevel === 'town'
+                                ? 'bg-components-panel-bg text-text-primary shadow-xs'
+                                : 'text-text-tertiary hover:text-text-secondary'
+                            }`}
+                          >
+                            乡镇/街道
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRankingLevel('village')}
+                            className={`h-8 rounded-md px-3 system-sm-medium transition-colors ${
+                              rankingLevel === 'village'
+                                ? 'bg-components-panel-bg text-text-primary shadow-xs'
+                                : 'text-text-tertiary hover:text-text-secondary'
+                            }`}
+                          >
+                            村/社区
+                          </button>
+                        </div>
+                        {rankingLevel === 'village' && (
+                          <select
+                            aria-label="排名按乡镇/街道筛选"
+                            value={rankingTown}
+                            onChange={event => setRankingTown(event.target.value)}
+                            className="h-8 min-w-0 rounded-lg border border-components-input-border-active bg-components-input-bg-normal px-2.5 system-sm-regular text-text-secondary outline-none sm:w-48"
+                          >
+                            <option value="">全部乡镇/街道</option>
+                            {rows.map(row => <option key={row.town} value={row.town}>{row.town}</option>)}
+                          </select>
+                        )}
+                      </div>
+                      {rankingLevel === 'village' && (
+                        <div className="mb-2 system-xs-regular text-text-tertiary">
+                          {rankingTown ? `${rankingTown}村/社区会话量前 ${VILLAGE_RANKING_LIMIT} 名` : `全区村/社区会话量前 ${VILLAGE_RANKING_LIMIT} 名`}
+                        </div>
+                      )}
+                      {rankingRows.length > 0
+                        ? (
+                            <ReactECharts
+                              option={barOption}
+                              style={{ height: Math.max(260, rankingRows.length * 30) }}
+                              opts={{ renderer: 'svg' }}
+                            />
+                          )
+                        : (
+                            <div className="flex min-h-40 items-center justify-center body-sm-regular text-text-tertiary">
+                              该条件下暂无排名数据。
+                            </div>
+                          )}
                     </Panel>
 
                     <Panel
                       title="使用趋势"
-                      subtitle={`会话量排名前 ${Math.min(TREND_TOWN_LIMIT, rows.length)} 的乡镇/街道`}
+                      subtitle={`会话量排名前 ${trendSeriesCount} 的${trendLevel === 'town' ? '乡镇/街道' : '村/社区'}`}
                     >
+                      <div className="mb-4 flex flex-col gap-3 border-b border-divider-subtle pb-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex w-fit items-center gap-1 rounded-lg bg-background-section p-1" aria-label="趋势统计层级">
+                          <button
+                            type="button"
+                            onClick={() => setTrendLevel('town')}
+                            className={`h-8 rounded-md px-3 system-sm-medium transition-colors ${
+                              trendLevel === 'town'
+                                ? 'bg-components-panel-bg text-text-primary shadow-xs'
+                                : 'text-text-tertiary hover:text-text-secondary'
+                            }`}
+                          >
+                            乡镇/街道
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTrendLevel('village')}
+                            className={`h-8 rounded-md px-3 system-sm-medium transition-colors ${
+                              trendLevel === 'village'
+                                ? 'bg-components-panel-bg text-text-primary shadow-xs'
+                                : 'text-text-tertiary hover:text-text-secondary'
+                            }`}
+                          >
+                            村/社区
+                          </button>
+                        </div>
+                        {trendLevel === 'village' && (
+                          <select
+                            aria-label="趋势按乡镇/街道筛选"
+                            value={trendTown}
+                            onChange={event => setTrendTown(event.target.value)}
+                            className="h-8 min-w-0 rounded-lg border border-components-input-border-active bg-components-input-bg-normal px-2.5 system-sm-regular text-text-secondary outline-none sm:w-48"
+                          >
+                            <option value="">全部乡镇/街道</option>
+                            {rows.map(row => <option key={row.town} value={row.town}>{row.town}</option>)}
+                          </select>
+                        )}
+                      </div>
                       <ReactECharts option={lineOption} style={{ height: 300 }} opts={{ renderer: 'svg' }} />
                     </Panel>
 

@@ -70,6 +70,7 @@ export type AppTownDistributionResponse = {
 
 export type AppTownTrendResponse = {
   data: Array<{ date: string, town: string, conversation_count: number }>
+  villages: Array<{ date: string, town: string, village: string, conversation_count: number }>
 }
 
 export type AppStatisticsResponse = {

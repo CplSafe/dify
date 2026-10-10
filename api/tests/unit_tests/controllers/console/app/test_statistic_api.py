@@ -32,6 +32,14 @@ class _ConnContext:
         return self._rows
 
 
+class _SequentialConnContext(_ConnContext):
+    def __init__(self, result_sets):
+        self._result_sets = iter(result_sets)
+
+    def execute(self, _query, _args):
+        return next(self._result_sets)
+
+
 def _install_db(monkeypatch: pytest.MonkeyPatch, rows) -> None:
     engine = SimpleNamespace(begin=lambda: _ConnContext(rows))
     monkeypatch.setattr(statistic_module, "db", SimpleNamespace(engine=engine))
@@ -77,6 +85,33 @@ def test_daily_conversation_statistic_returns_rows(app, monkeypatch: pytest.Monk
         response = method(app_model=SimpleNamespace(id="app-1"))
 
     assert response.get_json() == {"data": [{"date": "2024-01-02", "conversation_count": 5}]}
+
+
+def test_town_distribution_returns_town_and_village_rows(app, monkeypatch: pytest.MonkeyPatch) -> None:
+    api = statistic_module.TownDistributionStatistic()
+    method = _unwrap(api.get)
+    town_rows = [SimpleNamespace(town="赫山街道", conversation_count=3, user_count=2)]
+    village_rows = [SimpleNamespace(town="赫山街道", village="洪家村社区", conversation_count=2, user_count=1)]
+    engine = SimpleNamespace(begin=lambda: _SequentialConnContext((town_rows, village_rows)))
+    monkeypatch.setattr(statistic_module, "db", SimpleNamespace(engine=engine))
+    _install_common(monkeypatch)
+
+    with app.test_request_context("/console/api/apps/app-1/statistics/town-distribution", method="GET"):
+        response = method(app_model=SimpleNamespace(id="app-1"))
+
+    assert response.get_json() == {
+        "data": [{"town": "赫山街道", "conversation_count": 3, "user_count": 2}],
+        "villages": [
+            {
+                "town": "赫山街道",
+                "village": "洪家村社区",
+                "conversation_count": 2,
+                "user_count": 1,
+            }
+        ],
+        "unspecified_count": 0,
+        "unspecified_user_count": 0,
+    }
 
 
 def test_daily_token_cost_statistic_returns_rows(app, monkeypatch: pytest.MonkeyPatch) -> None:

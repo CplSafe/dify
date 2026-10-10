@@ -139,6 +139,7 @@ export const TownStats = ({ appId: appIdProp, source = 'console' }: TownStatsPro
   const { data: trend } = useTownStatistic<AppTownTrendResponse>(source, appId, 'trend', current)
 
   const rows = useMemo(() => cur?.data ?? [], [cur])
+  const villageRows = useMemo(() => cur?.villages ?? [], [cur])
   const prevMap = useMemo(() => new Map((prev?.data ?? []).map(r => [r.town, r.conversation_count])), [prev])
   const yoyMap = useMemo(() => new Map((yoy?.data ?? []).map(r => [r.town, r.conversation_count])), [yoy])
 
@@ -284,7 +285,7 @@ export const TownStats = ({ appId: appIdProp, source = 'console' }: TownStatsPro
               <MetricCard
                 label="覆盖乡镇"
                 value={rows.length}
-                hint="共 18 个乡镇/街道"
+                hint={`已统计 ${villageRows.length} 个村/社区`}
               />
               <MetricCard
                 label="咨询用户数"
@@ -369,9 +370,45 @@ export const TownStats = ({ appId: appIdProp, source = 'console' }: TownStatsPro
                       </table>
                     </Panel>
 
+                    <Panel title="分村/社区明细" subtitle="按会话数从高到低排列">
+                      {villageRows.length === 0
+                        ? <div className="body-sm-regular text-text-tertiary">该统计周期内没有填写村/社区的会话记录。</div>
+                        : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full min-w-[640px] table-fixed">
+                                <thead>
+                                  <tr className="border-b border-divider-regular system-xs-medium-uppercase text-text-tertiary">
+                                    <th className="w-12 py-2.5 text-left font-normal">排名</th>
+                                    <th className="py-2.5 text-left font-normal">乡镇/街道</th>
+                                    <th className="py-2.5 text-left font-normal">村/社区</th>
+                                    <th className="w-24 py-2.5 text-right font-normal">会话数</th>
+                                    <th className="w-24 py-2.5 text-right font-normal">用户数</th>
+                                    <th className="w-20 py-2.5 text-right font-normal">占比</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {villageRows.map((row, index) => (
+                                    <tr key={`${row.town}-${row.village}`} className="border-b border-divider-subtle hover:bg-state-base-hover">
+                                      <td className="py-2.5 body-sm-regular text-text-quaternary tabular-nums">{index + 1}</td>
+                                      <td className="py-2.5 body-sm-regular text-text-secondary">{row.town}</td>
+                                      <td className="py-2.5 body-sm-medium text-text-primary">{row.village}</td>
+                                      <td className="py-2.5 text-right body-sm-regular text-text-secondary tabular-nums">{row.conversation_count}</td>
+                                      <td className="py-2.5 text-right body-sm-regular text-text-secondary tabular-nums">{row.user_count}</td>
+                                      <td className="py-2.5 text-right body-sm-regular text-text-tertiary tabular-nums">
+                                        {total > 0 ? `${((row.conversation_count / total) * 100).toFixed(1)}%` : '—'}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                    </Panel>
+
                     <div className="pb-2 system-xs-regular text-text-quaternary">
                       说明：统计口径为用户在小程序中选择的户籍地，非 GPS 实时定位。
-                      未填写户籍地的会话单列，不计入任何乡镇。环比对比上一个同长度周期，同比对比去年同期。
+                      未填写户籍地的会话单列，不计入任何乡镇；只填写乡镇的记录计入乡镇汇总，不进入村/社区明细。
+                      环比对比上一个同长度周期，同比对比去年同期。
                     </div>
                   </div>
                 )}

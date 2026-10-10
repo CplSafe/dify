@@ -33,7 +33,12 @@ describe('TownStats public source', () => {
     vi.mocked(getPublic).mockImplementation((url) => {
       if (url.endsWith('/trend'))
         return Promise.resolve({ data: [] })
-      return Promise.resolve({ data: [], unspecified_count: 0, unspecified_user_count: 0 })
+      return Promise.resolve({
+        data: [{ town: '赫山街道', conversation_count: 3, user_count: 2 }],
+        villages: [{ town: '赫山街道', village: '洪家村社区', conversation_count: 2, user_count: 1 }],
+        unspecified_count: 0,
+        unspecified_user_count: 0,
+      })
     })
   })
 
@@ -45,6 +50,7 @@ describe('TownStats public source', () => {
       expect(getPublic).toHaveBeenCalledWith('/town-statistics/distribution', expect.any(Object))
       expect(getPublic).toHaveBeenCalledWith('/town-statistics/trend', expect.any(Object))
     })
-    expect(screen.getByText('暂无数据')).toBeInTheDocument()
+    expect(screen.getByText('分村/社区明细')).toBeInTheDocument()
+    expect(screen.getByText('洪家村社区')).toBeInTheDocument()
   })
 })

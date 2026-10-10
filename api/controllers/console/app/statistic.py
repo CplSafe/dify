@@ -559,6 +559,19 @@ WHERE
     app_id = :app_id
     AND is_deleted IS false
     AND (invoke_from IS NULL OR invoke_from != :invoke_from)"""
+        village_sql_query = """SELECT
+    NULLIF(split_part(COALESCE(inputs ->> 'address', ''), '·', 1), '') AS town,
+    NULLIF(split_part(COALESCE(inputs ->> 'address', ''), '·', 2), '') AS village,
+    COUNT(*) AS conversation_count,
+    COUNT(DISTINCT from_end_user_id) AS user_count
+FROM
+    conversations
+WHERE
+    app_id = :app_id
+    AND is_deleted IS false
+    AND (invoke_from IS NULL OR invoke_from != :invoke_from)
+    AND NULLIF(split_part(COALESCE(inputs ->> 'address', ''), '·', 1), '') IS NOT NULL
+    AND NULLIF(split_part(COALESCE(inputs ->> 'address', ''), '·', 2), '') IS NOT NULL"""
         arg_dict = {"app_id": app_model.id, "invoke_from": InvokeFrom.DEBUGGER}
         assert account.timezone is not None
 
@@ -569,15 +582,19 @@ WHERE
 
         if start_datetime_utc:
             sql_query += " AND created_at >= :start"
+            village_sql_query += " AND created_at >= :start"
             arg_dict["start"] = start_datetime_utc
 
         if end_datetime_utc:
             sql_query += " AND created_at < :end"
+            village_sql_query += " AND created_at < :end"
             arg_dict["end"] = end_datetime_utc
 
         sql_query += " GROUP BY town ORDER BY conversation_count DESC, town"
+        village_sql_query += " GROUP BY town, village ORDER BY conversation_count DESC, town, village"
 
         response_data = []
+        village_data = []
         unspecified_count = 0
         unspecified_user_count = 0
 
@@ -595,10 +612,21 @@ WHERE
                         "user_count": i.user_count,
                     }
                 )
+            village_rows = conn.execute(sa.text(village_sql_query), arg_dict)
+            for row in village_rows:
+                village_data.append(
+                    {
+                        "town": row.town,
+                        "village": row.village,
+                        "conversation_count": row.conversation_count,
+                        "user_count": row.user_count,
+                    }
+                )
 
         return jsonify(
             {
                 "data": response_data,
+                "villages": village_data,
                 "unspecified_count": unspecified_count,
                 "unspecified_user_count": unspecified_user_count,
             }

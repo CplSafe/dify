@@ -7,16 +7,16 @@ from controllers.web import town_statistic
 
 
 class _Connection:
-    def __init__(self, rows):
-        self.rows = rows
+    def __init__(self, result_sets):
+        self.result_sets = iter(result_sets)
 
     def execute(self, _query, _args):
-        return self.rows
+        return next(self.result_sets)
 
 
 class _ConnectionContext:
-    def __init__(self, rows):
-        self.connection = _Connection(rows)
+    def __init__(self, result_sets):
+        self.connection = _Connection(result_sets)
 
     def __enter__(self):
         return self.connection
@@ -25,20 +25,21 @@ class _ConnectionContext:
         return False
 
 
-def _install_db(monkeypatch: pytest.MonkeyPatch, *, site=None, app_model=None, rows=()):
+def _install_db(monkeypatch: pytest.MonkeyPatch, *, site=None, app_model=None, result_sets=((), ())):
     session = SimpleNamespace(
         scalar=lambda _query: site,
         get=lambda _model, _id: app_model,
     )
-    engine = SimpleNamespace(begin=lambda: _ConnectionContext(rows))
+    engine = SimpleNamespace(begin=lambda: _ConnectionContext(result_sets))
     monkeypatch.setattr(town_statistic, "db", SimpleNamespace(session=session, engine=engine))
 
 
 def test_distribution_allows_anonymous_access_with_share_code(app, monkeypatch: pytest.MonkeyPatch):
     site = SimpleNamespace(app_id="app-1")
     app_model = SimpleNamespace(id="app-1", enable_site=True)
-    rows = [SimpleNamespace(town="赫山街道", conversation_count=3, user_count=2)]
-    _install_db(monkeypatch, site=site, app_model=app_model, rows=rows)
+    town_rows = [SimpleNamespace(town="赫山街道", conversation_count=3, user_count=2)]
+    village_rows = [SimpleNamespace(town="赫山街道", village="洪家村社区", conversation_count=2, user_count=1)]
+    _install_db(monkeypatch, site=site, app_model=app_model, result_sets=(town_rows, village_rows))
     monkeypatch.setattr(town_statistic, "parse_time_range", lambda *_args: (None, None))
 
     with app.test_request_context(
@@ -49,6 +50,14 @@ def test_distribution_allows_anonymous_access_with_share_code(app, monkeypatch: 
 
     assert response.get_json() == {
         "data": [{"town": "赫山街道", "conversation_count": 3, "user_count": 2}],
+        "villages": [
+            {
+                "town": "赫山街道",
+                "village": "洪家村社区",
+                "conversation_count": 2,
+                "user_count": 1,
+            }
+        ],
         "unspecified_count": 0,
         "unspecified_user_count": 0,
     }

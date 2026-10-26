@@ -60,6 +60,19 @@ def test_batch_fetch_plugin_manifests_returns_empty_for_empty_input(mocker: Mock
     post_mock.assert_not_called()
 
 
+def test_batch_fetch_plugin_manifests_removes_unsupported_polling_feature(mocker: MockerFixture) -> None:
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = {"data": {"plugins": [{"model": {"models": [{"features": ["polling", "vision"]}]}}]}}
+    mocker.patch("core.helper.marketplace.httpx.post", return_value=response)
+    validate_mock = mocker.patch(
+        "core.helper.marketplace.MarketplacePluginDeclaration.model_validate", return_value="manifest"
+    )
+
+    assert batch_fetch_plugin_manifests(["p1"]) == ["manifest"]
+    assert validate_mock.call_args.args[0]["model"]["models"][0]["features"] == ["vision"]
+
+
 def test_batch_fetch_plugin_manifests_validates_and_returns_plugins(mocker: MockerFixture) -> None:
     response = MagicMock()
     response.raise_for_status.return_value = None

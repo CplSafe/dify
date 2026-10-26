@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Sequence
+from typing import Any
 
 import httpx
 from yarl import URL
@@ -11,6 +12,19 @@ from extensions.ext_redis import redis_client
 
 marketplace_api_url = URL(str(dify_config.MARKETPLACE_API_URL))
 logger = logging.getLogger(__name__)
+
+
+def _normalize_marketplace_manifest(payload: Any) -> Any:
+    if isinstance(payload, list):
+        return [_normalize_marketplace_manifest(item) for item in payload]
+    if not isinstance(payload, dict):
+        return payload
+
+    normalized = {key: _normalize_marketplace_manifest(value) for key, value in payload.items()}
+    features = normalized.get("features")
+    if isinstance(features, list):
+        normalized["features"] = [feature for feature in features if feature != "polling"]
+    return normalized
 
 
 def get_plugin_pkg_url(plugin_unique_identifier: str) -> str:
@@ -29,7 +43,8 @@ def batch_fetch_plugin_manifests(plugin_ids: list[str]) -> Sequence[MarketplaceP
     response = httpx.post(url, json={"plugin_ids": plugin_ids}, headers={"X-Dify-Version": dify_config.project.version})
     response.raise_for_status()
 
-    return [MarketplacePluginDeclaration.model_validate(plugin) for plugin in response.json()["data"]["plugins"]]
+    plugins = _normalize_marketplace_manifest(response.json()["data"]["plugins"])
+    return [MarketplacePluginDeclaration.model_validate(plugin) for plugin in plugins]
 
 
 def batch_fetch_plugin_by_ids(plugin_ids: list[str]) -> list[dict]:

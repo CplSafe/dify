@@ -53,6 +53,21 @@ else:
 
 logger = logging.getLogger(__name__)
 
+
+def _normalize_plugin_daemon_response(payload: Any) -> Any:
+    """Drop manifest capabilities unsupported by this API's graphon version."""
+    if isinstance(payload, list):
+        return [_normalize_plugin_daemon_response(item) for item in payload]
+    if not isinstance(payload, dict):
+        return payload
+
+    normalized = {key: _normalize_plugin_daemon_response(value) for key, value in payload.items()}
+    features = normalized.get("features")
+    if isinstance(features, list):
+        normalized["features"] = [feature for feature in features if feature != "polling"]
+    return normalized
+
+
 _httpx_client: httpx.Client = get_pooled_http_client(
     "plugin_daemon",
     lambda: httpx.Client(limits=httpx.Limits(max_keepalive_connections=50, max_connections=100), trust_env=False),
@@ -253,6 +268,7 @@ class BasePluginClient:
             json_response = response.json()
             if transformer:
                 json_response = transformer(json_response)
+            json_response = _normalize_plugin_daemon_response(json_response)
             # https://stackoverflow.com/questions/59634937/variable-foo-class-is-not-valid-as-type-but-why
             rep = PluginDaemonBasicResponse[type_].model_validate(json_response)  # type: ignore
         except Exception:

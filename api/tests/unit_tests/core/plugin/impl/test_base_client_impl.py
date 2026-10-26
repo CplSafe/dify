@@ -4,7 +4,7 @@ import pytest
 
 from core.plugin.endpoint.exc import EndpointSetupFailedError
 from core.plugin.entities.plugin_daemon import PluginDaemonInnerError
-from core.plugin.impl.base import BasePluginClient
+from core.plugin.impl.base import BasePluginClient, _normalize_plugin_daemon_response
 from core.trigger.errors import (
     EventIgnoreError,
     TriggerInvokeError,
@@ -39,6 +39,13 @@ class _StreamContext:
 
 
 class TestBasePluginClientImpl:
+    def test_normalize_plugin_daemon_response_drops_unsupported_polling_feature(self):
+        payload = {"data": {"manifest": {"model": {"models": [{"features": ["polling", "vision"]}]}}}}
+
+        assert _normalize_plugin_daemon_response(payload) == {
+            "data": {"manifest": {"model": {"models": [{"features": ["vision"]}]}}}
+        }
+
     def test_inject_trace_headers(self, mocker):
         client = BasePluginClient()
         mocker.patch("core.plugin.impl.base.dify_config.ENABLE_OTEL", True)
